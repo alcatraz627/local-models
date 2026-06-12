@@ -12,6 +12,10 @@ WARM_KEEP_ALIVE="-1"
 
 OLLAMA_HOST="${OLLAMA_HOST:-http://127.0.0.1:11434}"
 
+# Toolkit version — reported by `lm status --json` (api_version covers the
+# machine contract separately; bump that only on breaking changes).
+LM_VERSION="1.1"
+
 # Default image-gen model for `imagine` (override per call with `imagine -m <name>`).
 # Registry names: schnell (fast) · flux2 (balanced) · qwen (best text) · dev · or any HF repo.
 IMAGINE_MODEL="${IMAGINE_MODEL:-schnell}"

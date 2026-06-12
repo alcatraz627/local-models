@@ -9,10 +9,9 @@
 #   git diff | q commit            a commit message from the piped diff
 #   cmd | q "summarize"            piped stdin becomes input context
 #
-# Flags (put them before the query):
-#   --think        show the model's reasoning trace (off by default — a latency tax)
-#   -m <model>     override the model (e.g. -m qwen2.5-coder:3b for sharper commands)
-#   --raw          no system prompt (the bare model)
+# Machine modes (for GUI hosts / scripts — see docs/q-spec.md §API):
+#   q --json --ctx - --intent summarize     one JSON object on stdout
+#   q --stream-json ...                     NDJSON chunk/done/error lines
 #
 # Why this exists: raw `ollama run` returns essays + thinking traces + every OS. The value
 # is the wrapper — a terse macOS system prompt and think:false the model can't talk its way
@@ -28,7 +27,7 @@ show_help() {
   printf '%s%sq%s %s— quick local LLM companion (macOS / Apple Silicon)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
   _cmd 'q "<prompt>"'           'ask a question (default intent)'
-  _cmd 'q <intent> "<prompt>"'  'intent = cmd | ask | title | commit'
+  _cmd 'q <intent> "<prompt>"'  'intent = cmd | ask | title | commit | summarize | explain-code | describe-data | qa'
   _cmd 'q -c [N] "<prompt>"'    'continue the last exchange (or entry N) — multi-turn'
   _cmd 'q on | off | status'    'Tier W warm toggle (= warm)'
   _cmd 'q history [N|--json]'   'recent queries, numbered (default 15)'
@@ -39,26 +38,37 @@ show_help() {
   _ex 'q cmd "kill everything on port 3001"' '# one macOS command'
   _ex 'q title "<conversation text>"'        '# 2-5 word title'
   _ex 'git diff | q commit'                  '# commit message from the diff'
-  _ex 'git log --oneline -20 | q "summarize"' '# piped stdin = input context'
+  _ex 'q summarize --ctx report.md'          '# TL;DR a document'
+  _ex 'q --json --ctx - qa "who signs off?" < doc.md'  '# machine mode'
   _ex 'q --think "harder reasoning task"'    '# show the thinking trace'
   _ex 'q -m qwen2.5-coder:3b cmd "..."'      '# swap model per call'
-  _ex 'q history 20'                         '# recent queries, numbered'
   _ex 'q show 14'                            '# full prompt + response of entry 14'
-  _ex 'warm on'                              '# keep the model resident (snappy)'
   _sec OPTIONS
   _opt '--think'        'show the reasoning trace (dimmed, on stderr; off by default)'
+  _opt '-c, --continue [N]' 'continue last exchange / entry N'
   _opt '-m, --model M'  "override the model (default: $WARM_MODEL)"
   _opt '--raw'          'no system prompt (bare model)'
+  _opt '--json'         'machine mode: one JSON object on stdout, no ANSI'
+  _opt '--stream-json'  'machine mode: NDJSON chunk/done/error lines'
+  _opt '--ctx FILE | -' 'context document from a file or stdin'
+  _opt '--ctx-name S'   "the document's display name (framing hint)"
+  _opt '--max-ctx N'    'truncate context to N chars (default 16000)'
+  _opt '--timeout S'    'wall-clock cap; structured timeout error after'
+  _opt '--intent X'     'intent as a flag (same set as the positional token)'
   _opt '-h, --help'     'show this help'
   _sec INTENTS
   _opt 'ask  (default)' 'direct answer, <=2 sentences'
   _opt 'cmd'            'a single macOS shell command, nothing else'
   _opt 'title'          'a 2-5 word title (tab titles, fire-and-forget)'
   _opt 'commit'         'a git commit message (pipe the diff in)'
+  _opt 'summarize'      'TL;DR of the context document, length-adaptive'
+  _opt 'explain-code'   'what the code does + flags dangerous bits'
+  _opt 'describe-data'  'schema + notable observations of tabular data'
+  _opt 'qa'             'answer grounded ONLY in the context document'
   _sec DEFAULTS
   printf '  %smacOS/Apple-Silicon assumed; Linux only if you say "linux server/container".%s\n' "$Dm" "$Rs"
   printf '  %sthinking off · deterministic (temp 0) · never asks · logged to logs/q-history.jsonl%s\n' "$Dm" "$Rs"
-  printf '  %spiped stdin is appended as input context (truncated past ~16k chars).%s\n' "$Dm" "$Rs"
+  printf '  %spiped stdin / --ctx is appended as input context (truncated at --max-ctx chars).%s\n' "$Dm" "$Rs"
   _sec CONFIGURATION
   printf '  %s%s/config.sh%s %s(WARM_MODEL, keep-alive)%s\n' "$C" "$DIR" "$Rs" "$Dm" "$Rs"
 }
@@ -91,6 +101,8 @@ MODEL="$WARM_MODEL"
 THINK=false
 INTENT=ask
 RAW=false
+MODE=text          # text (human) | json (one object) | stream (NDJSON)
+CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0
 CONT=false; CONT_N=""; USER_MODEL=false; USER_INTENT=false
 
 # Pull leading flags; everything else is positional.
@@ -99,6 +111,13 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --think) THINK=true; shift ;;
     --raw)   RAW=true; shift ;;
+    --json)        MODE=json; shift ;;
+    --stream-json) MODE=stream; shift ;;
+    --ctx)      CTX_FILE="$2"; shift 2 ;;
+    --ctx-name) CTX_NAME="$2"; shift 2 ;;
+    --max-ctx)  MAX_CTX="$2"; shift 2 ;;
+    --timeout)  TIMEOUT="$2"; shift 2 ;;
+    --intent)   INTENT="$2"; USER_INTENT=true; shift 2 ;;
     -c|--continue)
       CONT=true
       if [[ "${2:-}" =~ ^[0-9]+$ ]]; then CONT_N="$2"; shift 2; else shift; fi ;;
@@ -111,10 +130,67 @@ done
 # A leading intent token selects the intent; the rest is the query.
 if [ "${#positionals[@]}" -gt 0 ]; then
   case "${positionals[0]}" in
-    cmd|ask|title|commit) INTENT="${positionals[0]}"; USER_INTENT=true; positionals=("${positionals[@]:1}") ;;
+    cmd|ask|title|commit|summarize|explain-code|describe-data|qa)
+      INTENT="${positionals[0]}"; USER_INTENT=true; positionals=("${positionals[@]:1}") ;;
   esac
 fi
 QUERY="${positionals[*]}"
+
+# Structured failure for machine modes; plain stderr for humans. The error CODES
+# and exit codes are the extension contract (q-spec §API) — never branch on text.
+emit_error() { # CODE MESSAGE EXIT
+  case "$MODE" in
+    stream) jq -cn --arg c "$1" --arg m "$2" '{t:"error", code:$c, message:$m}' ;;
+    json)   jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}' ;;
+    *)      echo "q: $2" >&2 ;;
+  esac
+  exit "$3"
+}
+
+# Cancellation must hold during the bash phase too (ctx reads, preflight curl);
+# python replaces this with its own handlers the moment it execs.
+trap 'emit_error cancelled "cancelled by client" 130' TERM INT
+
+# Numeric flags are part of the machine contract — garbage must be a structured
+# error, not a bash arithmetic stderr leak or an uncaught python ValueError.
+[[ "$MAX_CTX" =~ ^[0-9]+$ ]] || emit_error invalid_args "--max-ctx must be a non-negative integer, got '$MAX_CTX'" 2
+[[ "$TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || emit_error invalid_args "--timeout must be seconds (number), got '$TIMEOUT'" 2
+
+# Context document: --ctx - (stdin) · --ctx FILE · or bare non-TTY stdin.
+CTX=""; TRUNC=false
+if [ "$CTX_FILE" = "-" ]; then
+  CTX="$(cat)"
+elif [ -n "$CTX_FILE" ]; then
+  [ -f "$CTX_FILE" ] || emit_error ctx_unreadable "no such file: $CTX_FILE" 12
+  CTX="$(cat "$CTX_FILE")"
+  [ -n "$CTX_NAME" ] || CTX_NAME="$(basename "$CTX_FILE")"
+elif [ ! -t 0 ]; then
+  CTX="$(cat)"
+fi
+if [ -n "$CTX" ]; then
+  # 400k chars (~25x the default window) means a binary or a mistake — refuse
+  # rather than silently summarize 4% of it.
+  [ "${#CTX}" -gt 400000 ] && emit_error ctx_too_large "document is ${#CTX} chars (hard cap 400000)" 12
+  if [ "${#CTX}" -gt "$MAX_CTX" ]; then CTX="${CTX:0:$MAX_CTX}"; TRUNC=true; fi
+  CTX_OPEN="<input>"
+  [ -n "$CTX_NAME" ] && CTX_OPEN="<input name=\"$CTX_NAME\">"
+  if [ -n "$QUERY" ]; then QUERY="$QUERY
+
+$CTX_OPEN
+$CTX
+</input>"
+  else QUERY="$CTX_OPEN
+$CTX
+</input>"; fi
+  if $TRUNC && [ "$MODE" = text ]; then QUERY="$QUERY
+[input truncated at $MAX_CTX chars]"; fi
+fi
+if [ -z "$QUERY" ]; then
+  # Bare `q` is a human asking for help; in machine mode an empty query is a
+  # caller bug and must be a structured error, never help text on stdout.
+  [ "$MODE" = text ] && { show_help; exit 0; }
+  emit_error invalid_args "no prompt or context provided" 2
+fi
 
 # -c: replay the target entry's whole conversation chain (entries sharing a cid)
 # as prior messages, and adopt its model/intent unless overridden. Chains are
@@ -132,50 +208,61 @@ if $CONT && [ -f "$LOG" ]; then
     HIST=$(jq -cs --arg cid "$CID" \
       '[ .[] | select((.cid // .ts) == $cid) | {p:.prompt, r:.response} ] | .[-8:]' "$LOG")
   else
-    echo "q: no entry ${CONT_N:-} to continue" >&2; exit 1
+    emit_error no_such_entry "no entry ${CONT_N:-} to continue" 2
   fi
 fi
-
-# Piped stdin becomes input context below the instruction (so `git diff | q commit`
-# and `cmd | q "summarize"` both work). Truncated to fit the warm model's 8k window.
-STDIN_TEXT=""
-if [ ! -t 0 ]; then
-  STDIN_TEXT="$(cat)"
-  if [ "${#STDIN_TEXT}" -gt 16000 ]; then
-    STDIN_TEXT="${STDIN_TEXT:0:16000}
-[input truncated at 16k chars]"
-  fi
-fi
-if [ -n "$STDIN_TEXT" ]; then
-  if [ -n "$QUERY" ]; then QUERY="$QUERY
-
-<input>
-$STDIN_TEXT
-</input>"
-  else QUERY="$STDIN_TEXT"; fi
-fi
-[ -n "$QUERY" ] || { show_help; exit 0; }
 
 case "$INTENT" in
   cmd) SYS="You are a macOS command assistant (Apple Silicon, BSD userland, zsh) — the permanent default. Reply with ONE shell command only: no explanation, no markdown fences, no clarifying questions. Never ask for clarification; assume the most likely intent and answer. Use macOS/BSD tools and flags ONLY (never GNU-only options like --sort or /proc) UNLESS I explicitly mention a Linux server or container, then use Linux idioms. macOS idioms: ports -> lsof -i :PORT ; memory-sorted procs -> ps -axo pid,rss,comm -m | head ; CPU add -r." ;;
   ask) SYS="Answer in at most 2 short sentences. Be direct, no preamble, never ask clarifying questions — assume the most likely intent and answer. Default environment is macOS on Apple Silicon (zsh); only assume Linux if I explicitly mention a Linux server or container. Don't mention other operating systems unless asked." ;;
   title) SYS="Output a single 2-5 word title in Title Case summarizing the input. No quotes, no trailing punctuation, no preamble — just the title." ;;
   commit) SYS="You write git commit messages from diffs. Output ONLY the commit message — no markdown fences, no preamble, no commentary. Format: an imperative present-tense subject line under 72 characters describing the why/intent of the change (not a file list); if the change is multi-faceted, add a blank line then 2-4 terse body bullets starting with '- '. Never invent changes not visible in the diff." ;;
+  summarize) SYS="Summarize the provided document. Lead with one sentence saying what the document IS, then the key points. Adapt length to the input: 2-3 sentences for short documents, a short bullet list for long ones. No preamble, no meta-commentary about summarizing." ;;
+  explain-code) SYS="Explain what the provided code or script does. Start with a one-sentence purpose a non-programmer could follow, then the key behaviors in order. EXPLICITLY call out anything dangerous or surprising: deletions (rm/trash), curl-pipe-to-shell, sudo, credential or env access, network calls, writes outside its own directory. Be direct, no preamble." ;;
+  describe-data) SYS="Describe the provided tabular or structured data: (1) the schema — columns/fields and apparent types, (2) approximate size, (3) 2-4 notable observations (ranges, outliers, missing values, oddities). Be concrete and terse, no preamble." ;;
+  qa) SYS="Answer the user's question using ONLY the provided document as ground truth. If the document does not contain the answer, say exactly that — never fill gaps from general knowledge. Be direct, at most 4 sentences unless the question demands structure." ;;
 esac
 $RAW && SYS=""
 
-ollama_up || { server_down_msg; exit 1; }
+if ! ollama_up; then
+  if [ "$MODE" = text ]; then server_down_msg; exit 10; fi
+  emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
+fi
 
 # Don't disturb the warm pin: keep_alive is last-writer-wins per request, so if
 # the target model is already resident keep it resident (-1); otherwise load it
 # just for this call and let it unload (0).
 if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
 
-# Deterministic (temperature 0) + history logging. Stream token-by-token for low perceived latency.
+# Deterministic (temperature 0) + history logging. Stream token-by-token for low
+# perceived latency (text mode) or as NDJSON frames (stream mode).
+# exec so python IS this process: a GUI host's SIGTERM must reach the signal
+# handlers (cancelled/130), not kill a bash wrapper around them (143).
 mkdir -p "$DIR/logs"
-python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" <<'PY'
-import sys, json, time, urllib.request
-model, sysp, query, think, keep, intent, logf, histjson, cid = sys.argv[1:10]
+exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" <<'PY'
+import sys, json, time, signal, urllib.request, urllib.error
+(model, sysp, query, think, keep, intent, logf,
+ histjson, cid, mode, timeout, trunc, host) = sys.argv[1:14]
+truncated = trunc == "true"
+
+def emit_err(code, msg, rc):
+    if mode == "stream":
+        sys.stdout.write(json.dumps({"t": "error", "code": code, "message": msg}) + "\n")
+    elif mode == "json":
+        sys.stdout.write(json.dumps({"ok": False, "code": code, "message": msg}) + "\n")
+    else:
+        sys.stderr.write("q: %s\n" % msg)
+    sys.stdout.flush()
+    sys.exit(rc)
+
+# Cancellation contract: the GUI host SIGTERMs us when the user closes the
+# overlay. Exiting drops the HTTP connection, which makes Ollama stop generating.
+signal.signal(signal.SIGTERM, lambda *_: emit_err("cancelled", "cancelled by client", 130))
+signal.signal(signal.SIGINT,  lambda *_: emit_err("cancelled", "cancelled by client", 130))
+if float(timeout) > 0:
+    signal.signal(signal.SIGALRM, lambda *_: emit_err("timeout", "exceeded %ss wall clock" % timeout, 13))
+    signal.setitimer(signal.ITIMER_REAL, float(timeout))
+
 # Replay the conversation chain (newest-first whole exchanges) within ~18k chars
 # — the warm model's 8k-token window minus headroom for system + new prompt.
 hist, budget, picked = json.loads(histjson), 18000, []
@@ -195,7 +282,7 @@ body = json.dumps({
     "keep_alive": int(keep),
     "options": {"temperature": 0},
 }).encode()
-req = urllib.request.Request("http://127.0.0.1:11434/api/chat", data=body,
+req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
                             headers={"Content-Type": "application/json"})
 t0 = time.time(); parts = []
 in_thinking = False  # thinking streams in message.thinking, separate from content
@@ -207,9 +294,10 @@ try:
             if not line:
                 continue
             msg = json.loads(line).get("message", {})
-            # The reasoning trace goes to stderr (dimmed) so stdout stays the bare answer.
+            # The reasoning trace goes to stderr (dimmed) so stdout stays the bare
+            # answer; machine modes drop it entirely.
             trace = msg.get("thinking", "")
-            if trace:
+            if trace and mode == "text":
                 if not in_thinking:
                     sys.stderr.write(dim); in_thinking = True
                 sys.stderr.write(trace); sys.stderr.flush()
@@ -218,22 +306,38 @@ try:
                 if in_thinking:
                     sys.stderr.write(rs + "\n"); sys.stderr.flush(); in_thinking = False
                 parts.append(chunk)
-                sys.stdout.write(chunk); sys.stdout.flush()
+                if mode == "text":
+                    sys.stdout.write(chunk); sys.stdout.flush()
+                elif mode == "stream":
+                    sys.stdout.write(json.dumps({"t": "chunk", "text": chunk}) + "\n")
+                    sys.stdout.flush()
+except urllib.error.HTTPError as e:
+    if e.code == 404:
+        emit_err("model_missing", "model '%s' not available on the server" % model, 11)
+    emit_err("server_down", "HTTP %s from ollama" % e.code, 10)
 except OSError as e:
     # The pre-flight check covers a dead server; this covers it dying mid-request.
-    sys.stderr.write("\nq: lost the ollama server mid-request (%s)\n" % e)
-    sys.exit(1)
+    emit_err("server_down", "lost the ollama server mid-request (%s)" % e, 10)
+signal.setitimer(signal.ITIMER_REAL, 0)
 if in_thinking:
     sys.stderr.write(rs + "\n"); sys.stderr.flush()
-sys.stdout.write("\n")
+ms = int((time.time() - t0) * 1000)
+text = "".join(parts).strip()
+if mode == "text":
+    sys.stdout.write("\n")
+elif mode == "stream":
+    sys.stdout.write(json.dumps({"t": "done", "model": model, "ms": ms, "truncated": truncated}) + "\n")
+elif mode == "json":
+    sys.stdout.write(json.dumps({"ok": True, "text": text, "model": model, "ms": ms, "truncated": truncated}) + "\n")
+sys.stdout.flush()
 try:  # history is best-effort — never break the answer on a log failure
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     with open(logf, "a") as f:
         f.write(json.dumps({
             "ts": ts, "cid": cid or ts,  # chain id: continued -> inherited, fresh -> own ts
             "intent": intent, "model": model, "think": think == "true",
-            "prompt": query, "response": "".join(parts).strip(),
-            "ms": int((time.time() - t0) * 1000),
+            "prompt": query, "response": text,
+            "ms": ms,
         }) + "\n")
 except Exception:
     pass

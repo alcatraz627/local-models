@@ -35,6 +35,34 @@ overview() {
   printf '  %sdocs: ~/Code/local-models/docs/  (plan · q-spec · research · imagegen techniques)%s\n' "$Dm" "$Rs"
 }
 
+# Machine-readable status for GUI hosts (better-file-browser native host).
+# Contract: pure JSON on stdout, exit 0 whenever JSON was produced, <150ms even
+# with the server down — state lives in the payload, not the exit code.
+lm_status_json() {
+  local model="${WARM_MODEL:-gemma4-e4b-warm}" server=down warm=false latency=down
+  local resident='[]' available='[]' ps_json tags_json
+  if ps_json=$(curl -s -m 0.12 "$OLLAMA_HOST/api/ps" 2>/dev/null); then
+    server=up
+    resident=$(printf '%s' "$ps_json" | jq -c '[.models[]?.name]' 2>/dev/null) || resident='[]'
+    # On-disk models — lets a GUI offer model pickers / detect a missing default
+    # without a second round-trip. Same latency cap; degrades to [] on a miss.
+    tags_json=$(curl -s -m 0.12 "$OLLAMA_HOST/api/tags" 2>/dev/null) \
+      && { available=$(printf '%s' "$tags_json" | jq -c '[.models[]?.name]' 2>/dev/null) || available='[]'; }
+    if printf '%s' "$resident" | jq -e --arg m "$model" \
+         'any(.[]; . == $m or startswith($m + ":"))' >/dev/null 2>&1; then
+      warm=true; latency=warm
+    else
+      latency=cold
+    fi
+  fi
+  jq -cn --arg server "$server" --arg host "$OLLAMA_HOST" --arg model "$model" \
+    --argjson warm "$warm" --argjson resident "$resident" --argjson avail "$available" \
+    --arg lat "$latency" --arg tv "${LM_VERSION:-1.0}" \
+    '{api_version: 1, server: $server, host: $host, default_model: $model,
+      warm: $warm, resident_models: $resident, available_models: $avail,
+      latency_class: $lat, toolkit_version: $tv}'
+}
+
 lm_status() {
   printf '%sserver%s   ' "$Y" "$Rs"
   if ollama_up; then
@@ -88,7 +116,7 @@ case "${1:-}" in
   q)        shift; exec "$BIN/q" "$@" ;;
   imagine)  shift; exec "$BIN/imagine" "$@" ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
-  status)   lm_status ;;
+  status)   shift; if [ "${1:-}" = "--json" ]; then lm_status_json; else lm_status; fi ;;
   doctor)   lm_doctor ;;
   timeline) shift; lm_timeline "${1:-20}" ;;
   *) echo "lm: unknown '$1' — try: lm · lm q · lm imagine · lm warm · lm status · lm doctor · lm timeline"; exit 1 ;;

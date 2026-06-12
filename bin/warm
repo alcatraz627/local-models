@@ -43,6 +43,9 @@ case "$cmd" in
     echo "  status   show what's resident + context window (default; bare 'warm')"
     echo "  restart  off -> on"
     echo
+    echo "Residency is a HUMAN choice — GUI hosts get read-only visibility via"
+    echo "'lm status --json' (warm/latency_class) and must not toggle this."
+    echo
     echo "examples:  warm on      warm status      warm off"
     ;;
   *)

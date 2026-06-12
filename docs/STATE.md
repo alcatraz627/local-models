@@ -62,6 +62,13 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   Report: `.claude/output/20260612-skeptical-review/review.md`.
 - **gcc discovery** (2026-06-12) — `~/.claude/features/local-models.md` + CLAUDE.md Tier-2
   pointer: other Claude instances can now find the suite.
+- **Programmatic API v1** (2026-06-12) — for better-file-browser's native-messaging host (spec:
+  `~/Code/better-file-browser/.claude/output/20260612-2014-lm-q-extension-api/spec.md`):
+  `lm status --json` (<150ms), `q --json`/`--stream-json` + `--ctx/-name/-max-ctx/--timeout`,
+  structured error codes w/ stable exits (10-13, 130), SIGTERM abort (q execs python), 4
+  document intents (summarize/explain-code/describe-data/qa). Warmth is READ-ONLY for
+  machine consumers (status reports warm/latency_class/available_models; no programmatic
+  warm-up — user decision 2026-06-12). Contract: `docs/q-spec.md` §API.
 - **Server + warm** — LaunchAgent, `num_ctx`/q8-KV governance, `warm` toggle, verified no-idle.
 - **llm-mini** — watchdog neutralized (`idle_timeout_min=0`) so it can't pkill our server; full
   fold-in deliberately **deferred** (over-engineering; serves a future Claude→local goal).
