@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# lm — single entrypoint for the local-models toolkit (everything runs on your machine).
+#
+#   lm                 overview (this screen)
+#   lm q ...           quick local LLM   (= q)
+#   lm imagine ...     local image gen   (= imagine)
+#   lm warm on|off     warm-model toggle (= warm)
+#   lm status          server + warm + models at a glance
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN="$DIR/bin"
+# shellcheck source=/dev/null
+source "$DIR/config.sh" 2>/dev/null || true   # WARM_MODEL etc — doctor checks the configured one
+# shellcheck source=/dev/null
+source "$BIN/_lib.sh"
+
+overview() {
+  printf '%s%slm%s %s— local-models toolkit (all on your machine, no cloud)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  printf '\n%sCOMMANDS%s\n' "$Y" "$Rs"
+  printf '  %s%-20s%s %squick local LLM — answers, macOS commands, titles%s\n' "$C" 'lm q "..."' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %slocal image generation (Flux/Qwen on the GPU)%s\n' "$C" 'lm imagine "..."' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %ssmoke-check the whole toolkit (server, models, venv, PATH)%s\n' "$C" 'lm doctor' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %smerged q + imagine history, one timeline%s\n' "$C" 'lm timeline [N]' "$Rs" "$Dm" "$Rs"
+  printf '\n%sEXAMPLES%s\n' "$Y" "$Rs"
+  printf '  %s$%s lm q cmd "free up port 3001"\n' "$Dm" "$Rs"
+  printf '  %s$%s lm q "how do I check disk usage"\n' "$Dm" "$Rs"
+  printf '  %s$%s lm imagine --enhance "a cozy reading nook"\n' "$Dm" "$Rs"
+  printf '  %s$%s lm imagine -m qwen "a sign reading OPEN"\n' "$Dm" "$Rs"
+  printf '  %s$%s lm imagine critique out.png "a moody forest"\n' "$Dm" "$Rs"
+  printf '  %s$%s lm warm on        %s# then q + imagine --enhance are sub-second%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
+  printf '\n%sMORE%s\n' "$Y" "$Rs"
+  printf '  per-command help (every flag + examples):  %sq -h%s · %simagine -h%s · %swarm -h%s\n' "$C" "$Rs" "$C" "$Rs" "$C" "$Rs"
+  printf '  %sdocs: ~/Code/local-models/docs/  (plan · q-spec · research · imagegen techniques)%s\n' "$Dm" "$Rs"
+}
+
+lm_status() {
+  printf '%sserver%s   ' "$Y" "$Rs"
+  if ollama_up; then
+    echo "up · ${OLLAMA_HOST#http://}"
+  else
+    echo "DOWN — start: launchctl kickstart -k gui/$(id -u)/$LM_LAUNCHD_LABEL"
+  fi
+  printf '%sloaded%s   resident models (warm)\n' "$Y" "$Rs"
+  ollama ps 2>/dev/null | sed '1d;s/^/  /' | grep -q . && ollama ps 2>/dev/null | sed '1d;s/^/  /' || echo "  none (idle, ~0 RAM)"
+  printf '%smodels%s   on disk\n' "$Y" "$Rs"
+  ollama list 2>/dev/null | sed '1d;s/^/  /' | head -8
+}
+
+# One pass/fail line per dependency the toolkit stands on. Exit 1 if any fail.
+lm_doctor() {
+  local fails=0
+  check() { # LABEL CMD...
+    local label="$1"; shift
+    if "$@" >/dev/null 2>&1; then printf '  %sok%s   %s\n' "$G" "$Rs" "$label"
+    else printf '  %sFAIL%s %s\n' "$Y" "$Rs" "$label"; fails=$((fails+1)); fi
+  }
+  check "jq installed"                       command -v jq
+  check "ollama installed"                   command -v ollama
+  check "server up ($OLLAMA_HOST)"           ollama_up
+  check "LaunchAgent loaded ($LM_LAUNCHD_LABEL)" launchctl print "gui/$(id -u)/$LM_LAUNCHD_LABEL"
+  check "warm model built (${WARM_MODEL:-gemma4-e4b-warm})" \
+        sh -c "ollama list 2>/dev/null | grep -q '^${WARM_MODEL:-gemma4-e4b-warm}'"
+  check "mflux venv ($DIR/.venv)"            test -x "$DIR/.venv/bin/mflux-generate"
+  local c; for c in lm q imagine warm; do
+    check "on PATH: $c -> $BIN/$c"           sh -c "command -v $c | grep -q ."
+  done
+  check "logs dir writable"                  sh -c "mkdir -p '$DIR/logs' && touch '$DIR/logs/.w' && rm -f '$DIR/logs/.w'"
+  if [ "$fails" -eq 0 ]; then echo "all checks passed"; else echo "$fails check(s) failed"; exit 1; fi
+}
+
+# Merged q + imagine history, newest last — one timeline across both tools.
+lm_timeline() {
+  local n="${1:-20}"
+  # gsub: multiline prompts (piped diffs) must stay one row, or sort scatters
+  # their continuation lines through the timeline.
+  {
+    [ -f "$DIR/logs/q-history.jsonl" ] && \
+      jq -r '"\(.ts)  q        \(.intent)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/logs/q-history.jsonl"
+    [ -f "$DIR/outputs/imagine-history.jsonl" ] && \
+      jq -r '"\(.ts)  imagine  \(.kind // "gen")\(if .star then " ★" else "" end)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/outputs/imagine-history.jsonl"
+  } | sort | tail -n "$n"
+}
+
+case "${1:-}" in
+  ''|-h|--help|help) overview ;;
+  q)        shift; exec "$BIN/q" "$@" ;;
+  imagine)  shift; exec "$BIN/imagine" "$@" ;;
+  warm)     shift; exec "$BIN/warm" "$@" ;;
+  status)   lm_status ;;
+  doctor)   lm_doctor ;;
+  timeline) shift; lm_timeline "${1:-20}" ;;
+  *) echo "lm: unknown '$1' — try: lm · lm q · lm imagine · lm warm · lm status · lm doctor · lm timeline"; exit 1 ;;
+esac

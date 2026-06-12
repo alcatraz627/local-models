@@ -1,0 +1,414 @@
+#!/usr/bin/env bash
+# imagine — local image generation via mflux (MLX Flux on Apple Silicon).
+#
+# Runs 100% locally on the GPU. HuggingFace is only the one-time weight download.
+# Observable: prints what it will do, shows mflux's live step progress, then reports
+# output path + size + time + seed, embeds config into the PNG (--metadata), and
+# logs the FULL reproducible config of every run to outputs/imagine-history.jsonl.
+#
+# Iteration verbs (work from a history entry N, see `imagine history`):
+#   redo N             exact re-run (same seed + config; flags override)
+#   vary N             same prompt + config, fresh seed
+#   refine N "delta"   same seed, prompt + ", delta" — steer without losing the image
+# Smart-default goodies:
+#   --enhance   gemma4 (your local LLM) rewrites a terse idea into a rich diffusion prompt
+#   --from IMG  start from an input image (img2img)
+#   --style S   apply a named style preset
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VENV="$DIR/.venv/bin"
+LOG="$DIR/outputs/imagine-history.jsonl"
+# shellcheck source=/dev/null
+source "$DIR/config.sh" 2>/dev/null || true     # for WARM_MODEL (prompt-enhance LLM)
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"                       # colors, help/_kv helpers, jsonl_*, ollama_*
+
+# Model registry — friendly name → mflux binary + variant args + sane step/guidance
+# defaults. ADD A MODEL = add one case line (no repo manager needed). First use of a
+# model downloads its weights to the HF cache.
+resolve_model() {
+  MODEL_ARGS=(); DEF_GUIDANCE=""
+  case "$1" in
+    schnell)                 BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model schnell); DEF_STEPS=4 ;;
+    dev)                     BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model dev);     DEF_STEPS=20; DEF_GUIDANCE=3.5 ;;
+    qwen)                    BIN="$VENV/mflux-generate-qwen";  DEF_STEPS=20; DEF_GUIDANCE=4 ;;
+    flux2|klein|flux2-klein) BIN="$VENV/mflux-generate-flux2"; MODEL_ARGS=(--base-model flux2-klein-4b); DEF_STEPS=8 ;;
+    *)                       BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model "$1");    DEF_STEPS=4 ;;
+  esac
+}
+
+# Named style presets (bash 3.2 — case, not an assoc array).
+style_suffix() {
+  case "$1" in
+    photo)     echo "photorealistic, 35mm photo, natural light, sharp focus, high detail" ;;
+    cinematic) echo "cinematic film still, dramatic lighting, shallow depth of field" ;;
+    anime)     echo "anime style, vibrant, clean lineart, cel shading" ;;
+    watercolor)echo "watercolor painting, soft washes, textured paper" ;;
+    3d)        echo "3D render, octane, soft global illumination, subsurface scattering" ;;
+    cyberpunk) echo "cyberpunk, neon, rain-slick streets, volumetric haze" ;;
+    *)         echo "" ;;
+  esac
+}
+
+# gemma4 (local LLM) as prompt engineer: terse idea -> rich diffusion prompt.
+enhance_prompt() {
+  local idea="$1" sys out model keep
+  model="${WARM_MODEL:-gemma4-e4b-warm}"
+  # keep_alive is last-writer-wins per request: omitting it falls back to the
+  # server's KEEP_ALIVE=0 and would silently un-pin a `warm on` model. Same
+  # guard as q: already resident -> keep resident; else load-and-unload.
+  if ollama_resident "$model"; then keep=-1; else keep=0; fi
+  sys="You are an image-generation prompt engineer. Rewrite the idea as ONE detailed prompt for a diffusion model: subject, composition, lighting, style, lens, mood. Output ONLY the prompt — no preamble, no quotes, under 60 words."
+  out=$(curl -s --max-time 20 http://127.0.0.1:11434/api/chat \
+    -d "$(jq -n --arg m "$model" --arg s "$sys" --arg u "$idea" --argjson k "$keep" \
+      '{model:$m, messages:[{role:"system",content:$s},{role:"user",content:$u}], think:false, stream:false, keep_alive:$k, options:{temperature:0}}')" \
+    | jq -r '.message.content // empty' 2>/dev/null)
+  printf '%s' "${out:-$idea}"
+}
+
+show_help() {
+  printf '%s%simagine%s %s— local image generation (Flux on Apple Silicon, runs on YOUR GPU)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  _sec USAGE
+  _cmd 'imagine "<prompt>"'      'generate (default model + model-aware steps)'
+  _cmd 'imagine redo|vary N'     're-run entry N exactly / with a fresh seed'
+  _cmd 'imagine refine N "delta"' 'seed-locked prompt tweak of entry N'
+  _cmd 'imagine history [N|--json]' 'recent generations, numbered (★ = starred)'
+  _cmd 'imagine show N'          'full metadata of generation N'
+  _cmd 'imagine star N'          'toggle the star on entry N (kept by prune)'
+  _cmd 'imagine prune [-y]'      'list (or -y: Trash) unstarred output images'
+  _cmd 'imagine gallery'         'regenerate outputs/index.html from history'
+  _cmd 'imagine critique IMG ["goal"]' 'local gemma4-vision critique of an image'
+  _sec EXAMPLES
+  printf '  %s$%s imagine "a neon city at night, rain"\n' "$Dm" "$Rs"
+  printf '  %s$%s imagine --enhance "tired developer at 3am"   %s# gemma4 expands the prompt%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
+  printf '  %s$%s imagine refine 12 "warmer light, less fog"    %s# keep the image, steer it%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
+  printf '  %s$%s imagine vary 12                               %s# same prompt, new roll%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
+  printf '  %s$%s imagine --from photo.png "make it watercolor" %s# img2img from an input image%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
+  printf '  %s$%s imagine --style photo "a corgi on a skateboard"\n' "$Dm" "$Rs"
+  printf '  %s$%s imagine -m qwen "a sign reading OPEN"         %s# qwen = legible text%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
+  printf '  %s$%s imagine critique out.png "a moody forest"     %s# local vision critique%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
+  printf '  %s$%s imagine star 12 && imagine prune -y           %s# keep the good one, Trash the rest%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
+  _sec OPTIONS
+  _opt '-e, --enhance'      'gemma4 rewrites your idea into a rich prompt (smart default)'
+  _opt '--from IMG [--strength X]' 'img2img: start from an input image (X=0..1, default 0.5)'
+  _opt '--style NAME'       'photo | cinematic | anime | watercolor | 3d | cyberpunk'
+  _opt '-s, --steps N'      'denoising steps (model-aware default: schnell 4, qwen ~20)'
+  _opt '--neg "..."'        'negative prompt (dev/qwen only — ignored with a warning elsewhere)'
+  _opt '--guidance N'       'prompt adherence (dev/qwen; model default applied)'
+  _opt '--seed N'           'reproducibility (default: random, always recorded)'
+  _opt '--stepwise'         'save each denoising step to outputs/steps/<ts>/'
+  _opt '-q, --quant 3..8'   'weight quantization at load (default 8)'
+  _opt '-W / -H N'          'width / height (default 1024x1024)'
+  _opt '-m, --model M'      'model name (see MODELS); default in config.sh IMAGINE_MODEL'
+  _opt '-o, --output PATH'  'output path (default outputs/img-<ts>.png)'
+  _opt '--open / --no-open' 'force/suppress auto-open (default: open only on a TTY)'
+  _opt '-h, --help'         'show this help'
+  _sec MODELS
+  _opt 'schnell  (default)'   'fast ~25s · great light · weak text/coherence'
+  _opt 'flux2    (balanced)'  'newer · better coherence · 4B, mid download'
+  _opt 'qwen     (best text)' 'legible text · strongest overall · ~1-2 min'
+  _opt 'dev'                  'high quality · gated · non-commercial · slow'
+  printf '  %sdefault: config.sh IMAGINE_MODEL · per-call: -m <name> · first use downloads weights%s\n' "$Dm" "$Rs"
+  _sec NOTES
+  printf '  %sLocal; no network after the one-time download. No tokens/billing — "spend" is%s\n' "$Dm" "$Rs"
+  printf '  %ssteps x wall-time, $0. Each PNG self-documents; history records the full config,%s\n' "$Dm" "$Rs"
+  printf '  %sso redo/vary/refine can reproduce any past run. For legible TEXT use qwen/dev.%s\n' "$Dm" "$Rs"
+}
+
+show_history() {
+  # gsub keeps multiline prompts to ONE display line, so displayed numbers
+  # stay equal to JSONL line numbers (the show/redo/vary/refine contract).
+  jsonl_history "$LOG" "${1:-15}" \
+    '"\(if .star then "★" else " " end) \(.ts[11:19])  \(.steps)st  seed \(.seed)  \((.bytes/1024)|floor)KB  \((.prompt | gsub("\\s+"; " "))[0:40])"'
+  echo "  → imagine show N · redo/vary/refine N · star N · gallery"
+}
+show_entry() {
+  jsonl_entry "$LOG" "${1:-}" \
+    '"#\($i)  \(.ts)\(if .star then "  ★" else "" end)\(if .parent then "  (\(.kind) of #\(.parent))" else "" end)\n  prompt : \(.prompt)\n  model  : \(.model)  steps \(.steps)  seed \(.seed)  quant \(.quant // 8)  \(.width // 1024)x\(.height // 1024)\(if .guidance then "  guidance \(.guidance)" else "" end)\n  output : \(.output)\n  size   : \((.bytes/1024)|floor)KB   time \((.ms/1000))s"'
+}
+
+# Toggle the star flag on history entry N (line replaced by file surgery —
+# NOT awk -v, which C-escape-mangles JSON containing \" or \n).
+star_entry() {
+  local i="$1" line updated total
+  [[ "$i" =~ ^[0-9]+$ ]] || { echo "usage: imagine star <N>"; return 1; }
+  line=$(sed -n "${i}p" "$LOG"); [ -n "$line" ] || { echo "no entry #$i"; return 1; }
+  updated=$(printf '%s' "$line" | jq -c '.star = ((.star // false) | not)')
+  total=$(wc -l < "$LOG" | tr -d ' ')
+  {
+    [ "$i" -gt 1 ] && sed -n "1,$(( i - 1 ))p" "$LOG"
+    printf '%s\n' "$updated"
+    [ "$i" -lt "$total" ] && sed -n "$(( i + 1 )),\$p" "$LOG"
+  } > "$LOG.tmp" && mv -f "$LOG.tmp" "$LOG"
+  printf '%s' "$updated" | jq -r --arg i "$i" 'if .star then "★ starred #\($i)" else "unstarred #\($i)" end'
+}
+
+# List (default) or Trash (-y) every unstarred output image. The keep-set is
+# per FILE, not per entry — a path shared with ANY starred entry survives
+# (paths can repeat via -o reuse or same-second default names).
+prune_outputs() {
+  local yes=false; [ "${1:-}" = "-y" ] && yes=true
+  [ -f "$LOG" ] || { echo "no generations yet"; return; }
+  if $yes && ! command -v trash >/dev/null; then
+    echo "imagine prune: 'trash' not found — refusing to delete"; return 1
+  fi
+  local count=0 f
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    count=$((count+1))
+    if $yes; then trash "$f" && echo "  trashed $f" || echo "  FAILED   $f"; else echo "  $f"; fi
+  done < <(comm -23 \
+      <(jq -r 'select((.star // false) | not) | .output' "$LOG" | sort -u) \
+      <(jq -r 'select(.star // false) | .output' "$LOG" | sort -u))
+  if [ "$count" -eq 0 ]; then echo "nothing to prune (all outputs starred or already gone)"; return; fi
+  $yes || echo "→ imagine prune -y   to move these $count to Trash (starred entries are kept)"
+}
+
+# Regenerate outputs/index.html — a self-contained gallery of every recorded
+# generation (image + prompt + config), newest first. No server, no deps.
+make_gallery() {
+  [ -f "$LOG" ] || { echo "no generations yet"; return; }
+  local out="$DIR/outputs/index.html" cards
+  # Images that live in outputs/ get a relative src; -o paths elsewhere fall
+  # back to file:// so they still render instead of silently breaking.
+  cards=$(jq -r -s --arg outdir "$DIR/outputs/" 'to_entries | reverse | .[] | (.key + 1) as $n | .value |
+    "<figure class=\"\(if .star then "starred" else "" end)\">" +
+    "<img loading=\"lazy\" src=\"\(if (.output | startswith($outdir)) then (.output | split("/") | last) else ("file://" + .output) end)\" alt=\"\">" +
+    "<figcaption><span class=\"n\">#\($n)\(if .star then " ★" else "" end)</span> " +
+    "<span class=\"meta\">\(.model) · \(.steps)st · seed \(.seed)\(if .kind and .parent then " · \(.kind) of #\(.parent)" else "" end)</span>" +
+    "<p>\(.prompt | @html)</p></figcaption></figure>"' "$LOG")
+  cat > "$out" <<HTML
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>imagine — gallery</title>
+<style>
+  :root { --bg:#101216; --surface:#1a1d23; --text:#e6e6e6; --dim:#9aa0a6; --border:#2a2e36; }
+  [data-theme="light"] { --bg:#f6f6f4; --surface:#ffffff; --text:#1a1a1a; --dim:#666; --border:#ddd; }
+  body { background:var(--bg); color:var(--text); font:14px/1.45 -apple-system,sans-serif; margin:0; padding:1.5rem; }
+  header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:1rem; }
+  h1 { font-size:1.1rem; margin:0; } h1 small { color:var(--dim); font-weight:normal; }
+  #theme { background:var(--surface); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:.3rem .7rem; cursor:pointer; }
+  main { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; }
+  figure { background:var(--surface); border:1px solid var(--border); border-radius:8px; margin:0; overflow:hidden; }
+  figure.starred { border-color:#c9a227; }
+  img { width:100%; display:block; aspect-ratio:1; object-fit:cover; }
+  figcaption { padding:.6rem .8rem; }
+  .n { font-weight:600; } .meta { color:var(--dim); font-size:.85em; margin-left:.4rem; }
+  p { margin:.4rem 0 0; color:var(--dim); font-size:.85em; max-height:5.5em; overflow:auto; }
+</style></head>
+<body>
+<header><h1>imagine <small>— local generations, newest first</small></h1>
+<button id="theme">light/dark</button></header>
+<main>
+$cards
+</main>
+<script>
+  const root = document.documentElement;
+  document.getElementById('theme').onclick = () => {
+    root.dataset.theme = root.dataset.theme === 'light' ? '' : 'light';
+    localStorage.setItem('imagine-theme', root.dataset.theme);
+  };
+  root.dataset.theme = localStorage.getItem('imagine-theme') || '';
+</script>
+</body></html>
+HTML
+  echo "gallery → $out"
+  if [ -t 1 ] && command -v open >/dev/null; then open "$out"; fi
+}
+
+# Load history entry N into E_* vars (defaults cover pre-full-config entries).
+load_entry() {
+  local i="$1" line
+  [[ "$i" =~ ^[0-9]+$ ]] || { echo "usage: imagine $VERB <N> [...]"; return 1; }
+  line=$(sed -n "${i}p" "$LOG"); [ -n "$line" ] || { echo "no entry #$i"; return 1; }
+  E_PROMPT=$(printf '%s' "$line" | jq -r '.prompt')
+  E_MODEL=$(printf '%s' "$line" | jq -r '.model')
+  E_STEPS=$(printf '%s' "$line" | jq -r '.steps')
+  E_SEED=$(printf '%s' "$line" | jq -r '.seed')
+  E_GUIDANCE=$(printf '%s' "$line" | jq -r '.guidance // empty')
+  E_QUANT=$(printf '%s' "$line" | jq -r '.quant // 8')
+  E_WIDTH=$(printf '%s' "$line" | jq -r '.width // 1024')
+  E_HEIGHT=$(printf '%s' "$line" | jq -r '.height // 1024')
+  E_NEG=$(printf '%s' "$line" | jq -r '.neg // empty')
+  E_FROM=$(printf '%s' "$line" | jq -r '.from // empty')
+  E_STRENGTH=$(printf '%s' "$line" | jq -r '.strength // 0.5')
+}
+
+# Critique an image with a local vision model (gemma4) — the generate->critique->refine loop.
+# Optional trailing text is the INTENDED result, so it critiques against your goal.
+critique_image() {
+  local img="$1"; shift; local goal="$*"
+  [ -f "$img" ] || { echo "no such image: $img"; return 1; }
+  local model="${IMAGINE_CRITIC_MODEL:-gemma4:26b}" tmp task
+  tmp=$(mktemp); base64 -i "$img" | tr -d '\n' > "$tmp"
+  if [ -n "$goal" ]; then
+    task="The intended result was: \"$goal\". Examine the image and report in 4 short labeled sections: (1) WHAT IT IS, (2) MATCH vs the intent, (3) WHAT WENT WRONG, (4) FIXES (prompt, model, settings). Be direct."
+  else
+    task="Examine the image and report concisely: (1) WHAT IT IS (style/subject/composition), (2) STRENGTHS, (3) WEAKNESSES/artifacts, (4) FIXES to improve it. Be direct."
+  fi
+  echo "  ${Dm}(critiquing $img with $model — loads on demand)${Rs}"
+  jq -n --arg m "$model" \
+        --arg s "You are an honest, concise art critic examining a generated image." \
+        --arg p "$task" --rawfile img "$tmp" \
+        '{model:$m, messages:[{role:"system",content:$s},{role:"user",content:$p,images:[$img]}], stream:false, think:false, options:{temperature:0}}' \
+    | curl -s --max-time 240 http://127.0.0.1:11434/api/chat -d @- \
+    | jq -r '.message.content // .error // "(no response)"'
+  rm -f "$tmp"
+}
+
+VERB=""
+case "${1:-}" in
+  -h|--help|help|'') show_help; exit 0 ;;
+  history)           shift
+                     if [ "${1:-}" = "--json" ]; then
+                       shift; if [ -f "$LOG" ]; then tail -n "${1:-15}" "$LOG"; fi; exit 0
+                     fi
+                     show_history "${1:-15}"; exit 0 ;;
+  show)              shift; show_entry "${1:-}"; exit 0 ;;
+  star)              shift; star_entry "${1:-}"; exit $? ;;
+  prune)             shift; prune_outputs "${1:-}"; exit $? ;;
+  gallery)           shift; make_gallery; exit $? ;;
+  critique)          shift; critique_image "$@"; exit $? ;;
+  redo|vary|refine)  VERB="$1"; shift ;;
+esac
+
+MODEL="${IMAGINE_MODEL:-schnell}"; STEPS=""; GUIDANCE=""; QUANT=8; OUT=""; SEED=""
+STEPWISE=false; WIDTH=1024; HEIGHT=1024; FROM=""; STRENGTH=0.5; STYLE=""; ENHANCE=false; NEG=""
+PARENT=""; KIND="gen"; USER_SEED=false
+AUTO_OPEN=auto   # auto = open only on a TTY; --open/--no-open force it
+
+# Verbs seed every knob from the recorded entry; flags below still override.
+if [ -n "$VERB" ]; then
+  load_entry "${1:-}" || exit 1
+  PARENT="$1"; KIND="$VERB"; shift
+  MODEL="$E_MODEL"; STEPS="$E_STEPS"; SEED="$E_SEED"; GUIDANCE="$E_GUIDANCE"
+  QUANT="$E_QUANT"; WIDTH="$E_WIDTH"; HEIGHT="$E_HEIGHT"
+  NEG="$E_NEG"; FROM="$E_FROM"; STRENGTH="$E_STRENGTH"
+fi
+
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -e|--enhance) ENHANCE=true; shift ;;
+    --from)       FROM="$2"; shift 2 ;;
+    --strength)   STRENGTH="$2"; shift 2 ;;
+    --style)      STYLE="$2"; shift 2 ;;
+    --neg|--negative) NEG="$2"; shift 2 ;;
+    -m|--model)   MODEL="$2"; shift 2 ;;
+    -s|--steps)   STEPS="$2"; shift 2 ;;
+    --guidance)   GUIDANCE="$2"; shift 2 ;;
+    -q|--quant)   QUANT="$2"; shift 2 ;;
+    -o|--output)  OUT="$2"; shift 2 ;;
+    --seed)       SEED="$2"; USER_SEED=true; shift 2 ;;
+    --stepwise)   STEPWISE=true; shift ;;
+    -W|--width)   WIDTH="$2"; shift 2 ;;
+    -H|--height)  HEIGHT="$2"; shift 2 ;;
+    --open)       AUTO_OPEN=yes; shift ;;
+    --no-open)    AUTO_OPEN=no; shift ;;
+    -h|--help)    show_help; exit 0 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+
+if [ -n "$VERB" ]; then
+  case "$VERB" in
+    refine) [ "${#args[@]}" -gt 0 ] || { echo "usage: imagine refine N \"what to change\""; exit 1; }
+            PROMPT="$E_PROMPT, ${args[*]}" ;;
+    *)      PROMPT="$E_PROMPT" ;;
+  esac
+  # vary = same everything, fresh roll (unless the user pinned one).
+  [ "$VERB" = "vary" ] && ! $USER_SEED && SEED=""
+  # Enhance/style shape NEW prompts; on a verb they'd silently mutate the
+  # recorded one — warn-and-drop, same convention as the --neg guard.
+  if $ENHANCE || [ -n "$STYLE" ]; then
+    echo "  ${Y}note:${Rs} --enhance/--style shape new prompts — ignored with '$VERB'"
+    ENHANCE=false; STYLE=""
+  fi
+  RAW_IDEA="$PROMPT"
+else
+  PROMPT="${args[*]}"
+  [ -n "$PROMPT" ] || { show_help; exit 0; }
+  # Smart-default pipeline: enhance (gemma4) → style suffix.
+  RAW_IDEA="$PROMPT"
+  if $ENHANCE; then PROMPT="$(enhance_prompt "$PROMPT")"; fi
+  if [ -n "$STYLE" ]; then
+    suf="$(style_suffix "$STYLE")"; [ -n "$suf" ] && PROMPT="$PROMPT, $suf"
+  fi
+fi
+
+resolve_model "$MODEL"
+[ -n "$STEPS" ]    || STEPS="$DEF_STEPS"
+[ -n "$GUIDANCE" ] || GUIDANCE="$DEF_GUIDANCE"
+
+# Negative prompts only exist on guidance models — warn-and-drop elsewhere
+# (mflux schnell would otherwise fail mid-generation).
+if [ -n "$NEG" ]; then
+  case "$MODEL" in
+    dev|qwen) : ;;
+    *) echo "  ${Y}note:${Rs} --neg needs a dev/qwen model — ignored for '$MODEL'"; NEG="" ;;
+  esac
+fi
+
+mkdir -p "$DIR/outputs"
+[ -n "$OUT" ]  || OUT="$DIR/outputs/img-$(date +%s).png"
+[ -n "$SEED" ] || SEED=$(( RANDOM * 32768 + RANDOM ))
+
+EXTRA=()
+[ -n "$FROM" ] && EXTRA+=(--image-path "$FROM" --image-strength "$STRENGTH")
+[ -n "$NEG" ]  && EXTRA+=(--negative-prompt "$NEG")
+STEPDIR=""
+if $STEPWISE; then
+  STEPDIR="$DIR/outputs/steps/$(date +%s)"; mkdir -p "$STEPDIR"
+  EXTRA+=(--stepwise-image-output-dir "$STEPDIR")
+fi
+
+_sec GENERATING
+_kv model "$MODEL"; _kv steps "$STEPS"; _kv quant "${QUANT}-bit"; _kv seed "$SEED"
+_kv size "${WIDTH}x${HEIGHT}"; _kv output "$OUT"
+[ -n "$PARENT" ] && _kv from "#$PARENT ($KIND)"
+[ -n "$FROM" ]  && _kv img2img "$FROM (strength $STRENGTH)"
+[ -n "$STYLE" ] && _kv style "$STYLE"
+$ENHANCE && { _kv idea "$RAW_IDEA"; _kv enhanced "$PROMPT"; } || _kv prompt "$PROMPT"
+echo "  ${Dm}(mflux live progress below — first run of a new model also downloads it)${Rs}"
+
+GUID_ARGS=(); [ -n "$GUIDANCE" ] && GUID_ARGS=(--guidance "$GUIDANCE")
+t0=$(date +%s)
+if "$BIN" "${MODEL_ARGS[@]}" --steps "$STEPS" --quantize "$QUANT" --seed "$SEED" \
+     --width "$WIDTH" --height "$HEIGHT" --metadata "${GUID_ARGS[@]}" "${EXTRA[@]}" \
+     --prompt "$PROMPT" --output "$OUT"; then rc=0; else rc=$?; fi
+t1=$(date +%s); secs=$(( t1 - t0 ))
+
+if [ "$rc" -eq 0 ] && [ -f "$OUT" ]; then
+  bytes=$(stat -f%z "$OUT" 2>/dev/null || echo 0)
+  _sec DONE
+  _kv file "$OUT"; _kv size "$(du -h "$OUT" | cut -f1)"; _kv time "${secs}s"
+  _kv seed "$SEED   ${Dm}(reuse: imagine --seed $SEED ... · or redo/vary/refine N)${Rs}"
+  $STEPWISE && _kv steps-dir "$STEPDIR"
+  # Full reproducible config — redo/vary/refine and the gallery read this back.
+  jq -cn \
+    --arg ts "$(date -u +%FT%TZ)" --arg prompt "$PROMPT" --arg model "$MODEL" \
+    --argjson steps "$STEPS" --argjson seed "$SEED" --arg output "$OUT" \
+    --argjson bytes "${bytes:-0}" --argjson ms "$(( secs * 1000 ))" \
+    --arg guidance "${GUIDANCE:-}" --argjson quant "$QUANT" \
+    --argjson width "$WIDTH" --argjson height "$HEIGHT" \
+    --arg style "${STYLE:-}" --arg neg "${NEG:-}" --arg from "${FROM:-}" \
+    --arg strength "$STRENGTH" --arg raw_idea "$RAW_IDEA" --argjson enhance "$ENHANCE" \
+    --arg parent "${PARENT:-}" --arg kind "$KIND" \
+    '{ts:$ts, prompt:$prompt, model:$model, steps:$steps, seed:$seed, output:$output,
+      bytes:$bytes, ms:$ms, quant:$quant, width:$width, height:$height,
+      guidance:(if $guidance == "" then null else ($guidance|tonumber) end),
+      style:(if $style == "" then null else $style end),
+      neg:(if $neg == "" then null else $neg end),
+      from:(if $from == "" then null else $from end),
+      strength:($strength|tonumber), enhance:$enhance,
+      raw_idea:(if $enhance then $raw_idea else null end),
+      parent:(if $parent == "" then null else ($parent|tonumber) end),
+      kind:$kind}' >> "$LOG" 2>/dev/null || true
+  case "$AUTO_OPEN" in
+    yes) command -v open >/dev/null && open "$OUT" ;;
+    no)  : ;;
+    auto) [ -t 1 ] && command -v open >/dev/null && open "$OUT" ;;
+  esac
+else
+  _sec FAILED; echo "  generation did not produce $OUT (exit $rc)"; exit 1
+fi

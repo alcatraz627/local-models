@@ -1,0 +1,13 @@
+{
+  "name": "skybound-isles",
+  "description": "Dreamy ethereal floating-islands phone wallpaper (hero-island variant)",
+  "model": "schnell",
+  "seed": 16778,
+  "steps": 4,
+  "width": 768,
+  "height": 1344,
+  "prompt": "A single massive floating island dominating the foreground, lush green cliffs and ancient trees with long waterfalls cascading off its underside into deep clouds far below, a few smaller islands receding into a vast pastel sky, dramatic sense of scale and height, warm golden-hour light with gentle bloom and soft haze, glowing distant horizon, dreamy ethereal atmosphere, weightless and serene, peach and soft-blue and warm gold palette, painterly fantasy concept art, epic vertical composition with deep sky and depth",
+  "image": "presets/skybound-isles.png",
+  "regenerate": "imagine -m schnell -W 768 -H 1344 --seed 16778 \"<prompt from this file>\"",
+  "created": "2026-06-11"
+}

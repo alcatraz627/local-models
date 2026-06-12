@@ -1,0 +1,7 @@
+.venv/
+outputs/
+logs/
+.DS_Store
+_*.claude.md
+.claude/*
+!.claude/output/

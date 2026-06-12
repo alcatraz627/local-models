@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# The local-models Ollama server, run with our resource policy baked in.
+#
+# Self-hosted on purpose: Ollama.app does NOT inherit `launchctl setenv` vars, so
+# server-launch-only settings (notably OLLAMA_MAX_LOADED_MODELS) never took effect
+# when the app owned the server. Running serve ourselves makes the policy
+# deterministic and version-controlled. Owns 127.0.0.1:11434.
+#
+# Started by the LaunchAgent com.alcatraz.local-models-ollama at login; also
+# runnable by hand for debugging. None of these vars are credentials.
+
+# Unload models immediately by default; Tier W overrides per-request (`warm on`).
+export OLLAMA_KEEP_ALIVE=0
+# Warm companion coexists with one on-demand big model without eviction.
+export OLLAMA_MAX_LOADED_MODELS=2
+# Flash attention unlocks the quantized KV cache below.
+export OLLAMA_FLASH_ATTENTION=1
+# q8 KV cache ~halves KV-cache RAM vs f16 (verified: log shows K (q8_0), flash_attn enabled).
+export OLLAMA_KV_CACHE_TYPE=q8_0
+
+# NOTE: OLLAMA_USE_MLX is NOT recognized by Ollama 0.30.6 — it's absent from the server's
+# own config dump, so MLX never activated. Backend is llama.cpp/Metal. Removed to avoid
+# cargo-cult config; revisit if a future Ollama version exposes a real MLX toggle.
+
+exec /opt/homebrew/bin/ollama serve

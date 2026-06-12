@@ -1,0 +1,6 @@
+# Tier W warm companion: gemma4 e4b (QAT 4-bit) with a small context window.
+# Pinning num_ctx low keeps the KV-cache footprint tiny while the model is resident,
+# so the "always available, snappy" model is also cheap to keep warm.
+# Build:  ollama create gemma4-e4b-warm -f modelfiles/gemma4-e4b-warm.Modelfile
+FROM gemma4:e4b-it-qat
+PARAMETER num_ctx 8192

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Tier W on/off control — decide when to pay the warm-start cost vs shut it down.
+#
+#   warm on       load the warm companion model and pin it resident (snappy)
+#   warm off      fully unload it — zero warm footprint
+#   warm status   show what's resident + its context window
+#   warm restart  off -> on
+#
+# Residency is tracked by Ollama itself (ollama ps), not a state file here.
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/config.sh"
+
+cmd="${1:-status}"
+case "$cmd" in
+  on)
+    echo "warming $WARM_MODEL (keep_alive=$WARM_KEEP_ALIVE) ..."
+    # A 1-token generate loads the model and pins it with the chosen keep_alive.
+    curl -s "$OLLAMA_HOST/api/generate" \
+      -d "{\"model\":\"$WARM_MODEL\",\"prompt\":\"ok\",\"stream\":false,\"keep_alive\":$WARM_KEEP_ALIVE}" \
+      >/dev/null || { echo "failed — is the model built? (ollama list)"; exit 1; }
+    ollama ps
+    ;;
+  off)
+    echo "shutting down $WARM_MODEL ..."
+    ollama stop "$WARM_MODEL" 2>/dev/null || true
+    ollama ps
+    ;;
+  status)
+    ollama ps
+    ;;
+  restart)
+    "$0" off
+    "$0" on
+    ;;
+  -h|--help|help)
+    echo "warm — Tier W warm-model toggle (decide when to pay the warm-start cost)"
+    echo
+    echo "usage: warm {on|off|status|restart}"
+    echo "  on       load \$WARM_MODEL ($WARM_MODEL) and pin it resident — snappy q/imagine-enhance"
+    echo "  off      fully unload it — zero warm footprint (~0 idle RAM)"
+    echo "  status   show what's resident + context window (default; bare 'warm')"
+    echo "  restart  off -> on"
+    echo
+    echo "examples:  warm on      warm status      warm off"
+    ;;
+  *)
+    echo "usage: warm {on|off|status|restart}   (try: warm -h)"
+    exit 1
+    ;;
+esac
