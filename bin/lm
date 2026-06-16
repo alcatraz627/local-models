@@ -21,6 +21,7 @@ overview() {
   printf '  %s%-20s%s %slocal image generation (Flux/Qwen on the GPU)%s\n' "$C" 'lm imagine "..."' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %ssmoke-check the whole toolkit (server, models, venv, PATH)%s\n' "$C" 'lm doctor' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %smerged q + imagine history, one timeline%s\n' "$C" 'lm timeline [N]' "$Rs" "$Dm" "$Rs"
   printf '\n%sEXAMPLES%s\n' "$Y" "$Rs"
@@ -98,6 +99,33 @@ lm_doctor() {
   if [ "$fails" -eq 0 ]; then echo "all checks passed"; else echo "$fails check(s) failed"; exit 1; fi
 }
 
+# What models can q/imagine actually use right now: on-disk (Ollama), which is
+# resident, and which is the configured default. --json for machine consumers.
+lm_models() {
+  local model="${WARM_MODEL:-gemma4-e4b-warm}" tags ps resident avail
+  tags=$(curl -s -m 2 "$OLLAMA_HOST/api/tags" 2>/dev/null) \
+    || { echo "server down — start: launchctl kickstart -k gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2; return 1; }
+  # A reachable-but-erroring server (HTTP 500 body) makes curl exit 0 with non-JSON;
+  # validate before the jq pipes, which would otherwise abort under `set -e`.
+  printf '%s' "$tags" | jq -e . >/dev/null 2>&1 \
+    || { echo "server reachable but returned no model list" >&2; return 1; }
+  ps=$(curl -s -m 2 "$OLLAMA_HOST/api/ps" 2>/dev/null)
+  resident=$(printf '%s' "$ps" | jq -c '[.models[]?.name]' 2>/dev/null || echo '[]')
+  if [ "${1:-}" = "--json" ]; then
+    jq -n --arg default "$model" --argjson resident "${resident:-[]}" \
+      --argjson tags "$(printf '%s' "$tags" | jq '[.models[]? | {name, size: (.size // 0), family: .details.family}]' 2>/dev/null || echo '[]')" \
+      '{default: $default, resident: $resident, available: $tags}'
+    return
+  fi
+  printf '%smodels on disk%s  (★ default · ● resident)\n' "$Y" "$Rs"
+  printf '%s' "$tags" | jq -r --arg d "$model" --argjson r "${resident:-[]}" '
+    .models[]? | .name as $n | (((.size // 0)/1073741824*10|floor)/10) as $gb
+    | (if ($n | startswith($d)) then "★" elif ($r | any(. == $n)) then "●" else " " end)
+      + "  " + ($n | (. + "                              ")[0:30]) + "  " + ($gb|tostring) + "GB"' \
+    | sed 's/^/  /'
+  printf '%sdefault%s  %s  %s(config.sh WARM_MODEL · override per call: q -m <name>)%s\n' "$Y" "$Rs" "$model" "$Dm" "$Rs"
+}
+
 # Merged q + imagine history, newest last — one timeline across both tools.
 lm_timeline() {
   local n="${1:-20}"
@@ -117,7 +145,8 @@ case "${1:-}" in
   imagine)  shift; exec "$BIN/imagine" "$@" ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
   status)   shift; if [ "${1:-}" = "--json" ]; then lm_status_json; else lm_status; fi ;;
+  models)   shift; lm_models "${1:-}" ;;
   doctor)   lm_doctor ;;
   timeline) shift; lm_timeline "${1:-20}" ;;
-  *) echo "lm: unknown '$1' — try: lm · lm q · lm imagine · lm warm · lm status · lm doctor · lm timeline"; exit 1 ;;
+  *) echo "lm: unknown '$1' — try: lm · lm q · lm imagine · lm warm · lm status · lm models · lm doctor · lm timeline"; exit 1 ;;
 esac

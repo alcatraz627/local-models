@@ -30,6 +30,15 @@ git diff | q commit       commit message from the piped diff
 | `cmd` | macOS/BSD command assistant; ONE command only | a single shell command |
 | `title` | 2-5 word Title Case summary | a bare title |
 | `commit` | commit-message writer; imperative subject <72 chars, why-over-what | a bare commit message |
+| `summarize` · `describe-data` · `explain-code` · `qa` | **document intents** — REQUIRE a document via `--ctx`/`--file`/stdin | grounded answer |
+
+**Document intents require real context.** `summarize`/`describe-data`/`explain-code`/`qa` refuse
+with no document (`ctx_required`, exit 2) and, if you named an existing file *in the prompt*, nudge
+you to pass it. This closes the trap where a path in the prompt is just text the model can't open
+(the model would otherwise hallucinate "I can't access your filesystem"). `--ctx`/`--file` extract
+text LOCALLY by type — PDF via `pdftotext`, Word/RTF/HTML via `textutil`, text/csv/json/code as-is,
+binaries refused (`file --mime-encoding`). No cloud. For the rationale on why the model does NOT
+orchestrate its own file tools, see `docs/03-tool-orchestration-decision.md`.
 
 ### Flags
 

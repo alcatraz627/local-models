@@ -38,7 +38,8 @@ show_help() {
   _ex 'q cmd "kill everything on port 3001"' '# one macOS command'
   _ex 'q title "<conversation text>"'        '# 2-5 word title'
   _ex 'git diff | q commit'                  '# commit message from the diff'
-  _ex 'q summarize --ctx report.md'          '# TL;DR a document'
+  _ex 'q summarize --file report.pdf'        '# PDF/Word/etc extracted locally'
+  _ex 'q describe-data --file data.csv'      '# schema + observations'
   _ex 'q --json --ctx - qa "who signs off?" < doc.md'  '# machine mode'
   _ex 'q --think "harder reasoning task"'    '# show the thinking trace'
   _ex 'q -m qwen2.5-coder:3b cmd "..."'      '# swap model per call'
@@ -50,7 +51,7 @@ show_help() {
   _opt '--raw'          'no system prompt (bare model)'
   _opt '--json'         'machine mode: one JSON object on stdout, no ANSI'
   _opt '--stream-json'  'machine mode: NDJSON chunk/done/error lines'
-  _opt '--ctx FILE | -' 'context document from a file or stdin'
+  _opt '--ctx, --file FILE | -' 'context document from a file or stdin (- = stdin)'
   _opt '--ctx-name S'   "the document's display name (framing hint)"
   _opt '--max-ctx N'    'truncate context to N chars (default 16000)'
   _opt '--timeout S'    'wall-clock cap; structured timeout error after'
@@ -65,10 +66,13 @@ show_help() {
   _opt 'explain-code'   'what the code does + flags dangerous bits'
   _opt 'describe-data'  'schema + notable observations of tabular data'
   _opt 'qa'             'answer grounded ONLY in the context document'
+  printf '  %sthese four REQUIRE a document via --ctx/--file or stdin — a path%s\n' "$Dm" "$Rs"
+  printf '  %snamed in the prompt is just text and will be refused (ctx_required).%s\n' "$Dm" "$Rs"
   _sec DEFAULTS
   printf '  %smacOS/Apple-Silicon assumed; Linux only if you say "linux server/container".%s\n' "$Dm" "$Rs"
   printf '  %sthinking off · deterministic (temp 0) · never asks · logged to logs/q-history.jsonl%s\n' "$Dm" "$Rs"
-  printf '  %spiped stdin / --ctx is appended as input context (truncated at --max-ctx chars).%s\n' "$Dm" "$Rs"
+  printf '  %s--ctx/--file extracts text locally: PDF (poppler), Word/RTF/HTML (textutil),%s\n' "$Dm" "$Rs"
+  printf '  %stext/csv/json/code as-is; binaries refused. Truncated at --max-ctx chars.%s\n' "$Dm" "$Rs"
   _sec CONFIGURATION
   printf '  %s%s/config.sh%s %s(WARM_MODEL, keep-alive)%s\n' "$C" "$DIR" "$Rs" "$Dm" "$Rs"
 }
@@ -113,7 +117,7 @@ while [ $# -gt 0 ]; do
     --raw)   RAW=true; shift ;;
     --json)        MODE=json; shift ;;
     --stream-json) MODE=stream; shift ;;
-    --ctx)      CTX_FILE="$2"; shift 2 ;;
+    --ctx|--file) CTX_FILE="$2"; shift 2 ;;
     --ctx-name) CTX_NAME="$2"; shift 2 ;;
     --max-ctx)  MAX_CTX="$2"; shift 2 ;;
     --timeout)  TIMEOUT="$2"; shift 2 ;;
@@ -156,13 +160,41 @@ trap 'emit_error cancelled "cancelled by client" 130' TERM INT
 [[ "$MAX_CTX" =~ ^[0-9]+$ ]] || emit_error invalid_args "--max-ctx must be a non-negative integer, got '$MAX_CTX'" 2
 [[ "$TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || emit_error invalid_args "--timeout must be seconds (number), got '$TIMEOUT'" 2
 
-# Context document: --ctx - (stdin) · --ctx FILE · or bare non-TTY stdin.
+# Context document: --ctx - (stdin) · --ctx/--file FILE · or bare non-TTY stdin.
+# Rich formats (PDF, Word, RTF) are extracted to text LOCALLY — no cloud, ever —
+# so "summarize this PDF" works instead of feeding the model raw bytes. Each
+# emit_error runs in THIS scope (the `||`), so its exit actually stops q; calling
+# it inside a `$(...)` would only kill the subshell and swallow the error frame.
 CTX=""; TRUNC=false
 if [ "$CTX_FILE" = "-" ]; then
   CTX="$(cat)"
 elif [ -n "$CTX_FILE" ]; then
   [ -f "$CTX_FILE" ] || emit_error ctx_unreadable "no such file: $CTX_FILE" 12
-  CTX="$(cat "$CTX_FILE")"
+  # Empty file first — else `file --mime-encoding` reports a 0-byte .txt as
+  # "binary" and we'd refuse it with a misleading reason.
+  [ -s "$CTX_FILE" ] || emit_error ctx_empty "file is empty: $CTX_FILE" 12
+  ext="$(printf '%s' "${CTX_FILE##*.}" | tr 'A-Z' 'a-z')"
+  case "$ext" in
+    pdf)
+      command -v pdftotext >/dev/null \
+        || emit_error ctx_unsupported "reading PDF needs poppler — 'brew install poppler'" 12
+      CTX="$(pdftotext -q -nopgbrk "$CTX_FILE" - 2>/dev/null)" \
+        || emit_error ctx_unsupported "pdftotext failed on $CTX_FILE" 12 ;;
+    doc|docx|rtf|odt|html|htm)
+      CTX="$(textutil -convert txt -stdout "$CTX_FILE" 2>/dev/null)" \
+        || emit_error ctx_unsupported "could not extract text from .$ext file" 12 ;;
+    *)
+      # Refuse binaries rather than feed garbage. `file --mime-encoding` is the
+      # right tool — a NUL-only sniff misses NUL-free binaries (200 random bytes
+      # slipped through in testing: ~46% have no NUL in the sample).
+      enc=$(file -b --mime-encoding "$CTX_FILE" 2>/dev/null)
+      [ "$enc" = binary ] && emit_error ctx_binary "'$CTX_FILE' looks binary ($(file -b "$CTX_FILE" 2>/dev/null)) — extract text first" 12
+      CTX="$(cat "$CTX_FILE")" || emit_error ctx_unreadable "could not read $CTX_FILE" 12 ;;
+  esac
+  # A real file that extracted to nothing (scanned/image-only PDF, empty doc).
+  if [ -z "$CTX" ] && [ -s "$CTX_FILE" ]; then
+    emit_error ctx_empty "no extractable text in $CTX_FILE (scanned PDF / image-only?)" 12
+  fi
   [ -n "$CTX_NAME" ] || CTX_NAME="$(basename "$CTX_FILE")"
 elif [ ! -t 0 ]; then
   CTX="$(cat)"
@@ -185,6 +217,23 @@ $CTX
   if $TRUNC && [ "$MODE" = text ]; then QUERY="$QUERY
 [input truncated at $MAX_CTX chars]"; fi
 fi
+# Document intents are meaningless without a document. The #1 trap (observed):
+# naming a file IN THE PROMPT — which is just text the model can't open — and
+# getting a confident "I can't access your filesystem" instead of an answer.
+# Require real context, and if they named an existing file, point at the fix.
+case "$INTENT" in
+  summarize|describe-data|explain-code|qa)
+    if [ -z "$CTX" ]; then
+      hint="'$INTENT' needs a document — pass the file with --ctx <path> (or pipe it in)."
+      set -f
+      for w in $QUERY; do
+        [ -f "$w" ] && { hint="$hint You named '$w' in the prompt (that's just text) — try: q $INTENT --ctx '$w'"; break; }
+      done
+      set +f
+      emit_error ctx_required "$hint" 2
+    fi ;;
+esac
+
 if [ -z "$QUERY" ]; then
   # Bare `q` is a human asking for help; in machine mode an empty query is a
   # caller bug and must be a structured error, never help text on stdout.

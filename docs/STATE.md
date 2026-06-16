@@ -37,6 +37,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - `modelfiles/gemma4-e4b-warm.Modelfile` · `presets/skybound-isles.{json,png}` (a locked wallpaper)
 - `docs/00-plan.md` (plan + build log + V1 line) · `docs/q-spec.md` · `docs/STATE.md` (this)
 - `docs/GOALS.md` — **goals + audit per command** (guiding goal points, implementation notes, ranked improvements; 2026-06-12)
+- `docs/03-tool-orchestration-decision.md` — **DECISION (2026-06-16, MAGI 5/5):** local model does NOT orchestrate its own tools; deterministic `q --ctx/--file` extraction + Claude-Code-as-orchestrator instead. Read before re-opening "let the model read files itself."
 - `.claude/output/20260612-lm-research/` — 4 research reports (consolidation · claude-integration · coding-models · assets-sessions; 2026-06-12)
 - `docs/research/` — runtime, vision, image-gen, **imagegen-techniques** (consolidated reference),
   **art-direction-brief** (the art-director persona's playbook)
