@@ -1,0 +1,21 @@
+lm — local-models toolkit (all on your machine, no cloud)
+
+COMMANDS
+  lm q "..."           quick local LLM — answers, macOS commands, titles
+  lm imagine "..."     local image generation (Flux/Qwen on the GPU)
+  lm warm on|off       warm-model toggle (snappy on / zero-idle off)
+  lm status            server + warm + models at a glance
+  lm doctor            smoke-check the whole toolkit (server, models, venv, PATH)
+  lm timeline [N]      merged q + imagine history, one timeline
+
+EXAMPLES
+  $ lm q cmd "free up port 3001"
+  $ lm q "how do I check disk usage"
+  $ lm imagine --enhance "a cozy reading nook"
+  $ lm imagine -m qwen "a sign reading OPEN"
+  $ lm imagine critique out.png "a moody forest"
+  $ lm warm on        # then q + imagine --enhance are sub-second
+
+MORE
+  per-command help (every flag + examples):  q -h · imagine -h · warm -h
+  docs: ~/Code/local-models/docs/  (plan · q-spec · research · imagegen techniques)

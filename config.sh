@@ -1,10 +1,14 @@
 # Local-models V1 config — sourced by bin/* scripts.
 # One place to change which model is the warm companion and how it behaves.
 
-# Tier W: the small model kept warm for the snappy companion path.
-# A derived model (see modelfiles/) with num_ctx pinned small so its KV-cache
-# footprint stays tiny even while resident.
-WARM_MODEL="${WARM_MODEL:-gemma4-e4b-warm}"
+# Model size tiers — `q -m <alias>` / `q --big` resolve these; any other -m
+# value is passed through literally. All on-demand-loaded except the warm small.
+#   small = the warm companion (snappy, default)   big = heavier MoE for reasoning
+#   code  = coding/tool-use specialist             (chosen for fast MoE shapes, not
+# dense — this 307GB/s machine is bandwidth-bound; see docs/03 + the model-tiers research)
+WARM_MODEL="${WARM_MODEL:-gemma4-e4b-warm}"   # = small
+BIG_MODEL="${BIG_MODEL:-gemma4:26b}"          # MoE (3.8B active): ~30-45 tok/s, best prose + long-ctx
+CODE_MODEL="${CODE_MODEL:-qwen3.6:35b-a3b}"   # MoE: strongest local tool-calling + coding
 
 # -1 = stay resident until `warm off` (never auto-unload). This is the whole
 # point of the toggle: residency is a deliberate choice, not a timer.

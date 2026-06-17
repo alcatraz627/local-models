@@ -46,8 +46,10 @@ show_help() {
   _ex 'q show 14'                            '# full prompt + response of entry 14'
   _sec OPTIONS
   _opt '--think'        'show the reasoning trace (dimmed, on stderr; off by default)'
+  _opt '--no-stats'     'hide the gray token line (text mode; machine modes always carry the counts)'
   _opt '-c, --continue [N]' 'continue last exchange / entry N'
-  _opt '-m, --model M'  "override the model (default: $WARM_MODEL)"
+  _opt '--big / --code' 'use the big (reasoning) / code tier for this call'
+  _opt '-m, --model M'  "model or tier alias: small | big | code | <name> (default: small)"
   _opt '--raw'          'no system prompt (bare model)'
   _opt '--json'         'machine mode: one JSON object on stdout, no ANSI'
   _opt '--stream-json'  'machine mode: NDJSON chunk/done/error lines'
@@ -101,6 +103,19 @@ case "${1:-}" in
   on|off|status|restart) exec "$DIR/bin/warm" "$@" ;;
 esac
 
+# Size-tier aliases → real model names. Any other -m value passes through
+# literally, so `q -m llama3.2` still works. Big/code load on demand (latency OK).
+# Note: the words small/big/code are reserved — a model literally named one of
+# them can't be reached by -m (use the full name:tag, which won't collide).
+resolve_tier() {
+  case "$1" in
+    small) echo "$WARM_MODEL" ;;
+    big)   echo "${BIG_MODEL:-gemma4:26b}" ;;
+    code)  echo "${CODE_MODEL:-qwen3.6:35b-a3b}" ;;
+    *)     echo "$1" ;;
+  esac
+}
+
 MODEL="$WARM_MODEL"
 THINK=false
 INTENT=ask
@@ -108,6 +123,7 @@ RAW=false
 MODE=text          # text (human) | json (one object) | stream (NDJSON)
 CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0
 CONT=false; CONT_N=""; USER_MODEL=false; USER_INTENT=false
+STATS=true         # gray token line at the end (text mode); --no-stats mutes
 
 # Pull leading flags; everything else is positional.
 positionals=()
@@ -115,8 +131,11 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --think) THINK=true; shift ;;
     --raw)   RAW=true; shift ;;
+    --no-stats) STATS=false; shift ;;
     --json)        MODE=json; shift ;;
     --stream-json) MODE=stream; shift ;;
+    --big)   MODEL="$(resolve_tier big)";  USER_MODEL=true; shift ;;
+    --code)  MODEL="$(resolve_tier code)"; USER_MODEL=true; shift ;;
     --ctx|--file) CTX_FILE="$2"; shift 2 ;;
     --ctx-name) CTX_NAME="$2"; shift 2 ;;
     --max-ctx)  MAX_CTX="$2"; shift 2 ;;
@@ -125,7 +144,7 @@ while [ $# -gt 0 ]; do
     -c|--continue)
       CONT=true
       if [[ "${2:-}" =~ ^[0-9]+$ ]]; then CONT_N="$2"; shift 2; else shift; fi ;;
-    -m|--model) MODEL="$2"; USER_MODEL=true; shift 2 ;;
+    -m|--model) MODEL="$(resolve_tier "$2")"; USER_MODEL=true; shift 2 ;;
     -h|--help) show_help; exit 0 ;;
     *) positionals+=("$1"); shift ;;
   esac
@@ -288,10 +307,10 @@ if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
 # exec so python IS this process: a GUI host's SIGTERM must reach the signal
 # handlers (cancelled/130), not kill a bash wrapper around them (143).
 mkdir -p "$DIR/logs"
-exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" <<'PY'
+exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" <<'PY'
 import sys, json, time, signal, urllib.request, urllib.error
 (model, sysp, query, think, keep, intent, logf,
- histjson, cid, mode, timeout, trunc, host) = sys.argv[1:14]
+ histjson, cid, mode, timeout, trunc, host, stats) = sys.argv[1:15]
 truncated = trunc == "true"
 
 def emit_err(code, msg, rc):
@@ -335,6 +354,7 @@ req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
                             headers={"Content-Type": "application/json"})
 t0 = time.time(); parts = []
 in_thinking = False  # thinking streams in message.thinking, separate from content
+tok_in = tok_out = 0  # filled from the final done chunk's eval counts
 dim, rs = ("\033[2m", "\033[0m") if sys.stderr.isatty() else ("", "")
 try:
     with urllib.request.urlopen(req) as r:
@@ -342,7 +362,11 @@ try:
             line = line.strip()
             if not line:
                 continue
-            msg = json.loads(line).get("message", {})
+            obj = json.loads(line)
+            if obj.get("done"):  # final chunk carries the token tallies
+                tok_in = obj.get("prompt_eval_count", 0)
+                tok_out = obj.get("eval_count", 0)
+            msg = obj.get("message", {})
             # The reasoning trace goes to stderr (dimmed) so stdout stays the bare
             # answer; machine modes drop it entirely.
             trace = msg.get("thinking", "")
@@ -374,10 +398,17 @@ ms = int((time.time() - t0) * 1000)
 text = "".join(parts).strip()
 if mode == "text":
     sys.stdout.write("\n")
+    # Gray token-spend line on stderr — like the --think trace, TTY-only, muteable.
+    if stats == "true" and sys.stderr.isatty():
+        tps = (tok_out / (ms / 1000)) if ms else 0
+        sys.stderr.write("%s· %s in / %s out · %d tok/s · %.1fs%s\n"
+                         % (dim, format(tok_in, ","), format(tok_out, ","), tps, ms / 1000, rs))
 elif mode == "stream":
-    sys.stdout.write(json.dumps({"t": "done", "model": model, "ms": ms, "truncated": truncated}) + "\n")
+    sys.stdout.write(json.dumps({"t": "done", "model": model, "ms": ms,
+                                 "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}) + "\n")
 elif mode == "json":
-    sys.stdout.write(json.dumps({"ok": True, "text": text, "model": model, "ms": ms, "truncated": truncated}) + "\n")
+    sys.stdout.write(json.dumps({"ok": True, "text": text, "model": model, "ms": ms,
+                                 "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}) + "\n")
 sys.stdout.flush()
 try:  # history is best-effort — never break the answer on a log failure
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

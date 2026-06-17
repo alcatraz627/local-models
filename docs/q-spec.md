@@ -45,10 +45,31 @@ orchestrate its own file tools, see `docs/03-tool-orchestration-decision.md`.
 | Flag | Effect | Default |
 |---|---|---|
 | `--think` | show the reasoning trace (dimmed, on stderr) | off |
+| `--no-stats` | hide the gray token-spend line (text mode, TTY only) | shown |
 | `-c`, `--continue [N]` | continue the last exchange (or entry N): replays the chain as prior messages, adopts its model/intent unless overridden | off |
-| `-m`, `--model M` | override the model for this call | `$WARM_MODEL` (gemma4-e4b-warm) |
+| `-m`, `--model M` | model OR size-tier alias: `small`·`big`·`code`·`<literal>` | `small` (= `$WARM_MODEL`) |
+| `--big` / `--code` | shorthand for `-m big` / `-m code` (on-demand load; latency OK) | — |
 | `--raw` | no system prompt (bare model) | off |
 | `-h`, `--help` | show help | — |
+
+### Size tiers (config.sh)
+
+| Tier | Model | Lifecycle | For |
+|---|---|---|---|
+| `small` | `WARM_MODEL` = gemma4-e4b | warm/snappy | the everyday companion (default) |
+| `big` | `BIG_MODEL` = gemma4:26b (MoE) | on-demand | reasoning, prose, long-context file reading |
+| `code` | `CODE_MODEL` = qwen3.6:35b-a3b (MoE) | on-demand | coding + tool-use |
+
+Both heavy tiers are **MoE (small active param set)** — fast despite large total, the right shape
+for this bandwidth-bound machine (dense models like the dropped gemma4:31b are ~8× slower per
+token). Rationale + the keep/drop verdict: `docs/03-tool-orchestration-decision.md` +
+`.claude/output/20260616-model-tiers/research.md`.
+
+### Token-spend line
+
+Text mode prints a dim gray line on stderr after the answer: `· <in> in / <out> out · <tok/s> · <s>`
+(TTY-only, like the `--think` trace; `--no-stats` mutes it). Machine modes (`--json`/`--stream-json`)
+carry `tokens_in` / `tokens_out` as fields in the done/result object instead.
 
 ## Behavior contract (the smart defaults)
 

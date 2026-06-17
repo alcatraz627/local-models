@@ -102,7 +102,7 @@ lm_doctor() {
 # What models can q/imagine actually use right now: on-disk (Ollama), which is
 # resident, and which is the configured default. --json for machine consumers.
 lm_models() {
-  local model="${WARM_MODEL:-gemma4-e4b-warm}" tags ps resident avail
+  local model="${WARM_MODEL:-gemma4-e4b-warm}" big="${BIG_MODEL:-gemma4:26b}" code="${CODE_MODEL:-qwen3.6:35b-a3b}" tags ps resident avail
   tags=$(curl -s -m 2 "$OLLAMA_HOST/api/tags" 2>/dev/null) \
     || { echo "server down — start: launchctl kickstart -k gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2; return 1; }
   # A reachable-but-erroring server (HTTP 500 body) makes curl exit 0 with non-JSON;
@@ -117,13 +117,16 @@ lm_models() {
       '{default: $default, resident: $resident, available: $tags}'
     return
   fi
-  printf '%smodels on disk%s  (★ default · ● resident)\n' "$Y" "$Rs"
-  printf '%s' "$tags" | jq -r --arg d "$model" --argjson r "${resident:-[]}" '
+  printf '%smodels on disk%s  (● resident · tier = q -m <tier>)\n' "$Y" "$Rs"
+  printf '%s' "$tags" | jq -r --arg sm "$model" --arg bg "$big" --arg cd "$code" --argjson r "${resident:-[]}" '
     .models[]? | .name as $n | (((.size // 0)/1073741824*10|floor)/10) as $gb
-    | (if ($n | startswith($d)) then "★" elif ($r | any(. == $n)) then "●" else " " end)
-      + "  " + ($n | (. + "                              ")[0:30]) + "  " + ($gb|tostring) + "GB"' \
+    | (if ($r | any(. == $n)) then "●" else " " end) as $res
+    | (def m($a): $n == $a or ($n | startswith($a + ":"));   # exact or name:tag — not bare prefix
+       if   m($sm) then "small" elif m($bg) then "big" elif m($cd) then "code" else "" end) as $tier
+    | $res + " " + ($n | (. + "                            ")[0:28]) + " " + (($gb|tostring) + "GB" | (. + "      ")[0:7]) + " " + $tier' \
     | sed 's/^/  /'
-  printf '%sdefault%s  %s  %s(config.sh WARM_MODEL · override per call: q -m <name>)%s\n' "$Y" "$Rs" "$model" "$Dm" "$Rs"
+  printf '%stiers%s   small=%s · big=%s · code=%s  %s(q --big / q -m code / q -m <literal>)%s\n' \
+    "$Y" "$Rs" "$model" "$big" "$code" "$Dm" "$Rs"
 }
 
 # Merged q + imagine history, newest last — one timeline across both tools.
