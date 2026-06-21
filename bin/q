@@ -75,17 +75,7 @@ show_help() {
   _opt '--timeout S'    'wall-clock cap; structured timeout error after'
   _opt '--intent X'     'intent as a flag (same set as the positional token)'
   _opt '-h, --help'     'show this help'
-  _sec INTENTS
-  _opt 'ask  (default)' 'direct answer, <=2 sentences'
-  _opt 'cmd'            'a single macOS shell command, nothing else'
-  _opt 'title'          'a 2-5 word title (tab titles, fire-and-forget)'
-  _opt 'commit'         'a git commit message (pipe the diff in)'
-  _opt 'summarize'      'TL;DR of the context document, length-adaptive'
-  _opt 'explain-code'   'what the code does + flags dangerous bits'
-  _opt 'describe-data'  'schema + notable observations of tabular data'
-  _opt 'qa'             'answer grounded ONLY in the context document'
-  printf '  %sthese four REQUIRE a document via --ctx/--file or stdin — a path%s\n' "$Dm" "$Rs"
-  printf '  %snamed in the prompt is just text and will be refused (ctx_required).%s\n' "$Dm" "$Rs"
+  list_intents   # the live registry — same source as `q intents`, never drifts
   _sec DEFAULTS
   printf '  %smacOS/Apple-Silicon assumed; Linux only if you say "linux server/container".%s\n' "$Dm" "$Rs"
   printf '  %sthinking off · deterministic (temp 0) · never asks · logged to logs/q-history.jsonl%s\n' "$Dm" "$Rs"
