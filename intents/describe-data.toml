@@ -1,0 +1,4 @@
+name = "describe-data"
+summary = "schema + notable observations of tabular data"
+needs_ctx = true
+system_prompt = "Describe the provided tabular or structured data: (1) the schema — columns/fields and apparent types, (2) approximate size, (3) 2-4 notable observations (ranges, outliers, missing values, oddities). Be concrete and terse, no preamble."
