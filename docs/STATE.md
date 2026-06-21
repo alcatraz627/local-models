@@ -40,6 +40,14 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - `docs/03-tool-orchestration-decision.md` — **DECISION (2026-06-16, MAGI 5/5):** local model does NOT orchestrate its own tools; deterministic `q --ctx/--file` extraction + Claude-Code-as-orchestrator instead. Read before re-opening "let the model read files itself."
 - `.claude/output/20260616-model-tiers/research.md` — **model-tier verdict (2026-06-17):** small=gemma4-e4b (keep), big=gemma4:26b (MoE, on disk), code=qwen3.6:35b-a3b (pulled); **dropped gemma4:31b** (dense → bandwidth-bound, ~8× slower than the 26B MoE for +2-4 pts). MoE wins on this 307GB/s machine.
 - `.claude/output/20260612-lm-research/` — 4 research reports (consolidation · claude-integration · coding-models · assets-sessions; 2026-06-12)
+- `.claude/output/20260619-open-model-landscape/` — **open-model landscape shortlist by task class (2026-06-19):** coding · general/reasoning · vision/VLM · image/video gen · embeddings/RAG + speech. Live-web, 5-agent fan-out, 64GB-fit vs API-tier flagged. Start at `INDEX.md`
+- `.claude/output/20260619-agentic-judgment-benchmarks/` — **benchmarks for agentic judgment (2026-06-19):** reliability (τ²-bench pass^k), ask-vs-assume, abstention/calibration, hallucination, long-horizon. Key finding: **reasoning fine-tuning hurts judgment**; prefer non-thinking instruct variants. Start at `INDEX.md`
+- `.claude/output/20260619-local-judgment-rerank/` — **local candidate re-rank by judgment axes (2026-06-19):** judgment data too sparse to pick by leaderboard → probe locally. Top-3: Qwen3-Coder-Next (coding) / Qwen3-Next-80B-Instruct (judgment) / GLM-4.5-Air (measured τ-bench).
+- `docs/04-ollama-vs-llamacpp-decision.md` — **DECISION (2026-06-20):** stay on Ollama (its engine IS llama.cpp; real perf lever is MLX). Don't migrate.
+- `docs/05-perf-levers-and-usage-audit.md` + `.claude/output/20260620-claude-usage-audit/` — **perf levers (MLX-first) + 3-day usage audit** → ~45-50% of work offloadable to lean/moderate local tiers; multi-file coding (~28%) stays cloud for now.
+- `.claude/output/20260620-efficacy-architecture/` — **software levers to raise EFFICACY without bigger hardware (2026-06-20):** scaffold > size (4B recovers ~90% of frontier via context-control); prioritized ladder (system-prompt → AGENTS.md → constrained-decode → verify-loop → repo-map → routing → LoRA). Start at `INDEX.md`
+- `docs/07-implementation.md` — **IMPLEMENTATION (2026-06-21): behaviour + product spec, professional-but-lean.** Reuses existing substrate (q --json Bus, q-history.jsonl outcome log, config.sh policy, lm status signal); additive coordination not a rebuild. Design principles, behaviour/UX/churn-resistance specs, phased build with concrete artifacts + done-criteria, and the explicit do-NOT-build line. Build from this.
+- `docs/06-local-orchestration-design.md` — **DESIGN (2026-06-20): the disciplined local-model collective** ("army of fools under strict procedures, conducted by Claude"). Units (Worker/Procedure/Conductor/Judge/Index/Governor/Feedback-Sink/Bus), the adaptive Governor (no knob-fiddling), 6 phases, cross-interactions, gcc integration (hooks/i-dream/atone/personas). **PENDING `/magi --mode full` adversarial review** (§9 open decisions) — was blocked by API throttle. Fable = the shut-down Claude Fable 5 (whole-repo structural comprehension → replicate via the Index).
 - `docs/research/` — runtime, vision, image-gen, **imagegen-techniques** (consolidated reference),
   **art-direction-brief** (the art-director persona's playbook)
 - Personas (global): `~/.claude/personas/` — `art-director` (image gen), `closer`/`platform-builder`/`pragmatist` (strategy triad)
@@ -91,7 +99,18 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   (`mflux-upscale-seedvr2`); a Qwen text helper (auto-quote). **→ the June 24 review decides order.**
 - **Proper dev-based ControlNet** — the minecraft-style "you" test washed out on schnell+dev-ControlNet;
   the real fix needs the gated FLUX.1-dev base (license + ~24 GB) + a voxel LoRA + a photo of the user.
+- **Structured-local agentic tier (NEW use-case, 2026-06-19)** — a heavy on-demand local coder
+  for Claude-Code-like multi-file feature work (the *structured* lane, not one-offs). Candidate:
+  **Qwen3-Coder-Next 80B-A3B** (UD-Q4_K_XL, ~38–42 GB) via llama.cpp/GGUF (MLX KV-branch bug in
+  agent loops). Gated on the **efficacy bar** — ballpark of the cloud agent, else route to cloud.
+  Plugging into Claude systems = deferred follow-up audit. See `docs/GOALS.md` § Work-routing lanes
+  + project memory `local_agentic_tier_use_case.md`.
 - **Deferred-with-triggers (V2):** llm-mini/MCP fold (Claude calls local), LAN M4-Pro offload.
+- **If `lm`/`q` quality or ergonomics stall** — evaluate **`simonw/llm`** as a richer base
+  (`brew install llm` + `llm install llm-ollama`, which talks to *this* Ollama). Edge over
+  `lm`/`q` is the ecosystem, not core chat (already solved here): templates, SQLite prompt
+  logging, `-f github:user/repo` fragments, and **embeddings/RAG** plugins for local semantic
+  search. Adopt-the-ecosystem, not gap-fill. (suggested 2026-06-18)
 
 ## Key lessons (load-bearing)
 

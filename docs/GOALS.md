@@ -19,6 +19,25 @@ approach holds up, and what to improve. Written from a full code read of `bin/*`
 6. **Iterate-by-prompt, not fine-tune** — image quality comes from prompts, presets, styles, and
    the local critique loop; models are swappable inputs.
 
+## Work-routing lanes (where a task goes)
+
+The user routes work by an **ease–effort–output triad**, judged by **efficacy**
+(result per unit of *their* effort), not speed. Three lanes:
+
+| Lane | Task shape | Tool | Status |
+|---|---|---|---|
+| **Light** | trivial one-off, quick lookup, acceptable answer | `q` (small local) / "just use chatgpt" | ✅ shipped — goal #2 |
+| **Structured-local** | Claude-Code-like multi-file feature work, offline | heavy on-demand agentic tier (candidate: Qwen3-Coder-Next 80B-A3B) | ⏳ not built — see `STATE.md` PENDING |
+| **Cloud** | cross-repo / Opus-grade reasoning | cloud Claude | ✅ the escalation target |
+
+The **efficacy bar** for the structured-local lane: it earns its place only if it
+lands multi-file work in the *general ballpark* of the cloud agent. The user will
+dedicate machine resources (close heavy apps, give it the box) for that — but if
+efficacy falls short, the work routes to cloud Claude, and one-offs stay on the
+light lane. The model here is **plan → implement → review, not one-shotting**.
+(Vocabulary baked in `~/.claude/memory/global/`: efficacy-over-speed,
+structure-over-one-shotting, work-routing-triad.)
+
 ## Architecture in one diagram
 
 ```
