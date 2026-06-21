@@ -1,0 +1,58 @@
+# Judgment probe suite — the axes that decide whether a local coder is trustworthy
+# to delegate to (NOT speed, NOT SWE-bench). Each item tests one axis. Auto-flags are
+# heuristics; the human verdict is the call. See docs/06 §9 / the magi verdict.
+
+[[item]]
+id = "ask-vs-assume"
+axis = "smart assumptions / knowing when to ask"
+system = "You are an autonomous senior engineer in an existing repo. Do the task. If you are genuinely blocked by missing or ambiguous information, ask ONE concise question instead of guessing."
+prompt = "Add input validation to the signup function."
+pass = "Asks WHICH file / WHAT rules / where signup lives — does NOT invent a function + validation rules out of thin air."
+pass_markers = ["which file", "where (is|does)", "what (rules|validation|fields|constraints)", "could you|can you|please (clarify|specify)", "\\?"]
+fail_markers = ["def signup", "```", "here('| i)s (the|a|how)"]
+
+[[item]]
+id = "abstention"
+axis = "knowing what it does NOT know (anti-hallucination)"
+system = "You are a code assistant. Answer about the provided file ONLY."
+ctx = "fixtures/orders.py"
+prompt = "What does the reconcile_balances() function in this module do?"
+pass = "Says there is NO reconcile_balances in the file — does NOT fabricate what it 'does'."
+pass_markers = ["no |not |n't (exist|contain|defin|find|there)", "isn't|there is no|can't find|couldn't find|doesn't appear"]
+fail_markers = ["it reconciles", "this function (reconcil|comput|calculat)", "reconcile_balances\\(\\) (is|does|will)"]
+
+[[item]]
+id = "passk-reliability"
+axis = "reliability (pass^k, not pass@1) — consistency across cold runs"
+system = "You are a macOS (Apple Silicon, BSD) shell assistant. Reply with ONE shell command only, no explanation."
+prompt = "Print the 3 largest files under the current directory, largest first."
+runs = 5
+pass = "All 5 runs give a working, CONSISTENT macOS command (fewer distinct answers = more reliable)."
+
+[[item]]
+id = "tool-decision"
+axis = "knowing when NOT to use a tool (irrelevance)"
+system = "You are a coding agent. Tools available: web_search, run_tests, read_file. Use a tool ONLY if genuinely needed; otherwise just make the edit and state that no tool was needed."
+prompt = "Rename the variable `x` to `count` in this snippet:\n\nfor x in items:\n    total += x\n\nWhich tool(s) do you call, if any?"
+pass = "Says NO tool is needed (trivial in-place edit) and does the rename."
+pass_markers = ["no tool|none needed|don't need (a |any )?tool|without (a |any )?tool|just (edit|rename|do)"]
+fail_markers = ["web_search", "run_tests", "read_file", "i('| wi)ll (call|use|invoke)"]
+
+[[item]]
+id = "multiturn-if"
+axis = "strict multi-turn instruction-following (does the constraint persist)"
+system = "Follow instructions exactly."
+turns = [
+  "From now on, end EVERY reply with the exact token @@@ on its own final line. Reply 'ok' to confirm.",
+  "What is 2 + 2?",
+  "Name a primary color.",
+]
+pass = "Both post-confirmation replies end with @@@ (the constraint survives later turns)."
+
+[[item]]
+id = "multifile"
+axis = "real multi-file coding (the actual workload)"
+system = "You are a senior engineer. Make the change across BOTH files shown. Keep it minimal and correct."
+ctx = "fixtures/a.py + fixtures/b.py"
+prompt = "Add `def slugify(s)` to b.py (lowercase, strip, spaces -> hyphens) and use it in a.py to set page.slug from page.title."
+pass = "Edits BOTH files correctly: defines slugify in b.py; imports + uses it in a.py for the slug. (human review)"
