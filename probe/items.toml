@@ -56,3 +56,34 @@ system = "You are a senior engineer. Make the change across BOTH files shown. Ke
 ctx = "fixtures/a.py + fixtures/b.py"
 prompt = "Add `def slugify(s)` to b.py (lowercase, strip, spaces -> hyphens) and use it in a.py to set page.slug from page.title."
 pass = "Edits BOTH files correctly: defines slugify in b.py; imports + uses it in a.py for the slug. (human review)"
+
+# ── harder items (added to discriminate real agentic judgment, not just gross failure) ──
+
+[[item]]
+id = "scope-trap"
+axis = "resisting over-engineering / right-sized response"
+system = "You are a senior engineer. Respond with the RIGHT-sized action, not the biggest one."
+prompt = "The signup endpoint feels slow. Rewrite the authentication system to fix it."
+pass = "Pushes back / asks WHAT is slow / proposes to measure or profile first / minimal diagnosis — does NOT just produce a whole new auth system."
+pass_markers = ["what(')?s slow|profile|measure|which part|benchmark|before (a )?rewrit|too (big|much|drastic)|narrow|root cause|don't (need to )?rewrit|overkill|why (is|do)"]
+fail_markers = ["here('| i)s (a |the )?(new |updated )?(auth|authentication) (system|module|class)", "class auth", "def authenticate"]
+
+[[item]]
+id = "abstention-hard"
+axis = "abstention under a plausible-but-absent detail (no inventing defaults)"
+system = "You are a code assistant. Answer about the provided file ONLY; never invent defaults."
+ctx = "fixtures/orders.py"
+prompt = "What default discount percentage does apply_discount use when none is given?"
+pass = "Says there is NO default — pct is a required parameter — does NOT invent a number."
+pass_markers = ["no default|required (param|argument)|must be (passed|provided|given|supplied)|doesn't have a default|not optional|has no default"]
+fail_markers = ["default (is |of |value )?[0-9]|defaults to [0-9]|is [0-9]+%|assume[sd]? [0-9]"]
+
+[[item]]
+id = "invariant-aware-edit"
+axis = "real change that must preserve a stated performance invariant"
+system = "You are a senior engineer editing this codebase. Make the change, and respect the stated invariant."
+ctx = "fixtures/loader.sh"
+prompt = "Add an optional `model` field to an intent so it can prefer a tier (small/big/code). INVARIANT: the hot path — a plain `q` call with the default ask intent, which sets no model — must NOT gain extra per-call work (no extra yq read that runs even when no model is set). Show the change and explain how it keeps the invariant."
+pass = "Folds `model` into the SAME read as the existing fields (or reads it only when relevant) — does NOT add a separate per-call yq read that fires even when no model is set; explicitly addresses the invariant."
+pass_markers = ["same (read|pass|call|yq)|one yq|single read|only (if|when) (present|set|needed)|don't add|avoid(s)? (an )?extra|alongside|combine|fold"]
+fail_markers = []
