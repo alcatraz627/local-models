@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# see — local vision: read an image/screenshot into text with a local VLM.
+#
+# "The VLM parses, the agent reasons": pipe a picture in, get structured text out
+# that Claude (or you) can reason over. All local — the image never leaves the box.
+#
+#   see screenshot.png                  structured read (text verbatim, UI, layout, anomalies)
+#   see chart.png "what's the trend?"   answer a question grounded in the image
+#   see ui.png --json                   machine mode: {ok,text,model,ms} for agents/GUIs
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/config.sh"
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"
+
+# A cold model-load via the ollama API can leave the terminal cursor hidden;
+# `see` doesn't emit cursor codes itself, but it guarantees the cursor is shown
+# again on exit (any path) so it never leaves the terminal in a bad state.
+trap '{ [ -t 1 ] && printf "\033[?25h"; [ -t 2 ] && printf "\033[?25h" >&2; } 2>/dev/null; true' EXIT INT TERM
+
+MODEL="${VISION_MODEL:-gemma4:26b}"
+MODE=text
+positionals=()
+
+show_help() {
+  printf '%s%ssee%s %s— read an image into text with a local vision model%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  _sec USAGE
+  _cmd 'see <image> ["question"]' 'describe an image, or answer a question about it'
+  _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
+  _sec EXAMPLES
+  _ex 'see ~/Desktop/shot.png'                 '# verbatim text + UI + layout'
+  _ex 'see chart.png "is it trending up?"'     '# grounded answer'
+  _ex 'see mockup.png --json'                  '# {ok,text,model,ms} for Claude to read'
+  _sec OPTIONS
+  _opt '--json'        'one JSON object on stdout, no ANSI'
+  _opt '-m, --model M' "vision model (default: \$VISION_MODEL = $MODEL)"
+  _opt '-h, --help'    'this help'
+  _sec NOTES
+  printf '  %slocal-only · the image is never uploaded · model loads on demand, unloads after%s\n' "$Dm" "$Rs"
+}
+
+emit_error() { # CODE MESSAGE EXIT
+  case "$MODE" in
+    json) jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}' ;;
+    *)    echo "see: $2" >&2 ;;
+  esac
+  exit "$3"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --json)     MODE=json; shift ;;
+    -m|--model) MODEL="$2"; shift 2 ;;
+    -h|--help)  show_help; exit 0 ;;
+    *)          positionals+=("$1"); shift ;;
+  esac
+done
+
+if [ "${#positionals[@]}" -eq 0 ]; then
+  [ "$MODE" = text ] && { show_help; exit 0; }
+  emit_error invalid_args "no image given" 2
+fi
+IMG="${positionals[0]}"; QUERY="${positionals[*]:1}"
+
+[ -f "$IMG" ] || emit_error img_unreadable "no such file: $IMG" 12
+case "$(file -b --mime-type "$IMG" 2>/dev/null)" in
+  image/*) : ;;
+  *) emit_error not_an_image "'$IMG' is not an image ($(file -b "$IMG" 2>/dev/null))" 12 ;;
+esac
+
+ollama_up || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
+
+if [ -n "$QUERY" ]; then
+  SYS="You are a precise visual assistant. Report only what is actually visible — never fabricate factual specifics (on-screen text, identity, counts, colors); if those aren't legible, say so. But when the user asks for an interpretation, a mood, or a description in a particular style, you MAY go beyond the literal — ground it in what's visible, and do not refuse."
+  USER="$QUERY"
+else
+  SYS="You are a precise visual parser for a downstream agent. First note what the image IS (UI/dashboard/document/chart/photo/artwork/AI-generated). Then: (1) transcribe ALL legible text VERBATIM and exactly — labels, values, code, messages — as a list, BEFORE any description; (2) report layout/structure and the detail that matters for the kind (dense UI → values + control states; charts → data/trends; photo/art → subject, composition, palette, mood). Anti-fabrication (critical): report ONLY what is visibly present — write [unsure] for anything not clearly legible; never invent an element, value, or control; and do NOT assign meanings to colors unless a visible legend defines them (describe a color as a color). This is a structural read; exact strings should be verified, not trusted blindly."
+  USER="Describe this image."
+fi
+
+# Build + send the request in Python: a real image's base64 is megabytes, which
+# exceeds ARG_MAX if passed via `jq --arg`. The image stays local — it's sent only
+# to 127.0.0.1 ollama, never uploaded.
+t0=$(python3 -c 'import time; print(int(time.time()*1000))')
+set +e
+TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" 2>&1 <<'PY'
+import sys, json, base64, urllib.request, urllib.error
+model, sysp, user, img, host = sys.argv[1:6]
+try:
+    with open(img, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    body = json.dumps({"model": model, "stream": False, "keep_alive": 0, "think": False,
+                       "options": {"temperature": 0},
+                       "messages": [{"role": "system", "content": sysp},
+                                    {"role": "user", "content": user, "images": [b64]}]}).encode()
+    req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        sys.stdout.write(json.load(r).get("message", {}).get("content", "").strip())
+except urllib.error.HTTPError as e:
+    try: m = json.load(e).get("error", "HTTP %s" % e.code)
+    except Exception: m = "HTTP %s" % e.code
+    sys.stderr.write(m)
+    sys.exit(11 if ("not found" in m.lower() or "no such model" in m.lower()) else 10)
+except OSError as e:
+    sys.stderr.write("server unreachable / lost mid-request (%s)" % e); sys.exit(10)
+PY
+)"; rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  [ "$rc" -eq 11 ] && emit_error model_missing "vision model '$MODEL' not installed — pull it: ollama pull $MODEL" 11
+  emit_error model_error "${TEXT:-vision request failed}" 10
+fi
+[ -n "$TEXT" ] || emit_error model_error "no content from the model" 10
+# Guard the end-timestamp: an interrupted run must not feed a blank/garbage value
+# into the arithmetic (which then poisoned the old awk stats line).
+end=$(python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo "$t0")
+[[ "$end" =~ ^[0-9]+$ ]] || end="$t0"
+ms=$(( end - t0 ))
+
+if [ "$MODE" = json ]; then
+  jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" '{ok:true, text:$t, model:$m, ms:$ms}'
+else
+  printf '%s\n' "$TEXT"
+  # Integer ms, no awk — robust even on an interrupted run.
+  [ -t 2 ] && printf '%s· %s · %dms%s\n' "$Dm" "$MODEL" "$ms" "$Rs" >&2
+fi

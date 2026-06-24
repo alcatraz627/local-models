@@ -19,6 +19,8 @@ overview() {
   printf '\n%sCOMMANDS%s\n' "$Y" "$Rs"
   printf '  %s%-20s%s %squick local LLM — answers, macOS cmds, titles, file Q&A; size tiers%s\n' "$C" 'lm q "..."' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slocal image generation (Flux/Qwen on the GPU)%s\n' "$C" 'lm imagine "..."' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sread an image/screenshot into text (local VLM)%s\n' "$C" 'lm see <img>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sreview a PR / files / folder / diff (local coder)%s\n' "$C" 'lm review <x>' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
@@ -94,7 +96,7 @@ lm_doctor() {
   check "warm model built (${WARM_MODEL:-gemma4-e4b-warm})" \
         sh -c "ollama list 2>/dev/null | grep -q '^${WARM_MODEL:-gemma4-e4b-warm}'"
   check "mflux venv ($DIR/.venv)"            test -x "$DIR/.venv/bin/mflux-generate"
-  local c; for c in lm q imagine warm; do
+  local c; for c in lm q imagine warm see review; do
     check "on PATH: $c -> $BIN/$c"           sh -c "command -v $c | grep -q ."
   done
   check "logs dir writable"                  sh -c "mkdir -p '$DIR/logs' && touch '$DIR/logs/.w' && rm -f '$DIR/logs/.w'"
@@ -148,6 +150,8 @@ case "${1:-}" in
   ''|-h|--help|help) overview ;;
   q)        shift; exec "$BIN/q" "$@" ;;
   imagine)  shift; exec "$BIN/imagine" "$@" ;;
+  see)      shift; exec "$BIN/see" "$@" ;;
+  review)   shift; exec "$BIN/review" "$@" ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
   status)   shift; if [ "${1:-}" = "--json" ]; then lm_status_json; else lm_status; fi ;;
   models)   shift; lm_models "${1:-}" ;;

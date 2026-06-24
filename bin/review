@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# review — hand code to the local reviewer (the `review` intent, on the code tier).
+#
+# One ergonomic front door for "look this over": a PR, your uncommitted work, a
+# set of files, a whole folder, or piped code. It assembles the right content and
+# routes it through `q review` on the coding model — all local.
+#
+#   review                     uncommitted changes (git diff)
+#   review --staged            staged changes (git diff --cached)
+#   review 214                 a GitHub PR (gh pr diff; number OR full URL)
+#   review src/a.ts b.py       specific file(s)
+#   review src/server/         a folder (code files, walked; respects .gitignore via fd)
+#   cat snippet.ts | review    piped code (stdin)
+#
+#   -m MODEL    reviewer model (default: the `code` tier from config.sh)
+#   --json      machine-readable review object (for agents / GUIs)
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/config.sh"
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"
+
+MODEL=code; JSON=(); CAP=240000; args=()
+
+show_help() {
+  printf '%s%sreview%s %s— hand code / PRs / folders to the local reviewer%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  _sec USAGE
+  _cmd 'review'            'uncommitted changes (git diff)'
+  _cmd 'review --staged'   'staged changes'
+  _cmd 'review <pr#|url>'  'a GitHub PR (gh pr diff)'
+  _cmd 'review <file>...'  'specific file(s)'
+  _cmd 'review <dir>'      'a folder (code files, walked)'
+  _cmd 'cat x | review'    'piped code (stdin)'
+  _sec OPTIONS
+  _opt '-m MODEL'  'reviewer model (default: the code tier)'
+  _opt '--json'    'machine-readable review object'
+  _sec NOTES
+  printf '  %sruns the `review` intent (intents/review.toml) via q on the code tier;%s\n' "$Dm" "$Rs"
+  printf '  %slogged to q-history — re-render a past review with: q show N | glow%s\n' "$Dm" "$Rs"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -m|--model) MODEL="$2"; shift 2 ;;
+    --json)     JSON=(--json); shift ;;
+    -h|--help)  show_help; exit 0 ;;
+    *)          args+=("$1"); shift ;;
+  esac
+done
+
+content=""; src=""
+collect_file() { content+=$'\n'"=== $1 ==="$'\n'"$(cat "$1")"; }
+
+if [ "${#args[@]}" -eq 0 ]; then
+  if [ ! -t 0 ]; then content="$(cat)"; src="stdin"
+  else
+    content="$(git diff 2>/dev/null || true)"; src="uncommitted changes (git diff)"
+    [ -n "$content" ] || { echo "review: no uncommitted changes — try: review <pr#|file|dir>, or pipe code in" >&2; exit 0; }
+  fi
+elif [ "${args[0]}" = "--staged" ]; then
+  content="$(git diff --cached 2>/dev/null || true)"; src="staged changes"
+  [ -n "$content" ] || { echo "review: nothing staged" >&2; exit 0; }
+elif [ "${args[0]}" = "-" ]; then
+  content="$(cat)"; src="stdin"
+elif [[ "${args[0]}" =~ ^[0-9]+$ || "${args[0]}" == *github.com* ]]; then
+  src="PR ${args[0]}"
+  content="$(gh pr diff "${args[0]}" 2>&1)" || { echo "review: gh pr diff failed: $content" >&2; exit 1; }
+else
+  src="${args[*]}"
+  for p in "${args[@]}"; do
+    if [ -d "$p" ]; then
+      if command -v fd >/dev/null; then
+        while IFS= read -r f; do collect_file "$f"; done \
+          < <(fd -t f -e ts -e tsx -e js -e jsx -e py -e go -e rs -e rb -e java -e c -e h -e cpp -e sh -e sql -e md . "$p")
+      else
+        while IFS= read -r f; do collect_file "$f"; done \
+          < <(find "$p" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.py' -o -name '*.go' -o -name '*.rs' -o -name '*.sh' \) ! -path '*/node_modules/*' ! -path '*/.git/*')
+      fi
+    elif [ -f "$p" ]; then collect_file "$p"
+    else echo "review: no such file or dir: $p" >&2; exit 1; fi
+  done
+fi
+
+[ -n "$content" ] || { echo "review: nothing to review" >&2; exit 2; }
+
+maxctx=$(( ${#content} + 5000 ))
+if [ "$maxctx" -gt "$CAP" ]; then
+  printf '%snote:%s %s chars exceeds the %s-char cap — reviewing the first %s. Narrow with a subdir/file for a full read.\n' \
+    "$Y" "$Rs" "${#content}" "$CAP" "$CAP" >&2
+  maxctx=$CAP
+fi
+printf '%sreviewing%s %s  %s(model=%s · %s chars)%s\n' "$C" "$Rs" "$src" "$Dm" "$MODEL" "${#content}" "$Rs" >&2
+printf '%s' "$content" | q review --ctx - -m "$MODEL" --max-ctx "$maxctx" "${JSON[@]}"

@@ -22,4 +22,12 @@ LM_VERSION="1.1"
 
 # Default image-gen model for `imagine` (override per call with `imagine -m <name>`).
 # Registry names: schnell (fast) · flux2 (balanced) · qwen (best text) · dev · or any HF repo.
-IMAGINE_MODEL="${IMAGINE_MODEL:-schnell}"
+IMAGINE_MODEL="${IMAGINE_MODEL:-qwen}"   # quality-first default; schnell dropped (speed not valued for images) — `imagine -m schnell` re-pulls it
+
+# Local vision model for `see` (read images/screenshots → text).
+# minicpm-v (~5.5GB, ollama-native): OCR-strong default. On a 4-screenshot fidelity
+# test against native-vision ground truth (claude-instances) it transcribed verbatim
+# text/commands/counts that gemma4:26b MISSED ("reads the shape, not the words"), with
+# no hallucinated controls. Trade-off: gemma4:26b (17GB) is the stronger general-scene
+# reasoner — use `see -m gemma4:26b` for that. (qwen3-vl image path hangs in ollama #16264.)
+VISION_MODEL="${VISION_MODEL:-minicpm-v}"

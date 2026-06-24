@@ -110,6 +110,7 @@ def main():
         L += ["**Human verdict:** ☐ pass  ☐ fail — _notes:_", "", "---", ""]
     L += [f"_ran {len(items)} items in {int(time.time() - t0)}s_"]
     out.write_text("\n".join(L))
+    subprocess.run(["ollama", "stop", model], capture_output=True)  # eval done — unload, don't leave it resident
     print(str(out))
 
 

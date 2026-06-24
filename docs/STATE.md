@@ -14,6 +14,8 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 |---|---|---|
 | `q "..."` | quick local LLM — answers, macOS commands (`q cmd`), titles (`q title`); `q history`/`q show N` | `q -h` |
 | `imagine "..."` | local image gen (Flux/Qwen on GPU); `--enhance --from --style --neg --seed --stepwise -m`; `imagine history`/`show`/`critique` | `imagine -h` |
+| `see <img> [q]` | local vision — structural read of an image/screenshot (type + layout + text + anomalies), or a grounded answer; **good-but-verify text** (don't trust exact strings/values blindly); `--json`; `-m minicpm-v` (default) or `gemma4:26b` | `see -h` |
+| `review <pr#\|file\|dir>` | local code review — PR (`gh pr diff N \| review`), files, folders, or stdin; the `review` intent on the code tier; `--json` | `review -h` |
 | `warm on\|off\|status` | Tier W toggle — pin a small model resident (snappy) vs zero-idle | `warm -h` |
 | `lm status` | server + resident + on-disk models | `lm` |
 
