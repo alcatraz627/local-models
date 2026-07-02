@@ -21,6 +21,7 @@ overview() {
   printf '  %s%-20s%s %slocal image generation (Flux/Qwen on the GPU)%s\n' "$C" 'lm imagine "..."' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sread an image/screenshot into text (local VLM)%s\n' "$C" 'lm see <img>' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sreview a PR / files / folder / diff (local coder)%s\n' "$C" 'lm review <x>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sjudge if a local model is trustworthy — reliability/judgment eval%s\n' "$C" 'lm probe <model>' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
@@ -152,6 +153,7 @@ case "${1:-}" in
   imagine)  shift; exec "$BIN/imagine" "$@" ;;
   see)      shift; exec "$BIN/see" "$@" ;;
   review)   shift; exec "$BIN/review" "$@" ;;
+  probe)    shift; exec "$BIN/probe" "$@" ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
   status)   shift; if [ "${1:-}" = "--json" ]; then lm_status_json; else lm_status; fi ;;
   models)   shift; lm_models "${1:-}" ;;
