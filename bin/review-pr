@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# review-pr — isolated full-code review of a GitHub PR. Sugar for `review <pr#> --full`.
+#
+# Fetches the PR's changed files at full content via the GitHub API at the PR head ref
+# (NO checkout — no working tree, anywhere, is touched) and hands them + the diff to the
+# local reviewer on the code tier. For a PR in another repo:
+#
+#   review-pr 217 --repo versable-git/enhancement-product
+#
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/review" --full "$@"

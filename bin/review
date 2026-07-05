@@ -21,7 +21,7 @@ source "$DIR/config.sh"
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"
 
-MODEL=code; JSON=(); CAP=240000; args=()
+MODEL=code; JSON=(); CAP=240000; args=(); REPO=""; FULL=""
 
 show_help() {
   printf '%s%sreview%s %s— hand code / PRs / folders to the local reviewer%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
@@ -34,6 +34,8 @@ show_help() {
   _cmd 'cat x | review'    'piped code (stdin)'
   _sec OPTIONS
   _opt '-m MODEL'  'reviewer model (default: the code tier)'
+  _opt '--full'    'PR: include FULL changed files (fetched via API at the PR head), not just the diff'
+  _opt '--repo S'  'owner/repo for a PR in another repo (e.g. versable-git/enhancement-product)'
   _opt '--json'    'machine-readable review object'
   _sec NOTES
   printf '  %sruns the `review` intent (intents/review.toml) via q on the code tier;%s\n' "$Dm" "$Rs"
@@ -43,6 +45,8 @@ show_help() {
 while [ $# -gt 0 ]; do
   case "$1" in
     -m|--model) MODEL="$2"; shift 2 ;;
+    --repo)     REPO="$2"; shift 2 ;;
+    --full)     FULL=1; shift ;;
     --json)     JSON=(--json); shift ;;
     -h|--help)  show_help; exit 0 ;;
     *)          args+=("$1"); shift ;;
@@ -76,8 +80,26 @@ elif [ "${args[0]}" = "--staged" ]; then
 elif [ "${args[0]}" = "-" ]; then
   content="$(cat)"; src="stdin"
 elif [[ "${args[0]}" =~ ^[0-9]+$ || "${args[0]}" == *github.com* ]]; then
-  src="PR ${args[0]}"
-  content="$(gh pr diff "${args[0]}" 2>&1)" || { echo "review: gh pr diff failed: $content" >&2; exit 1; }
+  pr="${args[0]}"; RA=(); [ -n "$REPO" ] && RA=(--repo "$REPO")
+  if [ -n "$FULL" ]; then
+    # Full review: PR intent + diff + the FULL changed files, fetched via the GitHub
+    # API at the PR head ref. No checkout — no working tree, anywhere, is touched.
+    slug="${REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)}"
+    ref="$(gh pr view "$pr" "${RA[@]}" --json headRefName -q .headRefName 2>/dev/null)"
+    [ -n "$ref" ] || { echo "review: could not resolve PR $pr (try --repo owner/name)" >&2; exit 1; }
+    src="PR $pr — full (diff + changed files @ $ref)"
+    content="# PR $pr — $(gh pr view "$pr" "${RA[@]}" --json title -q .title 2>/dev/null)"$'\n'
+    content+="$(gh pr view "$pr" "${RA[@]}" --json body -q .body 2>/dev/null)"$'\n\n## Diff\n'
+    content+="$(gh pr diff "$pr" "${RA[@]}" 2>&1)"$'\n\n## Full changed files (@ '"$ref"')\n'
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      fb="$(gh api "repos/$slug/contents/$f?ref=$ref" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null)"
+      content+=$'\n'"=== $f ==="$'\n'"${fb:-(binary, or deleted in this PR)}"$'\n'
+    done < <(gh pr view "$pr" "${RA[@]}" --json files --jq '.files[].path' 2>/dev/null)
+  else
+    src="PR $pr"
+    content="$(gh pr diff "$pr" "${RA[@]}" 2>&1)" || { echo "review: gh pr diff failed: $content" >&2; exit 1; }
+  fi
 else
   src="${args[*]}"
   for p in "${args[@]}"; do
