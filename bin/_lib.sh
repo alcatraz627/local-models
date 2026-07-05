@@ -28,10 +28,12 @@ jsonl_history() { # LOG N LINE_JQ
   start=$(( total - n + 1 )); (( start < 1 )) && start=1
   tail -n "$n" "$log" | jq -r "$fmt" | nl -ba -v "$start" -w4 -s'  '
 }
-jsonl_entry() { # LOG N ENTRY_JQ ($i is bound to N inside the jq program)
+jsonl_entry() { # LOG N ENTRY_JQ ($i bound to N in jq). N>0 = stable line no; N<0 counts from the end (-1 = latest)
   local log="$1" i="$2" fmt="$3"
-  [[ "$i" =~ ^[0-9]+$ ]] || { echo "usage: show <N>   (N from 'history')"; return 1; }
   [ -f "$log" ] || { echo "no history yet"; return 1; }
+  local total; total=$(wc -l < "$log" | tr -d ' ')
+  [[ "$i" =~ ^-[0-9]+$ ]] && i=$(( total + i + 1 ))   # -1 -> latest, -2 -> second-latest
+  [[ "$i" =~ ^[0-9]+$ ]] && (( i >= 1 )) || { echo "usage: show <N>   (N from 'history', or -1 for the latest)"; return 1; }
   local line; line=$(sed -n "${i}p" "$log")
   [ -n "$line" ] || { echo "no entry #$i"; return 1; }
   printf '%s' "$line" | jq -r --arg i "$i" "$fmt"

@@ -49,6 +49,18 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Reviews are logged to q-history (review is a q intent). Thin history aliases:
+if [ "${args[0]:-}" = "history" ]; then
+  LOG="$DIR/logs/q-history.jsonl"
+  grep -n '"intent": "review"' "$LOG" 2>/dev/null | tail -n "${args[1]:-15}" | while IFS=: read -r ln js; do
+    printf '%s%4d%s  %s  %s\n' "$Dm" "$ln" "$Rs" "$(printf '%s' "$js" | jq -r '.ts')" \
+      "$(printf '%s' "$js" | jq -r '.prompt' | tr '\n' ' ' | cut -c1-60)"
+  done
+  printf '  %s→ review show N   (or q show N) for the full review · -1 = latest%s\n' "$Dm" "$Rs"
+  exit 0
+fi
+if [ "${args[0]:-}" = "show" ]; then exec q show "${args[@]:1}"; fi
+
 content=""; src=""
 collect_file() { content+=$'\n'"=== $1 ==="$'\n'"$(cat "$1")"; }
 

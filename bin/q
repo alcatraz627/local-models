@@ -397,13 +397,17 @@ if in_thinking:
     sys.stderr.write(rs + "\n"); sys.stderr.flush()
 ms = int((time.time() - t0) * 1000)
 text = "".join(parts).strip()
+try:  # the JSONL line this call will occupy → `q show N` re-pulls it later, no lookup
+    n_entry = sum(1 for _ in open(logf)) + 1
+except Exception:
+    n_entry = 1
 if mode == "text":
     sys.stdout.write("\n")
     # Gray token-spend line on stderr — like the --think trace, TTY-only, muteable.
     if stats == "true" and sys.stderr.isatty():
         tps = (tok_out / (ms / 1000)) if ms else 0
-        sys.stderr.write("%s· %s in / %s out · %d tok/s · %.1fs%s\n"
-                         % (dim, format(tok_in, ","), format(tok_out, ","), tps, ms / 1000, rs))
+        sys.stderr.write("%s· %s in / %s out · %d tok/s · %.1fs · q show %d%s\n"
+                         % (dim, format(tok_in, ","), format(tok_out, ","), tps, ms / 1000, n_entry, rs))
 elif mode == "stream":
     sys.stdout.write(json.dumps({"t": "done", "model": model, "ms": ms,
                                  "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}) + "\n")
