@@ -265,8 +265,12 @@ antigravity migration decision by ~Nov 2026 (ahead of the Dec EOL).
   includes a model-dispatch section; calendar-visible).
 - **`lm gemini`:** confirmed as an lm subcommand.
 
-**Status: fully decided. Phase A (rule + guard-model-tier hook) and Phase B (lm gemini)
-are ready to build — the dedicated gcc session in Task #18.**
+**Status: BUILT (2026-07-07, same session).** Phase A live: `rules/model-tier-routing.md`
+(+ CLAUDE.md Tier-0 brief, `features/model-tier-harness.md`, ceiling-rule cross-link) and
+`guard-model-tier.sh` — live-proven (haiku dispatch passed + logged; a real fable dispatch
+was hard-blocked). Phase B live: `lm gemini` with both `gemini_unavailable` variants
+verified against the real tier-ineligible auth; **happy path UNCONFIRMED until the human
+re-auths gemini (or sets GEMINI_API_KEY)** — the one open human action.
 
 ---
 *Recon sources: `recon-gcc-surfaces.md` (300 lines) · `recon-gemini.md` (161 lines), both in
