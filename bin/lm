@@ -23,6 +23,7 @@ overview() {
   printf '  %s%-20s%s %sreview a PR / files / folder / diff (local coder)%s\n' "$C" 'lm review <x>' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sjudge if a local model is trustworthy — reliability/judgment eval%s\n' "$C" 'lm probe <model>' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sfan one intent across N files, judged (batch runner)%s\n' "$C" 'lm fleet <intent> …' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sopencode on the local code model — auto pin/unpin around the session%s\n' "$C" 'lm opencode [args]' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
@@ -156,6 +157,16 @@ case "${1:-}" in
   review)   shift; exec "$BIN/review" "$@" ;;
   probe)    shift; exec "$BIN/probe" "$@" ;;
   fleet)    shift; exec "$DIR/lib/fleet" "$@" ;;
+  opencode)
+    # Run opencode against the local code tier without paying the no-idle tax:
+    # lease the model for the session (bounded — self-heals if we die hard),
+    # release when opencode exits. NOT exec — the trap must outlive the child.
+    shift
+    command -v opencode >/dev/null 2>&1 || { echo "lm: opencode not installed (brew install opencode)"; exit 1; }
+    "$BIN/warm" on code "${LM_OPENCODE_LEASE:-4h}" >&2
+    trap '"$BIN/warm" off code >/dev/null 2>&1 || true' EXIT INT TERM
+    opencode "$@"
+    ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
   status)   shift; if [ "${1:-}" = "--json" ]; then lm_status_json; else lm_status; fi ;;
   models)   shift; lm_models "${1:-}" ;;
