@@ -4,6 +4,9 @@ A local LLM subsystem for this machine (MacBook Pro M5 Pro, macOS / Apple Silico
 running alongside cloud Claude. Goal: quick local work with **zero idle penalty** —
 nothing heavy resident unless you ask for it.
 
+**The full menu of what it can do, with examples: [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md)** ·
+current state: [`docs/STATE.md`](docs/STATE.md)
+
 ## Components
 
 - **Server** — self-hosted `ollama serve` via LaunchAgent `com.alcatraz.local-models-ollama`

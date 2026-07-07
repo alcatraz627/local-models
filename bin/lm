@@ -41,7 +41,8 @@ overview() {
   printf '  %s$%s lm warm on                                %s# pin the small model — q is then sub-second%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
   printf '\n%sMORE%s\n' "$Y" "$Rs"
   printf '  per-command help (every flag + examples):  %sq -h%s · %simagine -h%s · %swarm -h%s\n' "$C" "$Rs" "$C" "$Rs" "$C" "$Rs"
-  printf '  %sdocs: ~/Code/local-models/docs/  (STATE · q-spec · 03-tool-orchestration-decision · research)%s\n' "$Dm" "$Rs"
+  printf '  the full menu with examples:  %sglow ~/Code/local-models/docs/CAPABILITIES.md%s\n' "$C" "$Rs"
+  printf '  %sdocs: ~/Code/local-models/docs/  (STATE · CAPABILITIES · q-spec · 03-tool-orchestration-decision · research)%s\n' "$Dm" "$Rs"
 }
 
 # Machine-readable status for GUI hosts (better-file-browser native host).
