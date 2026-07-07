@@ -1,0 +1,160 @@
+#!/usr/bin/env bash
+# gemini — the gemini lane of the model-tier harness, behind one stable wrapper.
+#
+# Claude (and you) never call the `gemini` binary directly — always this wrapper
+# (rules/model-tier-routing.md). That isolation is the point: the backend today is
+# the deprecated Homebrew gemini-cli (EOL 2026-12-18); swapping to Antigravity/ACP
+# later changes this file only, no caller anywhere. Front door: `lm gemini …`.
+#
+#   lm gemini "prompt"                one-shot (stdin becomes context: cat doc | lm gemini "sum it")
+#   lm gemini ingest <files...>       feed a corpus into this project's session
+#   lm gemini ask "question"          query the session (project-scoped by default)
+#   lm gemini history [N] · show N    past calls (gem-history.jsonl, q-style numbering)
+#
+# Contract: model pinned to gemini-3.5-flash (user decision — other gemini models
+# unreliable); read-only posture (--approval-mode plan: gemini can generate text,
+# never edit/execute here); auth/tier failures are a STRUCTURED gemini_unavailable
+# error the calling agent must FLAG to the user before falling back to claude/lm.
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"
+
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash}"
+LOG="$DIR/logs/gem-history.jsonl"
+SESS_DIR="$DIR/logs/gemini-sessions"
+MODE=text; TIMEOUT=180; SESSION=""
+
+show_help() {
+  printf '%s%slm gemini%s %s— the gemini lane: throughput + huge context, behind the wrapper%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  _sec USAGE
+  _cmd 'lm gemini "prompt"'          'one-shot; piped stdin becomes context'
+  _cmd 'lm gemini ingest <files...>' "feed files into this project's persistent session"
+  _cmd 'lm gemini ask "question"'    'query the session (cross-project: --session NAME)'
+  _cmd 'lm gemini history [N] · show N' 'past calls, numbered (-1 = latest)'
+  _sec OPTIONS
+  _opt '--json'         'machine mode: {ok, text, model, ms, session} on stdout'
+  _opt '--session NAME' 'explicit session (default: the project dir name; sessions are per-project)'
+  _opt '--timeout N'    "wall-clock cap in seconds (default $TIMEOUT)"
+  _sec NOTES
+  printf '  %smodel pinned %s · read-only (--approval-mode plan) · never call the gemini binary directly%s\n' "$Dm" "$GEMINI_MODEL" "$Rs"
+  printf '  %sif unavailable (auth/tier): structured gemini_unavailable — FLAG to the user, fall back to claude/lm%s\n' "$Dm" "$Rs"
+}
+
+emit_error() { # CODE MESSAGE EXIT
+  if [ "$MODE" = json ]; then jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}'
+  else echo "lm gemini: $2" >&2; fi
+  log_line "error" "$1" "" || true
+  exit "$3"
+}
+
+# History is the API (mirrors q): successes AND failures, one JSONL line each.
+log_line() { # KIND TEXT_OR_CODE MS
+  mkdir -p "$DIR/logs"
+  jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg kind "$1" --arg sess "${SESSION:-}" \
+    --arg model "$GEMINI_MODEL" --arg prompt "${PROMPT:-}" --arg r "$2" --argjson ms "${3:-0}" \
+    '{ts:$ts, kind:$kind, session:(if $sess == "" then null else $sess end),
+      model:$model, prompt:$prompt, response:$r, ms:$ms}' >> "$LOG" 2>/dev/null
+}
+
+# Run the backend with a hard wall-clock cap (kills the whole process group —
+# gemini-cli can hang on interactive prompts it wasn't told to skip).
+run_gemini() { # extra args...; PROMPT in $PROMPT; stdin passes through
+  perl -e '
+    my $t = shift @ARGV;
+    my $p = fork;
+    if ($p == 0) { setpgrp(0,0); exec(@ARGV) or exit 127 }
+    local $SIG{ALRM} = sub { kill "KILL", -$p; exit 124 };
+    alarm $t; waitpid($p, 0); exit($? >> 8);
+  ' "$TIMEOUT" gemini -m "$GEMINI_MODEL" --skip-trust --approval-mode plan "$@" -p "$PROMPT"
+}
+
+# ── Parse ──
+positionals=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help|help) show_help; exit 0 ;;
+    --json)      MODE=json; shift ;;
+    --session)   SESSION="$2"; shift 2 ;;
+    --timeout)   TIMEOUT="$2"; shift 2 ;;
+    *)           positionals+=("$1"); shift ;;
+  esac
+done
+[[ "$TIMEOUT" =~ ^[0-9]+$ ]] || emit_error invalid_args "--timeout must be seconds, got '$TIMEOUT'" 2
+
+CMD="${positionals[0]:-}"
+case "$CMD" in
+  history) jsonl_history "$LOG" "${positionals[1]:-15}" \
+             '"\(.ts[11:19])  \(.kind)  \(.ms)ms  \((.prompt // "") | gsub("\\s+"; " ") | .[0:50])"'; exit 0 ;;
+  show)    jsonl_entry "$LOG" "${positionals[1]:-}" \
+             '"# lm gemini \(.kind)  ·  \(.ts)  ·  \(.model)\(if .session then "  ·  session: " + .session else "" end)\n\n\(.response)"'; exit $? ;;
+  "")      show_help; exit 0 ;;
+esac
+
+command -v gemini >/dev/null 2>&1 \
+  || emit_error gemini_unavailable "gemini CLI not installed (brew install gemini-cli) — FLAG this to the user; fall back to claude/lm" 11
+
+# Sessions are per-project by default (user decision); cross-project reference is
+# manual — pass --session NAME to point at another project's session.
+[ -n "$SESSION" ] || SESSION="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")"
+mkdir -p "$SESS_DIR"
+SESS_FILE="$SESS_DIR/$SESSION.json"
+
+case "$CMD" in
+  ingest)
+    files=("${positionals[@]:1}")
+    [ "${#files[@]}" -gt 0 ] || emit_error invalid_args "ingest needs files: lm gemini ingest <files...>" 2
+    for f in "${files[@]}"; do [ -f "$f" ] || emit_error item_missing "no such file: $f" 12; done
+    PROMPT="Ingest the following files as project context for later questions. Reply ONLY with a numbered digest (max 8 lines) of what you now know."
+    CTX="$(for f in "${files[@]}"; do printf '=== %s ===\n' "$f"; cat "$f"; printf '\n'; done)"
+    KIND=ingest
+    ;;
+  ask)
+    PROMPT="${positionals[*]:1}"
+    [ -n "$PROMPT" ] || emit_error invalid_args 'ask needs a question: lm gemini ask "..."' 2
+    CTX=""; KIND=ask
+    ;;
+  *)
+    PROMPT="${positionals[*]}"
+    CTX=""; [ -t 0 ] || CTX="$(cat)"
+    KIND=oneshot; SESS_ARGS=()
+    ;;
+esac
+[ "$KIND" = oneshot ] || SESS_ARGS=(--session-file "$SESS_FILE")
+
+t0=$(date +%s)
+set +e
+if [ -n "$CTX" ]; then
+  OUT="$(printf '%s' "$CTX" | run_gemini "${SESS_ARGS[@]}" 2>&1)"
+else
+  OUT="$(run_gemini "${SESS_ARGS[@]}" </dev/null 2>&1)"
+fi
+rc=$?
+set -e
+ms=$(( ($(date +%s) - t0) * 1000 ))
+
+if [ "$rc" -ne 0 ]; then
+  # Auth/tier/login failures are the "unavailable" class the routing rule names;
+  # everything else (incl. the 124 timeout kill) is a plain structured error.
+  if printf '%s' "$OUT" | grep -qiE 'IneligibleTier|not eligible|auth|login|credential|quota|permission denied'; then
+    emit_error gemini_unavailable "gemini backend unavailable ($(printf '%s' "$OUT" | rg -io 'IneligibleTierError|not eligible[^.]*' | head -1 | cut -c1-80)) — FLAG this to the user; fall back to claude/lm. Fix: re-auth (gemini → /auth) or set GEMINI_API_KEY." 11
+  fi
+  [ "$rc" -eq 124 ] && emit_error timeout "exceeded ${TIMEOUT}s wall clock" 13
+  emit_error gemini_error "$(printf '%s' "$OUT" | tail -2 | tr '\n' ' ' | cut -c1-200)" 10
+fi
+
+# gemini-cli prints housekeeping lines (e.g. "Ripgrep is not available...") to
+# stdout in some modes — keep the text as-is; consumers treat gemini content as
+# untrusted input anyway (the wrapper guarantees structure, not truth).
+TEXT="$(printf '%s' "$OUT" | sed '/^Ripgrep is not available/d')"
+log_line "$KIND" "$TEXT" "$ms"
+if [ "$MODE" = json ]; then
+  jq -cn --arg t "$TEXT" --arg m "$GEMINI_MODEL" --argjson ms "$ms" \
+    --arg s "$([ "$KIND" = oneshot ] && echo "" || echo "$SESSION")" \
+    '{ok:true, text:$t, model:$m, ms:$ms, session:(if $s == "" then null else $s end)}'
+else
+  printf '%s\n' "$TEXT"
+  [ -t 2 ] && printf '%s· %s · %dms · lm gemini show -1%s\n' "$Dm" "$GEMINI_MODEL" "$ms" "$Rs" >&2
+fi

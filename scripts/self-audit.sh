@@ -24,6 +24,7 @@ Q=$(recent "$LOGS/q-history.jsonl")
 SEE=$(recent "$LOGS/see-history.jsonl")
 FLEET=$(recent "$LOGS/fleet-history.jsonl")
 IMAGINE=$(recent "$DIR/outputs/imagine-history.jsonl")
+GEM=$(recent "$LOGS/gem-history.jsonl")
 
 count() { [ -n "$1" ] && printf '%s\n' "$1" | wc -l | tr -d ' ' || echo 0; }
 
@@ -36,6 +37,7 @@ count() { [ -n "$1" ] && printf '%s\n' "$1" | wc -l | tr -d ' ' || echo 0; }
   echo "| see | $(count "$SEE") | — |"
   echo "| fleet runs | $(count "$FLEET") | $(printf '%s\n' "$FLEET" | jq -s '[.[] | select(.fail > 0)] | length') runs w/ fails |"
   echo "| imagine | $(count "$IMAGINE") | — |"
+  echo "| gemini | $(count "$GEM") | $(printf '%s\n' "$GEM" | jq -s '[.[] | select(.kind == "error")] | length') |"
   echo
   echo "## q failures by code × model"
   printf '%s\n' "$Q" | jq -rs '[.[] | select(.error)] | group_by(.error + "|" + .model)

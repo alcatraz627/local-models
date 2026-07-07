@@ -179,6 +179,25 @@ lm opencode run "fix the failing test"          # headless one-shot
 # provider config: ~/.config/opencode/opencode.jsonc (all local chat models, qwen3.6 default)
 ```
 
+### The gemini lane — `lm gemini` (wrapper-only, never the binary directly)
+
+Throughput + huge-context work on a separate, abundant budget (model pinned
+`gemini-3.5-flash`; read-only posture — it generates text, never edits or executes).
+
+```bash
+lm gemini "brainstorm 20 names for this tool"    # one-shot
+cat big-spec.md | lm gemini "list the risks"     # piped stdin becomes context
+lm gemini ingest src/*.py docs/*.md              # feed a corpus into THIS project's session
+lm gemini ask "where is auth handled?"           # query the session (--session NAME = cross-project)
+lm gemini --json "..."                           # {ok, text, model, ms, session} for agents
+lm gemini history · show -1                      # every call logged (gem-history.jsonl)
+```
+
+If gemini is unavailable (auth/tier/not installed) you get a structured
+`gemini_unavailable` error (exit 11) — the calling agent flags it to the human and falls
+back to Claude/lm lanes (rules/model-tier-routing.md). The wrapper isolates the backend:
+today's deprecated `gemini-cli` (EOL 2026-12) swaps out later with zero caller changes.
+
 Claude (and any agent) drives the suite through the machine modes: `q --json` workers,
 `review --findings`, `see --json`, `lm fleet --json`, `lm status --json`. Local models never
 drive their own tools (docs/03) — the orchestrator extracts context, the model answers.

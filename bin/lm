@@ -25,6 +25,7 @@ overview() {
   printf '  %s%-20s%s %sfan one intent across N files, judged (batch runner)%s\n' "$C" 'lm fleet <intent> …' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sopencode on the local code model — auto pin/unpin around the session%s\n' "$C" 'lm opencode [args]' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %srepo symbol map — build once, "where is X" instantly%s\n' "$C" 'lm index [find X]' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sthe gemini lane — huge-context ingestion, ideation (wrapper-only)%s\n' "$C" 'lm gemini "..."' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
@@ -152,6 +153,8 @@ lm_timeline() {
       jq -r '"\(.ts)  see      \(.img | split("/") | last)  \(((.prompt // "describe") | gsub("\\s+"; " "))[0:40])"' "$DIR/logs/see-history.jsonl"
     [ -f "$DIR/logs/fleet-history.jsonl" ] && \
       jq -r '"\(.ts)  fleet    \(.intent) ×\(.items)  \(.pass)✓/\(.fail)✗"' "$DIR/logs/fleet-history.jsonl"
+    [ -f "$DIR/logs/gem-history.jsonl" ] && \
+      jq -r '"\(.ts)  gemini   \(.kind)\(if .kind == "error" then " ✗" else "" end)  \(((.prompt // "") | gsub("\\s+"; " "))[0:50])"' "$DIR/logs/gem-history.jsonl"
   } | sort | tail -n "$n"
 }
 
@@ -164,6 +167,7 @@ case "${1:-}" in
   probe)    shift; exec "$BIN/probe" "$@" ;;
   fleet)    shift; exec "$DIR/lib/fleet" "$@" ;;
   index)    shift; exec "$DIR/lib/repo-index" "$@" ;;
+  gemini)   shift; exec "$DIR/lib/gemini" "$@" ;;
   opencode)
     # Run opencode against the local code tier without paying the no-idle tax:
     # lease the model for the session (bounded — self-heals if we die hard),

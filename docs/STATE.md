@@ -21,6 +21,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 | `lm fleet <intent> <files…>` | batch fan-out: N files × one intent, concurrency-capped, Judge-gated, run record | `lm fleet -h` |
 | `lm index [find X]` | repo symbol map — "where is X" with live staleness | `lm index -h` |
 | `lm opencode [args]` | opencode on the local code tier — auto lease/release around the session | — |
+| `lm gemini "..."` | the gemini lane (pinned gemini-3.5-flash, wrapper-only, read-only posture); `ingest`/`ask` per-project sessions; structured `gemini_unavailable` fallback. **Happy path UNCONFIRMED — current Google auth is tier-ineligible; re-auth or GEMINI_API_KEY needed** | `lm gemini -h` |
 | `warm on\|off [tier\|model] [ttl]` | companion pin (forever) or **bounded lease** for big tiers; `warm off all` sweeps | `warm -h` |
 | `lm status` / `models` / `doctor` / `timeline` | server + resident + on-disk · tiers · smoke-check · merged history (q/imagine/see/fleet) | `lm` |
 
