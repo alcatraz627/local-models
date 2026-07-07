@@ -39,6 +39,19 @@ jsonl_entry() { # LOG N ENTRY_JQ ($i bound to N in jq). N>0 = stable line no; N<
   printf '%s' "$line" | jq -r --arg i "$i" "$fmt"
 }
 
+# ── Size-tier aliases → real model names ──
+# `-m small|big|code` resolves via config.sh; any other value passes through
+# literally, so `-m llama3.2` still works. The words small/big/code are
+# reserved — a model literally named one of them needs its full name:tag.
+resolve_tier() {
+  case "$1" in
+    small) echo "${WARM_MODEL:-gemma4-e4b-warm}" ;;
+    big)   echo "${BIG_MODEL:-gemma4:26b}" ;;
+    code)  echo "${CODE_MODEL:-qwen3.6:35b-a3b}" ;;
+    *)     echo "$1" ;;
+  esac
+}
+
 # ── Ollama server + residency ──
 ollama_up() { curl -s -m 3 "$OLLAMA_HOST/api/version" >/dev/null 2>&1; }
 

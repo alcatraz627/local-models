@@ -110,18 +110,7 @@ case "${1:-}" in
   on|off|status|restart) exec "$DIR/bin/warm" "$@" ;;
 esac
 
-# Size-tier aliases → real model names. Any other -m value passes through
-# literally, so `q -m llama3.2` still works. Big/code load on demand (latency OK).
-# Note: the words small/big/code are reserved — a model literally named one of
-# them can't be reached by -m (use the full name:tag, which won't collide).
-resolve_tier() {
-  case "$1" in
-    small) echo "$WARM_MODEL" ;;
-    big)   echo "${BIG_MODEL:-gemma4:26b}" ;;
-    code)  echo "${CODE_MODEL:-qwen3.6:35b-a3b}" ;;
-    *)     echo "$1" ;;
-  esac
-}
+# resolve_tier (small/big/code → real names) lives in _lib.sh — shared with lib/fleet.
 
 # Intents are data: intents/<name>.toml = {name, summary, needs_ctx, system_prompt}.
 # Adding an intent is dropping a file — bin/q reads the registry, nothing is hardcoded.
