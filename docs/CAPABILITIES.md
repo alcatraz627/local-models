@@ -68,11 +68,22 @@ when you ask one. Text is good-but-verify (don't trust exact strings blindly).
 ```bash
 see ~/Desktop/shot.png                          # verbatim text + UI + layout + anomalies
 see chart.png "is the trend up or down?"        # grounded answer
+see dashboard.png --ui                          # UI inventory: KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE
+see menu.png --ui "which item is enabled?"      # UI inventory + a focused answer
 see mockup.png --json                           # {ok,text,model,ms} for an agent
 see photo.png --glow                            # rendered read
 see ui.png -m gemma4:26b                        # the stronger general-scene reasoner
 see history · see show -1                       # every read is logged, replayable
 ```
+
+`--ui` is the sectioned UI-inventory read for websites/apps/widgets/mocks — enumerated
+elements with verbatim labels and states, visual hierarchy, icon best-effort, formatting
+patterns, coarse palette. It auto-routes to the big tier (`UI_VISION_MODEL`, measured better
+at structure/state 2026-07-08; `-m` overrides) and honors an active `warm on big` lease for
+batches. Benchmarked vs gemini vision on 15 real screenshots:
+`.claude/output/20260708-vision-ui-batch/report.md` (gemini wins exact-string fidelity,
+`see --ui` wins speed/cost/privacy; crop menu-bar strips before reading). Vision via the
+gemini lane: `lm gemini "describe @shot.png"`.
 
 ## 4 · Code review — `review`
 

@@ -6,6 +6,7 @@
 #
 #   see screenshot.png                  structured read (text verbatim, UI, layout, anomalies)
 #   see chart.png "what's the trend?"   answer a question grounded in the image
+#   see dash.png --ui                   UI mode: enumerated elements, layout, hierarchy, icons
 #   see ui.png --json                   machine mode: {ok,text,model,ms} for agents/GUIs
 set -eo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,7 +21,9 @@ source "$DIR/bin/_lib.sh"
 trap '{ [ -t 1 ] && printf "\033[?25h"; [ -t 2 ] && printf "\033[?25h" >&2; } 2>/dev/null; true' EXIT INT TERM
 
 MODEL="${VISION_MODEL:-gemma4:26b}"
+MODEL_SET=false
 MODE=text
+UI=false
 GLOW=false
 positionals=()
 LOG="$DIR/logs/see-history.jsonl"
@@ -29,13 +32,17 @@ show_help() {
   printf '%s%ssee%s %s— read an image into text with a local vision model%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
   _cmd 'see <image> ["question"]' 'describe an image, or answer a question about it'
+  _cmd 'see <image> --ui'         'UI mode: enumerated elements, layout, hierarchy, icons, patterns'
   _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
   _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
   _sec EXAMPLES
   _ex 'see ~/Desktop/shot.png'                 '# verbatim text + UI + layout'
   _ex 'see chart.png "is it trending up?"'     '# grounded answer'
+  _ex 'see dashboard.png --ui'                 '# sectioned inventory of a website/app/widget UI'
+  _ex 'see menu.png --ui "which item is on?"'  '# UI inventory + a focused answer'
   _ex 'see mockup.png --json'                  '# {ok,text,model,ms} for Claude to read'
   _sec OPTIONS
+  _opt '--ui'          'UI-inventory read for screenshots/mocks (KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE)'
   _opt '--json'        'one JSON object on stdout, no ANSI'
   _opt '--glow'        'render the read through glow (TTY-only, no-op without glow)'
   _opt '-m, --model M' "vision model (default: \$VISION_MODEL = $MODEL)"
@@ -65,8 +72,9 @@ esac
 while [ $# -gt 0 ]; do
   case "$1" in
     --json)     MODE=json; shift ;;
+    --ui)       UI=true; shift ;;
     --glow)     GLOW=true; shift ;;
-    -m|--model) MODEL="$2"; shift 2 ;;
+    -m|--model) MODEL="$2"; MODEL_SET=true; shift 2 ;;
     -h|--help)  show_help; exit 0 ;;
     *)          positionals+=("$1"); shift ;;
   esac
@@ -86,7 +94,47 @@ esac
 
 ollama_up || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
 
-if [ -n "$QUERY" ]; then
+# Don't disturb the warm pin / an active lease: keep_alive is last-writer-wins
+# per request (the _lib.sh contract every API caller must honor) — resident
+# stays resident (-1), cold loads just for this call (0). Matters for --ui
+# batches: a `warm on big 30m` lease survives each read instead of being
+# evicted by a hardcoded keep_alive:0.
+if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
+
+if $UI; then
+  # The UI-inventory lens — the one specialized mode the vision-lenses review
+  # (docs/08, Outcome) sanctioned once a real caller existed. Sections are fixed
+  # so downstream agents can parse by heading. Deliberately NO pixel/spacing
+  # estimates: the June audit showed even theme reads are unreliable, and
+  # requesting measurements invites confident fabrication.
+  #
+  # The rubric is the USER message, not the system prompt: gemma has no true
+  # system role (ollama folds system into the first user turn), and under that
+  # fold gemma4:26b deterministically emitted an early stop ~200 tokens in
+  # (reproduced twice, 2026-07-08). As a plain user message the same rubric
+  # runs to natural completion. Routed to the big tier by default (see
+  # config.sh UI_VISION_MODEL) — measured better at structure/state.
+  $MODEL_SET || MODEL="${UI_VISION_MODEL:-$MODEL}"
+  SYS="You are a precise UI analyst reading a computer-interface screenshot for a downstream agent. Report only what is visibly present."
+  USER="Analyze this interface screenshot (website, app window, dashboard, menu-bar widget, dropdown, or mock). Scan systematically before writing: top edge, left edge, main area, right edge, bottom edge — window title bars, filter rows, and status footers all count. Output EXACTLY these seven markdown sections, in order, each heading bare (never copy instruction text into the output):
+## KIND
+One line: what this interface is and its apparent purpose.
+## LAYOUT
+Each major region (title bar, header, nav, sidebar, main, panel, footer, overlay…) with its position and rough share of the frame, then the natural reading order.
+## HIERARCHY
+The visual hierarchy as an indented tree: what dominates, what nests under what, and what creates each level of emphasis (size, weight, color, position).
+## ELEMENTS
+A numbered enumeration grouped by region, ONE element per line: element type (button, tab, link, input, toggle, chip, card, stat tile, list row, avatar, chart, badge…), its visible text VERBATIM in quotes including any counts or numbers, and visible state (selected, disabled, active, checked…). For long repeated lists, enumerate the first few rows verbatim then summarize the rest with the total count shown on screen.
+## ICONS
+Each distinct icon or glyph: where it sits, its shape in plain words, and its likely meaning qualified as (likely). Minimal/SVG icons: best-effort shape description; pixel accuracy is not expected.
+## PATTERNS
+Repeated formatting conventions: e.g. cards: icon + title + big value + delta, or rows: icon / text / badge / percent / age — alignment and grouping rules the design reuses.
+## PALETTE
+Coarse only: light or dark theme (as a guess), the 3-5 dominant colors in plain words, and the accent color plus what carries it. The caller must verify before citing.
+Anti-fabrication (critical): enumerate ONLY what is visibly present. Never pad a section to look complete — a short honest section beats a full invented one. Write [unsure] for anything not clearly legible; never invent an element, value, or state. Before claiming an element is selected or active, check which item actually carries the highlight."
+  [ -n "$QUERY" ] && USER="$USER
+Additional focus: $QUERY"
+elif [ -n "$QUERY" ]; then
   SYS="You are a precise visual assistant. Report only what is actually visible — never fabricate factual specifics (on-screen text, identity, counts, colors); if those aren't legible, say so. But when the user asks for an interpretation, a mood, or a description in a particular style, you MAY go beyond the literal — ground it in what's visible, and do not refuse."
   USER="$QUERY"
 else
@@ -97,16 +145,21 @@ fi
 # Build + send the request in Python: a real image's base64 is megabytes, which
 # exceeds ARG_MAX if passed via `jq --arg`. The image stays local — it's sent only
 # to 127.0.0.1 ollama, never uploaded.
+# num_ctx 8192: image tiles + the sectioned UI prompt overflow the 4096 default
+# of some models and the read silently truncates mid-generation (observed on
+# gemma4:26b 2026-07-08); num_predict -1 lifts any Modelfile output cap.
+# (Keep apostrophes out of the PY block below — bash 3.2 misparses quotes in
+# heredocs inside $(...).)
 t0=$(python3 -c 'import time; print(int(time.time()*1000))')
 set +e
-TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" 2>&1 <<'PY'
+TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" 2>&1 <<'PY'
 import sys, json, base64, urllib.request, urllib.error
-model, sysp, user, img, host = sys.argv[1:6]
+model, sysp, user, img, host, keep = sys.argv[1:7]
 try:
     with open(img, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
-    body = json.dumps({"model": model, "stream": False, "keep_alive": 0, "think": False,
-                       "options": {"temperature": 0},
+    body = json.dumps({"model": model, "stream": False, "keep_alive": int(keep), "think": False,
+                       "options": {"temperature": 0, "num_ctx": 8192, "num_predict": -1},
                        "messages": [{"role": "system", "content": sysp},
                                     {"role": "user", "content": user, "images": [b64]}]}).encode()
     req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
@@ -135,10 +188,11 @@ end=$(python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo
 ms=$(( end - t0 ))
 
 # History is best-effort — never break the answer on a log failure.
+READ_MODE=general; if $UI; then READ_MODE=ui; fi
 mkdir -p "$DIR/logs"
 jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg img "$IMG" --arg p "$QUERY" \
-   --arg m "$MODEL" --argjson ms "$ms" --arg r "$TEXT" \
-   '{ts:$ts, img:$img, prompt:(if $p == "" then null else $p end), model:$m, ms:$ms, response:$r}' \
+   --arg m "$MODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
+   '{ts:$ts, img:$img, prompt:(if $p == "" then null else $p end), mode:$rm, model:$m, ms:$ms, response:$r}' \
    >> "$LOG" 2>/dev/null || true
 
 if [ "$MODE" = json ]; then

@@ -31,3 +31,10 @@ IMAGINE_MODEL="${IMAGINE_MODEL:-qwen}"   # quality-first default; schnell droppe
 # no hallucinated controls. Trade-off: gemma4:26b (17GB) is the stronger general-scene
 # reasoner — use `see -m gemma4:26b` for that. (qwen3-vl image path hangs in ollama #16264.)
 VISION_MODEL="${VISION_MODEL:-minicpm-v}"
+
+# `see --ui` (the UI-inventory read) routes to the big tier by default: on the
+# i-dream dashboard ground-truth test (2026-07-08) gemma4:26b read structure
+# minicpm-v kept getting wrong — the actually-selected nav item, region
+# proportions, per-element states — while matching its verbatim recall.
+# `see -m <model>` still overrides.
+UI_VISION_MODEL="${UI_VISION_MODEL:-$BIG_MODEL}"

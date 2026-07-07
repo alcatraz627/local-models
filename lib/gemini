@@ -39,6 +39,7 @@ show_help() {
   printf '%s%slm gemini%s %s— the gemini lane: throughput + huge context, behind the wrapper%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
   _cmd 'lm gemini "prompt"'          'one-shot; piped stdin becomes context'
+  _cmd 'lm gemini "… @img.png"'      'vision: @path attaches an image (relative to CWD; verified 2026-07-08)'
   _cmd 'lm gemini ingest <files...>' "feed files into this project's persistent session"
   _cmd 'lm gemini ask "question"'    'query the session (cross-project: --session NAME)'
   _cmd 'lm gemini history [N] · show N' 'past calls, numbered (-1 = latest)'
