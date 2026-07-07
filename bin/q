@@ -69,6 +69,7 @@ show_help() {
   _opt '--raw'          'no system prompt (bare model)'
   _opt '--json'         'machine mode: one JSON object on stdout, no ANSI'
   _opt '--stream-json'  'machine mode: NDJSON chunk/done/error lines'
+  _opt '--format FILE'  'constrain output to a JSON schema (with --json: adds parsed .data)'
   _opt '--ctx, --file FILE | -' 'context document from a file or stdin (- = stdin)'
   _opt '--ctx-name S'   "the document's display name (framing hint)"
   _opt '--max-ctx N'    'truncate context to N chars (default 16000)'
@@ -124,7 +125,7 @@ THINK=false
 INTENT=ask
 RAW=false
 MODE=text          # text (human) | json (one object) | stream (NDJSON)
-CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0
+CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0; FORMAT_FILE=""
 CONT=false; CONT_N=""; USER_MODEL=false; USER_INTENT=false
 STATS=true         # gray token line at the end (text mode); --no-stats mutes
 
@@ -139,6 +140,7 @@ while [ $# -gt 0 ]; do
     --stream-json) MODE=stream; shift ;;
     --big)   MODEL="$(resolve_tier big)";  USER_MODEL=true; shift ;;
     --code)  MODEL="$(resolve_tier code)"; USER_MODEL=true; shift ;;
+    --format)   FORMAT_FILE="$2"; shift 2 ;;
     --ctx|--file) CTX_FILE="$2"; shift 2 ;;
     --ctx-name) CTX_NAME="$2"; shift 2 ;;
     --max-ctx)  MAX_CTX="$2"; shift 2 ;;
@@ -178,6 +180,16 @@ trap 'emit_error cancelled "cancelled by client" 130' TERM INT
 # error, not a bash arithmetic stderr leak or an uncaught python ValueError.
 [[ "$MAX_CTX" =~ ^[0-9]+$ ]] || emit_error invalid_args "--max-ctx must be a non-negative integer, got '$MAX_CTX'" 2
 [[ "$TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || emit_error invalid_args "--timeout must be seconds (number), got '$TIMEOUT'" 2
+
+# Constrained decoding: --format FILE passes a JSON schema to Ollama's `format`
+# field, so the model's output IS schema-valid JSON. In --json mode the envelope
+# gains a `data` field with that output pre-parsed.
+FORMAT=""
+if [ -n "$FORMAT_FILE" ]; then
+  [ -f "$FORMAT_FILE" ] || emit_error format_unreadable "no such schema file: $FORMAT_FILE" 12
+  FORMAT="$(jq -c . "$FORMAT_FILE" 2>/dev/null)" \
+    || emit_error format_invalid "schema is not valid JSON: $FORMAT_FILE" 12
+fi
 
 # Context document: --ctx - (stdin) · --ctx/--file FILE · or bare non-TTY stdin.
 # Rich formats (PDF, Word, RTF) are extracted to text LOCALLY — no cloud, ever —
@@ -297,10 +309,10 @@ if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
 # exec so python IS this process: a GUI host's SIGTERM must reach the signal
 # handlers (cancelled/130), not kill a bash wrapper around them (143).
 mkdir -p "$DIR/logs"
-exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" <<'PY'
+exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" <<'PY'
 import sys, json, time, signal, urllib.request, urllib.error
 (model, sysp, query, think, keep, intent, logf,
- histjson, cid, mode, timeout, trunc, host, stats) = sys.argv[1:15]
+ histjson, cid, mode, timeout, trunc, host, stats, fmt) = sys.argv[1:16]
 truncated = trunc == "true"
 
 def emit_err(code, msg, rc):
@@ -334,12 +346,15 @@ picked.reverse()
 prior = [m for ex in picked for m in
          ({"role": "user", "content": ex["p"]}, {"role": "assistant", "content": ex["r"]})]
 msgs = ([{"role": "system", "content": sysp}] if sysp else []) + prior + [{"role": "user", "content": query}]
-body = json.dumps({
+payload = {
     "model": model, "messages": msgs,
     "think": think == "true", "stream": True,
     "keep_alive": int(keep),
     "options": {"temperature": 0},
-}).encode()
+}
+if fmt:
+    payload["format"] = json.loads(fmt)
+body = json.dumps(payload).encode()
 req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
                             headers={"Content-Type": "application/json"})
 t0 = time.time(); parts = []
@@ -401,8 +416,14 @@ elif mode == "stream":
     sys.stdout.write(json.dumps({"t": "done", "model": model, "ms": ms,
                                  "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}) + "\n")
 elif mode == "json":
-    sys.stdout.write(json.dumps({"ok": True, "text": text, "model": model, "ms": ms,
-                                 "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}) + "\n")
+    envelope = {"ok": True, "text": text, "model": model, "ms": ms,
+                "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}
+    if fmt:  # constrained output: hand consumers the parsed object, not a string to re-parse
+        try:
+            envelope["data"] = json.loads(text)
+        except ValueError:
+            envelope["data"] = None
+    sys.stdout.write(json.dumps(envelope) + "\n")
 sys.stdout.flush()
 try:  # history is best-effort — never break the answer on a log failure
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

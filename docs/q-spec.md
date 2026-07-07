@@ -147,6 +147,9 @@ lm status --json                  state probe: ~30ms typical / ≤~250ms worst (
      available_models[], latency_class, toolkit_version}
 q --json [flags] [intent] ["q"]   one JSON object: {ok:true, text, model, ms, truncated}
 q --stream-json …                 NDJSON: {"t":"chunk","text"} … {"t":"done",model,ms,truncated}
+q --json --format SCHEMA.json …   constrained decoding (Ollama `format`): output is schema-valid
+                                  JSON; the envelope gains `data` (the output pre-parsed, null if
+                                  unparseable). Without --format, `data` is absent — additive only.
 ```
 
 Warmth is **read-only** for machine consumers: `lm status --json` reports `warm` /
@@ -157,8 +160,9 @@ a client overriding with `-m` should judge its model against `resident_models` i
 
 Context flags: `--ctx -` (stdin) / `--ctx FILE` · `--ctx-name S` (framing hint, defaults to the
 file's basename) · `--max-ctx N` (truncate, default 16000 chars; reported via `truncated`) ·
-`--timeout S` · `--intent X`. Hard cap: 400k chars → `ctx_too_large` (refuses rather than
-summarizing 4% of a document).
+`--timeout S` · `--intent X` · `--format FILE` (JSON schema for constrained decoding; bad file →
+`format_unreadable`/`format_invalid`, exit 12). Hard cap: 400k chars → `ctx_too_large` (refuses
+rather than summarizing 4% of a document).
 
 Error contract (branch on `code` + exit, never on message text):
 

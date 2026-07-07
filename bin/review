@@ -36,7 +36,8 @@ show_help() {
   _opt '-m MODEL'  'reviewer model (default: the code tier)'
   _opt '--full'    'PR: include FULL changed files (fetched via API at the PR head), not just the diff'
   _opt '--repo S'  'owner/repo for a PR in another repo (e.g. versable-git/enhancement-product)'
-  _opt '--json'    'machine-readable review object'
+  _opt '--json'    'machine-readable review object (prose review in .text)'
+  _opt '--findings' 'schema-constrained findings: .data = {findings: [{file, line, severity, finding, suggestion}], summary}'
   _sec NOTES
   printf '  %sruns the `review` intent (intents/review.toml) via q on the code tier;%s\n' "$Dm" "$Rs"
   printf '  %slogged to q-history — re-render a past review with: q show N | glow%s\n' "$Dm" "$Rs"
@@ -48,6 +49,7 @@ while [ $# -gt 0 ]; do
     --repo)     REPO="$2"; shift 2 ;;
     --full)     FULL=1; shift ;;
     --json)     JSON=(--json); shift ;;
+    --findings) JSON=(--json --format "$DIR/intents/review-findings.schema.json"); shift ;;
     -h|--help)  show_help; exit 0 ;;
     *)          args+=("$1"); shift ;;
   esac

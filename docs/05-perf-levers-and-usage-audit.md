@@ -17,6 +17,29 @@ PERFORMANCE on this M5 Pro:
    `OLLAMA_USE_MLX` is absent from Ollama 0.30.6's config dump, so the flag is inert here.**
    MLX therefore needs a newer Ollama build that actually exposes it, or the `mlx_lm.server`
    path (lever 3) — it is NOT a 5-minute flag on 0.30.6. Don't cargo-cult the env var.
+
+   **MEASURED VERDICT (2026-07-07, Ollama 0.30.10 — supersedes the speculation above).**
+   MLX shipped natively in Ollama: it is **format-routed, not a toggle** — safetensors-format
+   models (library tags like `-nvfp4`/`-mxfp8`) run on an in-process MLX runner; GGUF always
+   goes to llama-server. No env var exists; lever 3 (a parallel `mlx_lm.server`) is dead —
+   nothing to build. Benchmarked `qwen3.6:35b-a3b-nvfp4` (MLX) vs the same model Q4_K_M
+   (llama.cpp/Metal), 1254-token prompt, 400-token gen, M5 Pro 64 GB:
+
+   | | Q4_K_M · llama.cpp | NVFP4 · MLX |
+   |---|---|---|
+   | cold load | 15.4 s | **4.9 s (3.2×)** |
+   | prefill | **1291 tok/s** | 931 tok/s (−28%) |
+   | decode | 64–68 tok/s | ~70 tok/s (+5–9%) |
+
+   The blog's ~2× decode did not materialize — this llama.cpp/Metal baseline is already
+   strong. **Decision: keep `CODE_MODEL` on Q4_K_M.** The fleet/review workload is
+   prefill-heavy and lease-amortized (cold load barely matters), and the probe re-run
+   (`probe/runs/qwen3.6_35b-a3b-nvfp4-20260707-131716.md`) showed a judgment-terseness
+   regression: same 9/9 conclusions, but visible deliberation leaks into output on the two
+   hardest items (tool-decision, invariant-aware-edit) — re-quantized weights need
+   re-gating. The 21 GB variant was reclaimed; re-try later with
+   `ollama pull qwen3.6:35b-a3b-nvfp4` (or an `-mtp-*` tag + `OLLAMA_MLX_MTP_*` for
+   speculative multi-token decode, unmeasured).
 2. **Quant + KV tuning — ~90% done.** 4-bit sweet spot; q8 KV cache (have it) ~doubles
    usable context; keep `num_ctx` no larger than the task needs (KV grows linearly).
 3. **Full MLX serving (when Ollama-MLX coverage disappoints):** `mlx_lm.server` (spec-decode
