@@ -149,6 +149,8 @@ else
   else
     printf '%s\n' "$TEXT"
   fi
-  # Integer ms, no awk — robust even on an interrupted run.
+  # Integer ms, no awk — robust even on an interrupted run. The TTY guard must
+  # not become the exit code (non-TTY text-mode success would exit 1).
   [ -t 2 ] && printf '%s· %s · %dms%s\n' "$Dm" "$MODEL" "$ms" "$Rs" >&2
 fi
+exit 0

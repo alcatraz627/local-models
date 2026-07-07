@@ -27,6 +27,14 @@ LOG="$DIR/logs/gem-history.jsonl"
 SESS_DIR="$DIR/logs/gemini-sessions"
 MODE=text; TIMEOUT=180; SESSION=""
 
+# The API key lives OUT of the global shell env: ~/.gemini/.env (chmod 600),
+# loaded here per-call so only this wrapper's process tree ever sees it. A key
+# already in the environment wins (one-off overrides stay possible).
+if [ -z "${GEMINI_API_KEY:-}" ] && [ -f "$HOME/.gemini/.env" ]; then
+  set -a; # shellcheck source=/dev/null
+  source "$HOME/.gemini/.env"; set +a
+fi
+
 show_help() {
   printf '%s%slm gemini%s %s— the gemini lane: throughput + huge context, behind the wrapper%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
@@ -97,10 +105,12 @@ command -v gemini >/dev/null 2>&1 \
   || emit_error gemini_unavailable "gemini CLI not installed (brew install gemini-cli) — FLAG this to the user; fall back to claude/lm" 11
 
 # Sessions are per-project by default (user decision); cross-project reference is
-# manual — pass --session NAME to point at another project's session.
+# manual — pass --session NAME to point at another project's session. gemini-cli
+# semantics (probed 2026-07-07): --session-id CREATES (errors if it exists),
+# -r <uuid> RESUMES — so we keep one UUID per session name and pick the verb.
 [ -n "$SESSION" ] || SESSION="$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")"
 mkdir -p "$SESS_DIR"
-SESS_FILE="$SESS_DIR/$SESSION.json"
+ID_FILE="$SESS_DIR/$SESSION.id"
 
 case "$CMD" in
   ingest)
@@ -122,7 +132,15 @@ case "$CMD" in
     KIND=oneshot; SESS_ARGS=()
     ;;
 esac
-[ "$KIND" = oneshot ] || SESS_ARGS=(--session-file "$SESS_FILE")
+if [ "$KIND" != oneshot ]; then
+  if [ -f "$ID_FILE" ]; then
+    SESS_ARGS=(-r "$(cat "$ID_FILE")")
+  else
+    NEW_ID="$(uuidgen | tr 'A-Z' 'a-z')"
+    printf '%s\n' "$NEW_ID" > "$ID_FILE"
+    SESS_ARGS=(--session-id "$NEW_ID")
+  fi
+fi
 
 t0=$(date +%s)
 set +e
@@ -145,10 +163,11 @@ if [ "$rc" -ne 0 ]; then
   emit_error gemini_error "$(printf '%s' "$OUT" | tail -2 | tr '\n' ' ' | cut -c1-200)" 10
 fi
 
-# gemini-cli prints housekeeping lines (e.g. "Ripgrep is not available...") to
-# stdout in some modes — keep the text as-is; consumers treat gemini content as
-# untrusted input anyway (the wrapper guarantees structure, not truth).
-TEXT="$(printf '%s' "$OUT" | sed '/^Ripgrep is not available/d')"
+# gemini-cli leaks housekeeping lines onto stdout ("Ripgrep is not available…",
+# "[STARTUP] Cannot measure phase…") — strip the known noise, keep the content
+# as-is; consumers treat gemini content as untrusted input anyway (the wrapper
+# guarantees structure, not truth).
+TEXT="$(printf '%s' "$OUT" | sed -E '/^Ripgrep is not available/d; /^\[STARTUP\]/d')"
 log_line "$KIND" "$TEXT" "$ms"
 if [ "$MODE" = json ]; then
   jq -cn --arg t "$TEXT" --arg m "$GEMINI_MODEL" --argjson ms "$ms" \
@@ -156,5 +175,8 @@ if [ "$MODE" = json ]; then
     '{ok:true, text:$t, model:$m, ms:$ms, session:(if $s == "" then null else $s end)}'
 else
   printf '%s\n' "$TEXT"
+  # Stats are TTY-only; the guard must not become the script's exit code — a
+  # machine caller in text mode would see exit 1 on every success.
   [ -t 2 ] && printf '%s· %s · %dms · lm gemini show -1%s\n' "$Dm" "$GEMINI_MODEL" "$ms" "$Rs" >&2
 fi
+exit 0
