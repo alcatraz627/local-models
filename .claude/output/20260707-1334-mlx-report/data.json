@@ -1,0 +1,188 @@
+{
+  "title": "MLX on Ollama — measured verdict",
+  "subtitle": "Ollama 0.30.10 · M5 Pro 64 GB · qwen3.6:35b-a3b — Q4_K_M (llama.cpp/Metal) vs NVFP4 (MLX)",
+  "generated": "2026-07-07",
+  "nav": [
+    {
+      "id": "verdict",
+      "text": "Verdict",
+      "level": 2,
+      "children": []
+    },
+    {
+      "id": "how-mlx-actually-engages",
+      "text": "How MLX actually engages",
+      "level": 2,
+      "children": []
+    },
+    {
+      "id": "the-numbers",
+      "text": "The numbers",
+      "level": 2,
+      "children": []
+    },
+    {
+      "id": "the-judgment-gate",
+      "text": "The judgment gate",
+      "level": 2,
+      "children": []
+    },
+    {
+      "id": "decision",
+      "text": "Decision",
+      "level": 2,
+      "children": []
+    },
+    {
+      "id": "unmeasured-follow-ups",
+      "text": "Unmeasured follow-ups",
+      "level": 2,
+      "children": []
+    }
+  ],
+  "sections": [
+    {
+      "id": "verdict",
+      "heading": "Verdict",
+      "level": 2,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "html": "<strong>MLX is now native in Ollama 0.30.10 — no parallel runtime to build. It loads the model 3.2× faster and decodes ~7% faster, but prefills 28% slower, and the NVFP4 quant regressed judgment terseness. <code>CODE_MODEL</code> stays on Q4_K_M.</strong>"
+        },
+        {
+          "type": "paragraph",
+          "html": "Machine: M5 Pro, 64 GB unified memory. Model under test: <code>qwen3.6:35b-a3b</code> (35B MoE, ~3B active) as Q4_K_M GGUF (24 GB, llama.cpp/Metal) vs NVFP4 safetensors (21 GB, MLX runner)."
+        }
+      ]
+    },
+    {
+      "id": "how-mlx-actually-engages",
+      "heading": "How MLX actually engages (the discovery)",
+      "level": 2,
+      "blocks": [
+        {
+          "type": "ul",
+          "items": [
+            "<strong>It is format-routed, not a toggle.</strong> Ollama ≥0.19 ships an in-process MLX runner; safetensors-format library tags (<code>-nvfp4</code>, <code>-mxfp8</code>, <code>-mlx-bf16</code>) route to it, GGUF blobs always go to the <code>llama-server</code> subprocess. Source: <code>llm/server.go</code> (\"All GGML models are served via the upstream llama-server subprocess\") + our server log.",
+            "<strong><code>OLLAMA_USE_MLX</code> never existed</strong> — the old <code>bin/lm-serve</code> human NOTE was right to call it cargo-cult. There is no env var today either.",
+            "<strong>Proof of engagement</strong> comes from the server log, never the tag name: <code>starting mlx runner subprocess model=qwen3.6:35b-a3b-nvfp4</code> · <code>MLX engine initialized (0.31.2) device=gpu</code>."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "the-numbers",
+      "heading": "The numbers",
+      "level": 2,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "html": "Benchmark: cold-load run, then two warm runs (1,254-token prompt, 400-token generation, temperature 0). Prefill measured on the first warm run only — repeating an identical prompt hits Ollama's KV cache and inflates prefill ~30×."
+        },
+        {
+          "type": "table",
+          "headers": [
+            "metric",
+            "Q4_K_M · llama.cpp/Metal",
+            "NVFP4 · MLX",
+            "delta"
+          ],
+          "rows": [
+            [
+              "cold load",
+              "15.4 s",
+              "4.9 s",
+              "3.2× faster"
+            ],
+            [
+              "cold call, end-to-end (short)",
+              "15.8 s",
+              "12.7 s",
+              "~20% faster"
+            ],
+            [
+              "prefill (1,254 tok)",
+              "1,291 tok/s",
+              "931 tok/s",
+              "28% slower"
+            ],
+            [
+              "decode",
+              "64–68 tok/s",
+              "~70 tok/s",
+              "+5–9%"
+            ],
+            [
+              "disk",
+              "24 GB",
+              "21 GB",
+              "−3 GB"
+            ]
+          ]
+        },
+        {
+          "type": "paragraph",
+          "html": "The blog's headline (~2× decode, 58→112 tok/s) did not reproduce here — this machine's llama.cpp/Metal baseline already decodes at 64–68 tok/s. MLX's first request after load also pays a visible warmup (shader JIT), folded into the cold numbers above."
+        }
+      ]
+    },
+    {
+      "id": "the-judgment-gate",
+      "heading": "The judgment gate (why speed didn't win)",
+      "level": 2,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "html": "Re-ran the 9-item probe suite on the NVFP4 variant (<code>probe/runs/qwen3.6_35b-a3b-nvfp4-20260707-131716.md</code>) against the Q4_K_M baseline run:"
+        },
+        {
+          "type": "ul",
+          "items": [
+            "<strong>7 of 9 items: identical flags</strong> — abstention (both), ask-vs-assume, 5/5 command consistency, multi-turn constraint, multifile edit, scope-trap all hold.",
+            "<strong>2 of 9 items: terseness regression.</strong> On <code>tool-decision</code>, Q4_K_M answered in 3 clean sentences; NVFP4 reached the same answer through ~35 lines of leaked deliberation (\"Wait… Actually…\"), tripping pass AND fail markers. On <code>invariant-aware-edit</code>, NVFP4 produced a ~180-line second-guessing loop around a correct conclusion.",
+            "<strong>Lesson: re-quantized weights need re-gating.</strong> Same model, same conclusions, different <em>behavior</em>. A tok/s benchmark alone would have shipped the regression."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "decision",
+      "heading": "Decision",
+      "level": 2,
+      "blocks": [
+        {
+          "type": "paragraph",
+          "html": "<strong>Keep <code>CODE_MODEL = qwen3.6:35b-a3b</code> (Q4_K_M).</strong> The workloads that matter (fleet runs, reviews) are prefill-heavy and lease-amortized — cold-load speed barely counts there, and prefill is where MLX loses. The judgment regression is the tie-breaker. The 21 GB NVFP4 variant was reclaimed; one command re-pulls it if the calculus changes:"
+        },
+        {
+          "type": "code",
+          "lang": "bash",
+          "content": "ollama pull qwen3.6:35b-a3b-nvfp4"
+        }
+      ]
+    },
+    {
+      "id": "unmeasured-follow-ups",
+      "heading": "Unmeasured follow-ups",
+      "level": 2,
+      "blocks": [
+        {
+          "type": "ul",
+          "items": [
+            "<strong>MTP tags</strong> (<code>-mtp-q4_K_M</code> etc.) + <code>OLLAMA_MLX_MTP_*</code> draft-token vars — multi-token prediction as speculative decoding; could stack on either backend.",
+            "<strong>MXFP8</strong> (38 GB, MLX) — the 8-bit variant might not carry NVFP4's behavior regression, at the cost of RAM headroom for the two-model fleet.",
+            "Re-test on future Ollama releases: the MLX runner is in preview and prefill is its known weak edge."
+          ]
+        },
+        {
+          "type": "hr"
+        },
+        {
+          "type": "paragraph",
+          "html": "<em>Sources: <code>docs/05-perf-levers-and-usage-audit.md</code> §1 (verdict) · benchmark script <code>scratchpad/baseline-qwen36.sh</code> · server log <code>logs/ollama-serve.err.log</code> · probe runs in <code>probe/runs/</code>. Ollama MLX announcement: ollama.com/blog/mlx.</em>"
+        }
+      ]
+    }
+  ]
+}
