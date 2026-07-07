@@ -1,51 +1,40 @@
 # NEXT SESSION — local-agent work (agenda)
 
-Resume point for the local-models work, paused 2026-07-05. A gcc-schedule reminder
-(`local-agent-resume`) fires **Thu 2026-07-09 09:33** pointing here.
+**Status: the 2026-07-05 agenda is DONE (session local-agent-9c, 2026-07-07).** The
+gcc-schedule reminder (`local-agent-resume`, Thu 2026-07-09 09:33) points here — if it
+fires and you're reading this, the work it was guarding already happened; retire it
+(`gcc-schedule rm local-agent-resume`) or repoint it at the follow-ups below.
 
-## How to start
+## What landed 2026-07-07 (branch `feat/intents-as-data`, NOT pushed)
 
-```bash
-cd ~/Code/local-models
-claude          # then run: /catchup   (finds the 2026-07-05 checkpoint automatically)
-```
-Or just read this file + `docs/09-local-fleet.md` (the design) + `docs/07-implementation.md` (the plan).
+- **#5 MLX** — measured, decided, documented in `docs/05` §1. MLX is native in Ollama
+  0.30.10 (format-routed: safetensors tags → MLX runner, GGUF → llama-server; no env
+  var, no parallel runtime to build). NVFP4 variant: 3.2× cold load, −28% prefill,
+  +5–9% decode, and a judgment-terseness regression caught by the probe →
+  **CODE_MODEL stays Q4_K_M**; the 21 GB variant was reclaimed.
+- **#9 fleet** — `lm fleet <intent> <files…>`: concurrency-capped fan-out, envelope +
+  `--judge` gate, salvage-first results, bounded warmth lease with warm-pin restore.
+  Exercised end-to-end (`lib/fleet`).
+- **Local-agent exercise** — finish-a-codebase proven: qwen3.6 completed the
+  `probe/fixtures/unfinished-v1` package 16/16 under a pytest Judge (2 surgical
+  retries). Findings in the fixture's `RESULTS.md`.
+- **Polish** — `q --format` (schema-constrained decoding, `.data` in the envelope) +
+  `review --findings`; q-spec updated.
 
-## State at pause (so you don't re-derive it)
+## Open items (pick up next)
 
-- **Shipped + committed** (branch `feat/intents-as-data`, HEAD `7331834`, NOT pushed): `see` (vision,
-  MiniCPM-V default), `review` + `review --full`/`--repo` + `review-pr`, `probe` + `lm probe`, history QoL.
-- **Decided:** `CODE_MODEL=qwen3.6` (won the Task #8 gate 9/9), `VISION_MODEL=minicpm-v`, local models
-  don't drive tools (`docs/03`), conversational large-PR review → use Claude (won't build).
-- **Task #8 gate = GREEN** → the orchestration spine (`docs/07` Phase 1) is justified to build.
-
-## The work, in priority order
-
-### 1. #5 — MLX perf measurement (small, gated on finding a path)
-- Baseline `qwen3.6` tok/s on Ollama (read `eval_count`/`eval_duration` from `/api/generate`).
-- Get a REAL MLX path — `OLLAMA_USE_MLX` is inert on 0.30.6 (human NOTE in `bin/lm-serve`, do NOT re-add);
-  need newer Ollama or `mlx_lm.server` / `mlx-vlm`. Measure before/after; decide if a parallel MLX
-  runtime earns its keep.
-
-### 2. #9 — the fan-out fleet (the big lever; `docs/09`)
-- Build the batch fan-out runner (`bin/procedure` / `lm fleet`): a rubric + N items → concurrency-capped
-  local-model tasks (2–3 moderate models on 64 GB) → a Judge gate → structured results.
-- It turns Claude's cloud sub-agent fan-outs (269 in 14 days, mostly audit/reconcile/verify) into free,
-  always-available local ones. Primarily Claude-called; direct for quick tasks.
-
-### 3. NEW — local-agent work (bigger, agentic)
-- **"Finishing an unfinished codebase":** a Claude-conducted Procedure with local workers + a Judge that
-  completes a partial codebase across files. This is `docs/07` Phase 1 made real (Procedure runner +
-  Judge + the winning local coder). Start scoped (one module), gate each step.
-- The `docs/09` fleet use-cases at volume: audit / reconcile / homework-check across many files.
-
-## Optional polish (pick up if touching the area)
-- `review --json` structured findings (for Claude to consume the review).
-- `review-pr` worktree variant when the model needs surrounding (unchanged) context, not just the diff.
-- Push `feat/intents-as-data` when ready (never to main without approval).
+1. **Push `feat/intents-as-data`** — awaiting the human's go (never main).
+2. **Fleet at volume** — first real Claude-called fleet run on actual work (an audit
+   or reconcile sweep across a real doc/code set); measure the cloud-dispatch offset.
+3. **Procedure manifests** (`procedures/*.toml` + `lm run`) — only when a 2nd real
+   multi-step recipe exists; the fleet + conduct.sh loop is the seam until then.
+4. **MTP speculative decode** — unmeasured: `-mtp-*` tags + `OLLAMA_MLX_MTP_*` vars.
+5. **`bin/lm-serve` NOTE** — the OLLAMA_USE_MLX note is now resolved history (docs/05
+   has the ground truth); human may want to update or keep it.
+6. **docs/STATE.md** — dated 2026-06-11, missing see/review/probe/fleet; due a refresh.
 
 ## Pointers
-- `docs/09-local-fleet.md` — the fleet design (use-cases, harness, ratio).
-- `docs/07-implementation.md` — the phased orchestration plan (Phase 1 is now unblocked).
-- `docs/03-tool-orchestration-decision.md` — why local models don't drive their own tools.
-- `_20260705-local-models.claude.md` — the full checkpoint (or `/catchup`).
+
+- `docs/05-perf-levers-and-usage-audit.md` §1 — the measured MLX verdict.
+- `docs/09-local-fleet.md` — fleet design · `lib/fleet` — the runner.
+- `probe/fixtures/unfinished-v1/RESULTS.md` — the codebase-finisher exercise record.
