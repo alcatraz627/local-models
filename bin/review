@@ -21,7 +21,7 @@ source "$DIR/config.sh"
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"
 
-MODEL=code; JSON=(); CAP=240000; args=(); REPO=""; FULL=""
+MODEL=code; JSON=(); GLOW=(); CAP=240000; args=(); REPO=""; FULL=""
 
 show_help() {
   printf '%s%sreview%s %s— hand code / PRs / folders to the local reviewer%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
@@ -38,6 +38,7 @@ show_help() {
   _opt '--repo S'  'owner/repo for a PR in another repo (e.g. versable-git/enhancement-product)'
   _opt '--json'    'machine-readable review object (prose review in .text)'
   _opt '--findings' 'schema-constrained findings: .data = {findings: [{file, line, severity, finding, suggestion}], summary}'
+  _opt '--glow'    'render the review through glow (TTY-only, no-op without glow)'
   _sec NOTES
   printf '  %sruns the `review` intent (intents/review.toml) via q on the code tier;%s\n' "$Dm" "$Rs"
   printf '  %slogged to q-history — re-render a past review with: q show N | glow%s\n' "$Dm" "$Rs"
@@ -50,6 +51,7 @@ while [ $# -gt 0 ]; do
     --full)     FULL=1; shift ;;
     --json)     JSON=(--json); shift ;;
     --findings) JSON=(--json --format "$DIR/intents/review-findings.schema.json"); shift ;;
+    --glow)     GLOW=(--glow); shift ;;
     -h|--help)  show_help; exit 0 ;;
     *)          args+=("$1"); shift ;;
   esac
@@ -127,4 +129,4 @@ if [ "$maxctx" -gt "$CAP" ]; then
   maxctx=$CAP
 fi
 printf '%sreviewing%s %s  %s(model=%s · %s chars)%s\n' "$C" "$Rs" "$src" "$Dm" "$MODEL" "${#content}" "$Rs" >&2
-printf '%s' "$content" | q review --ctx - -m "$MODEL" --max-ctx "$maxctx" "${JSON[@]}"
+printf '%s' "$content" | q review --ctx - -m "$MODEL" --max-ctx "$maxctx" "${JSON[@]}" "${GLOW[@]}"

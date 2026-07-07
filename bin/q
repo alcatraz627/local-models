@@ -70,6 +70,7 @@ show_help() {
   _opt '--json'         'machine mode: one JSON object on stdout, no ANSI'
   _opt '--stream-json'  'machine mode: NDJSON chunk/done/error lines'
   _opt '--format FILE'  'constrain output to a JSON schema (with --json: adds parsed .data)'
+  _opt '--glow'         'render the reply through glow (buffers output; TTY-only, no-op without glow)'
   _opt '--ctx, --file FILE | -' 'context document from a file or stdin (- = stdin)'
   _opt '--ctx-name S'   "the document's display name (framing hint)"
   _opt '--max-ctx N'    'truncate context to N chars (default 16000)'
@@ -125,7 +126,7 @@ THINK=false
 INTENT=ask
 RAW=false
 MODE=text          # text (human) | json (one object) | stream (NDJSON)
-CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0; FORMAT_FILE=""
+CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0; FORMAT_FILE=""; GLOW=false
 CONT=false; CONT_N=""; USER_MODEL=false; USER_INTENT=false
 STATS=true         # gray token line at the end (text mode); --no-stats mutes
 
@@ -141,6 +142,7 @@ while [ $# -gt 0 ]; do
     --big)   MODEL="$(resolve_tier big)";  USER_MODEL=true; shift ;;
     --code)  MODEL="$(resolve_tier code)"; USER_MODEL=true; shift ;;
     --format)   FORMAT_FILE="$2"; shift 2 ;;
+    --glow)     GLOW=true; shift ;;
     --ctx|--file) CTX_FILE="$2"; shift 2 ;;
     --ctx-name) CTX_NAME="$2"; shift 2 ;;
     --max-ctx)  MAX_CTX="$2"; shift 2 ;;
@@ -304,15 +306,20 @@ fi
 # just for this call and let it unload (0).
 if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
 
+# --glow renders the finished reply as markdown instead of streaming it. Decided
+# here (not in python) so PATH and TTY are probed once; machine modes ignore it.
+GLOW_OK=false
+if $GLOW && [ "$MODE" = text ] && [ -t 1 ] && command -v glow >/dev/null 2>&1; then GLOW_OK=true; fi
+
 # Deterministic (temperature 0) + history logging. Stream token-by-token for low
 # perceived latency (text mode) or as NDJSON frames (stream mode).
 # exec so python IS this process: a GUI host's SIGTERM must reach the signal
 # handlers (cancelled/130), not kill a bash wrapper around them (143).
 mkdir -p "$DIR/logs"
-exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" <<'PY'
+exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" "$GLOW_OK" <<'PY'
 import sys, json, time, signal, urllib.request, urllib.error
 (model, sysp, query, think, keep, intent, logf,
- histjson, cid, mode, timeout, trunc, host, stats, fmt) = sys.argv[1:16]
+ histjson, cid, mode, timeout, trunc, host, stats, fmt, glow) = sys.argv[1:17]
 truncated = trunc == "true"
 
 def emit_err(code, msg, rc):
@@ -384,7 +391,7 @@ try:
                 if in_thinking:
                     sys.stderr.write(rs + "\n"); sys.stderr.flush(); in_thinking = False
                 parts.append(chunk)
-                if mode == "text":
+                if mode == "text" and glow != "true":  # glow buffers; render after the loop
                     sys.stdout.write(chunk); sys.stdout.flush()
                 elif mode == "stream":
                     sys.stdout.write(json.dumps({"t": "chunk", "text": chunk}) + "\n")
@@ -406,7 +413,14 @@ try:  # the JSONL line this call will occupy → `q show N` re-pulls it later, n
 except Exception:
     n_entry = 1
 if mode == "text":
-    sys.stdout.write("\n")
+    if glow == "true":
+        import subprocess
+        try:  # glow died mid-render → the reply must still reach the user plain
+            subprocess.run(["glow", "-"], input=(text + "\n").encode(), check=False)
+        except Exception:
+            sys.stdout.write(text + "\n")
+    else:
+        sys.stdout.write("\n")
     # Gray token-spend line on stderr — like the --think trace, TTY-only, muteable.
     if stats == "true" and sys.stderr.isatty():
         tps = (tok_out / (ms / 1000)) if ms else 0
