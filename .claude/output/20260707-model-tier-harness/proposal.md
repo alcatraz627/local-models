@@ -257,14 +257,16 @@ antigravity migration decision by ~Nov 2026 (ahead of the Dec EOL).
 6. **Session boundary:** per-project; cross-project reference allowed via manual handoff
    (Claude carries the pointer).
 
-**Remaining open questions (small, non-blocking):**
-- **Vision head-to-head test:** the old fidelity audit survives only as citations
-  (§7.5) — run the designed test NOW as part of Phase B, or wait for the Jul-28 review
-  data to decide whether it's needed?
-- **Dispatch-telemetry review:** fold `model-dispatch.jsonl` into the same Jul-28 review,
-  or leave it for the weekly consolidation to surface?
-- **`lm gemini` naming:** decided here as an lm subcommand (see §8 deliberation) — veto if
-  you'd rather have the standalone `lm-gemini` binary name.
+**Follow-up decisions (user, 2026-07-07, round 2) — nothing open:**
+- **Vision head-to-head test:** later. Defaults stay as-is so the logs accumulate honest
+  usage data; the Jul-28 review decides whether the designed test is needed.
+- **Dispatch telemetry:** folded into the same Jul-28 review, PLUS a follow-up
+  **`tier-telemetry-review` one-shot Tue 2026-08-04 15:00** (same digest script, which now
+  includes a model-dispatch section; calendar-visible).
+- **`lm gemini`:** confirmed as an lm subcommand.
+
+**Status: fully decided. Phase A (rule + guard-model-tier hook) and Phase B (lm gemini)
+are ready to build — the dedicated gcc session in Task #18.**
 
 ---
 *Recon sources: `recon-gcc-surfaces.md` (300 lines) · `recon-gemini.md` (161 lines), both in
