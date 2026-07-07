@@ -23,15 +23,15 @@ fires and you're reading this, the work it was guarding already happened; retire
 
 ## Open items (pick up next)
 
-1. **Push `feat/intents-as-data`** — awaiting the human's go (never main).
-2. **Fleet at volume** — first real Claude-called fleet run on actual work (an audit
-   or reconcile sweep across a real doc/code set); measure the cloud-dispatch offset.
-3. **Procedure manifests** (`procedures/*.toml` + `lm run`) — only when a 2nd real
-   multi-step recipe exists; the fleet + conduct.sh loop is the seam until then.
-4. **MTP speculative decode** — unmeasured: `-mtp-*` tags + `OLLAMA_MLX_MTP_*` vars.
-5. **`bin/lm-serve` NOTE** — the OLLAMA_USE_MLX note is now resolved history (docs/05
-   has the ground truth); human may want to update or keep it.
-6. **docs/STATE.md** — dated 2026-06-11, missing see/review/probe/fleet; due a refresh.
+**Triaged by the user 2026-07-07 (day-2 wave shipped same day):** pushed ✓ · warm leases +
+`lm opencode` + scheduled warmth ✓ · feedback sink (all histories + weekly self-audit) ✓ ·
+`lm index` ✓ · CAPABILITIES.md + STATE refresh ✓ · lm-serve NOTE resolved ✓ · Thursday
+reminder retired ✓ · `--glow` everywhere ✓ · OpenCode wired ✓.
+
+**The live pending list is `docs/STATE.md` § PENDING** (single source; don't duplicate here).
+Headliners: fleet-at-real-volume (parked, actively noted) · Governor table + the gcc
+**model-tier harness** (user notes in the gcc proposals backlog + this session's Task #18) ·
+RAG deferred · procedures/MTP/review-pr-worktree deferred.
 
 ## Pointers
 
