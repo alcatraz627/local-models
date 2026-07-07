@@ -23,12 +23,14 @@ MODEL="${VISION_MODEL:-gemma4:26b}"
 MODE=text
 GLOW=false
 positionals=()
+LOG="$DIR/logs/see-history.jsonl"
 
 show_help() {
   printf '%s%ssee%s %s— read an image into text with a local vision model%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
   _cmd 'see <image> ["question"]' 'describe an image, or answer a question about it'
   _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
+  _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
   _sec EXAMPLES
   _ex 'see ~/Desktop/shot.png'                 '# verbatim text + UI + layout'
   _ex 'see chart.png "is it trending up?"'     '# grounded answer'
@@ -49,6 +51,16 @@ emit_error() { # CODE MESSAGE EXIT
   esac
   exit "$3"
 }
+
+# History subcommands (same numbering contract as q: stable JSONL line numbers).
+case "${1:-}" in
+  history) jsonl_history "$LOG" "${2:-15}" \
+             '"\(.ts[11:19])  \(.model)  \(.ms)ms  \(.img)  \((.prompt // "describe") | gsub("\\s+"; " ") | .[0:40])"'
+           exit 0 ;;
+  show)    jsonl_entry "$LOG" "${2:-}" \
+             '"# see \(.img)  ·  \(.ts)  ·  \(.model)  ·  \(.ms)ms\n\n\(.response)"'
+           exit $? ;;
+esac
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -121,6 +133,13 @@ fi
 end=$(python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo "$t0")
 [[ "$end" =~ ^[0-9]+$ ]] || end="$t0"
 ms=$(( end - t0 ))
+
+# History is best-effort — never break the answer on a log failure.
+mkdir -p "$DIR/logs"
+jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg img "$IMG" --arg p "$QUERY" \
+   --arg m "$MODEL" --argjson ms "$ms" --arg r "$TEXT" \
+   '{ts:$ts, img:$img, prompt:(if $p == "" then null else $p end), model:$m, ms:$ms, response:$r}' \
+   >> "$LOG" 2>/dev/null || true
 
 if [ "$MODE" = json ]; then
   jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" '{ok:true, text:$t, model:$m, ms:$ms}'

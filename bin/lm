@@ -143,9 +143,13 @@ lm_timeline() {
   # their continuation lines through the timeline.
   {
     [ -f "$DIR/logs/q-history.jsonl" ] && \
-      jq -r '"\(.ts)  q        \(.intent)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/logs/q-history.jsonl"
+      jq -r '"\(.ts)  q        \(.intent)\(if .error then " ✗" else "" end)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/logs/q-history.jsonl"
     [ -f "$DIR/outputs/imagine-history.jsonl" ] && \
       jq -r '"\(.ts)  imagine  \(.kind // "gen")\(if .star then " ★" else "" end)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/outputs/imagine-history.jsonl"
+    [ -f "$DIR/logs/see-history.jsonl" ] && \
+      jq -r '"\(.ts)  see      \(.img | split("/") | last)  \(((.prompt // "describe") | gsub("\\s+"; " "))[0:40])"' "$DIR/logs/see-history.jsonl"
+    [ -f "$DIR/logs/fleet-history.jsonl" ] && \
+      jq -r '"\(.ts)  fleet    \(.intent) ×\(.items)  \(.pass)✓/\(.fail)✗"' "$DIR/logs/fleet-history.jsonl"
   } | sort | tail -n "$n"
 }
 

@@ -93,26 +93,24 @@ MODEL="$(resolve_tier "$TIER")"
 
 # ── Warmth lease (docs/07 Phase 1: borrow, never seize) ──
 # Pin the fleet model once so N workers don't pay N loads: q's warm-aware
-# keep_alive would otherwise load-and-unload a 23GB model per item. Bounded
-# TTL (not -1) so a hard crash self-heals; the EXIT trap is the normal path.
+# keep_alive would otherwise load-and-unload a 23GB model per item. All lease
+# mechanics live in bin/warm (the one lease implementation): bounded TTL so a
+# hard crash self-heals; the EXIT trap is the normal path.
 WARM_WAS_RESIDENT=false; LEASED=false
 ollama_resident "${WARM_MODEL:-gemma4-e4b-warm}" && WARM_WAS_RESIDENT=true
 if ! ollama_resident "$MODEL"; then
-  curl -s "$OLLAMA_HOST/api/generate" \
-    -d "$(jq -cn --arg m "$MODEL" --arg k "$LEASE_TTL" '{model:$m, keep_alive:$k}')" >/dev/null \
+  "$DIR/bin/warm" on "$MODEL" "$LEASE_TTL" >/dev/null 2>&1 \
     || emit_error load_failed "could not load $MODEL" 11
   LEASED=true
 fi
 
 release_lease() {
-  # Unload our lease, then restore the user's warm pin if this run evicted it.
+  # Release our lease, then restore the user's warm pin if this run evicted it.
   if [ "$LEASED" = true ]; then
-    curl -s -m 10 "$OLLAMA_HOST/api/generate" \
-      -d "$(jq -cn --arg m "$MODEL" '{model:$m, keep_alive:0}')" >/dev/null 2>&1 || true
+    "$DIR/bin/warm" off "$MODEL" >/dev/null 2>&1 || true
   fi
   if [ "$WARM_WAS_RESIDENT" = true ] && ! ollama_resident "${WARM_MODEL:-gemma4-e4b-warm}"; then
-    curl -s -m 30 "$OLLAMA_HOST/api/generate" \
-      -d "$(jq -cn --arg m "${WARM_MODEL:-gemma4-e4b-warm}" '{model:$m, keep_alive:-1}')" >/dev/null 2>&1 || true
+    "$DIR/bin/warm" on >/dev/null 2>&1 || true
   fi
 }
 trap release_lease EXIT
@@ -176,6 +174,15 @@ for f in "${items[@]}"; do
     '{i:$i, item:$item, judge:$v, ok:(.ok // false), model:(.model // null), ms:(.ms // null),
       tokens_out:(.tokens_out // null), result:$res}' "$res" >> "$OUT/index.jsonl"
 done
+
+# Run-level history line (the feedback sink + lm timeline read this; the
+# per-item detail stays in the run dir). Best-effort — never break the result.
+mkdir -p "$DIR/logs"
+jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg intent "$INTENT" --arg model "$MODEL" \
+   --argjson items "${#items[@]}" --argjson pass "$PASS" --argjson fail "$FAIL" \
+   --argjson wall "$SECONDS" --arg run "$OUT" \
+   '{ts:$ts, intent:$intent, model:$model, items:$items, pass:$pass, fail:$fail, wall_s:$wall, run:$run}' \
+   >> "$DIR/logs/fleet-history.jsonl" 2>/dev/null || true
 
 if [ "$MODE" = json ]; then
   cat "$OUT/index.jsonl"

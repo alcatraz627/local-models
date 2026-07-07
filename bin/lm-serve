@@ -18,8 +18,10 @@ export OLLAMA_FLASH_ATTENTION=1
 # q8 KV cache ~halves KV-cache RAM vs f16 (verified: log shows K (q8_0), flash_attn enabled).
 export OLLAMA_KV_CACHE_TYPE=q8_0
 
-# NOTE: OLLAMA_USE_MLX is NOT recognized by Ollama 0.30.6 — it's absent from the server's
-# own config dump, so MLX never activated. Backend is llama.cpp/Metal. Removed to avoid
-# cargo-cult config; revisit if a future Ollama version exposes a real MLX toggle.
+# NOTE (resolved 2026-07-07; was "OLLAMA_USE_MLX inert on 0.30.6, revisit later"):
+# MLX shipped natively in Ollama and is FORMAT-routed, not an env toggle — safetensors
+# library tags (-nvfp4/-mxfp8) run the in-process MLX runner, GGUF always uses
+# llama-server. OLLAMA_USE_MLX never existed. Measured verdict (kept Q4_K_M on the
+# code tier — prefill + judgment beat MLX's faster load): docs/05 §1.
 
 exec /opt/homebrew/bin/ollama serve
