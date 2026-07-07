@@ -55,6 +55,10 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - `lib/` — orchestration internals, NOT on PATH: `fleet` (fan-out runner) · `repo-index`
 - `intents/` — the registry + `review-findings.schema.json` (constrained-decode schema)
 - `scripts/self-audit.sh` — the weekly feedback sink
+- **`scripts/verify.sh` — the one-command smoke battery (~30s): run after ANY change and at
+  session start after a handoff.** 23 checks: syntax, doctor, q envelope+format, fleet+lease,
+  index, gemini lane (skips cleanly when unavailable), histories/timeline, sink, gcc hooks
+  (pipe-tests), schedules. Its header lists what it deliberately does NOT cover.
 - `probe/` — `items.toml` (9-item judgment suite) · `runs/` (verdicts) ·
   `fixtures/unfinished-v1/` (the finish-a-codebase exercise: fixture + conduct.sh + RESULTS.md —
   qwen3.6 completed it 16/16 under a pytest Judge, 2026-07-07)
