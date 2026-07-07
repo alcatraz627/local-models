@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# repo-index — a lean "where is X" symbol map for any repo (docs/07 Phase 1).
+#
+# Builds a per-repo JSONL of {file, line, kind, symbol} so a worker (or you)
+# can answer "where is X defined?" without a model call — the orchestrator
+# greps the map and feeds the file:line as deterministic context (docs/03).
+# Front door: `lm index …`.
+#
+#   lm index [dir]            build/refresh the map (default: cwd)
+#   lm index find <sym> [dir] look a symbol up (auto-rebuilds if stale)
+#   lm index status [dir]     where the map lives, size, freshness
+#
+# Engine: universal-ctags when installed (richer kinds); otherwise built-in
+# rg definition-patterns for py/js/ts/go/rs/sh/rb/java/c-family. The map is
+# cached centrally (logs/index/) keyed by the repo's absolute path — indexing
+# someone's repo must not write into it. Staleness is checked against real
+# file mtimes on every read, never a TTL.
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"
+
+CACHE="$DIR/logs/index"
+EXTS=(py js jsx ts tsx go rs sh bash rb java c h cpp hpp)
+
+idx_path() { # DIR -> cache file
+  printf '%s/%s.jsonl' "$CACHE" "$(printf '%s' "$1" | tr -c 'A-Za-z0-9' '_')"
+}
+
+resolve_dir() {
+  local d="${1:-.}"
+  [ -d "$d" ] || { echo "index: no such dir: $d" >&2; exit 12; }
+  cd "$d" && pwd
+}
+
+# Any file newer than the map = stale (no extension filter: extensionless
+# scripts count, and a rebuild costs ~1s — over-eager beats a map that lies).
+# fd's --newer takes a DATE and is same-second-inclusive, so compare from one
+# second AFTER the build — else a file touched in the build's second re-marks
+# the fresh map stale forever (make-style 1s granularity trade).
+is_stale() { # REPO IDX
+  [ -f "$2" ] || return 0
+  local built
+  built="$(date -r "$2" -v+1S '+%Y-%m-%dT%H:%M:%S' 2>/dev/null)" || return 0
+  [ -n "$(fd -t f --newer "$built" . "$1" 2>/dev/null | head -1)" ]
+}
+
+build() { # REPO
+  local repo="$1" idx tmp n
+  idx="$(idx_path "$repo")"; tmp="$idx.tmp"
+  mkdir -p "$CACHE"
+  if command -v ctags >/dev/null 2>&1 && ctags --version 2>/dev/null | grep -q Universal; then
+    (cd "$repo" && ctags --output-format=json --fields=+n -R .) 2>/dev/null \
+      | jq -c 'select(.name and .path and .line) | {file: .path, line, kind: (.kind // "sym"), symbol: .name}' > "$tmp"
+  else
+    # rg fallback: definition-shaped lines per language family. kind = the
+    # defining keyword; good enough for "where is X", not a semantic parse.
+    # Two file populations: known extensions, plus extensionless scripts
+    # detected by shebang (this suite's own bin/ is exactly that shape).
+    local ext_args=()
+    for e in "${EXTS[@]}"; do ext_args+=(-g "*.$e"); done
+    { (cd "$repo" && rg -n --no-heading "${ext_args[@]}" \
+        '^\s*(async def|def|class|function|func|fn|type|struct|enum|trait|interface|module)\s+([A-Za-z_][A-Za-z0-9_]*)|^([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{' . 2>/dev/null || true)
+      (cd "$repo" && fd -t f 2>/dev/null | rg -v '\.[A-Za-z0-9]+$' \
+        | while IFS= read -r f; do
+            [ "$(head -c 2 "$f" 2>/dev/null)" = '#!' ] && printf '%s\0' "$f"
+          done \
+        | xargs -0 rg -n --no-heading \
+            '^\s*(async def|def|class|function|func|fn)\s+([A-Za-z_][A-Za-z0-9_]*)|^([A-Za-z_][A-Za-z0-9_]*)\s*\(\)\s*\{' \
+            2>/dev/null || true)
+    } | awk -F: '{
+          line=""; for (i=3; i<=NF; i++) line = line (i>3 ? ":" : "") $i
+          sub(/^\s+/, "", line)
+          if (match(line, /^(async def|def|class|function|func|fn|type|struct|enum|trait|interface|module)[ \t]+[A-Za-z_][A-Za-z0-9_]*/)) {
+            kw=line; sub(/[ \t].*/, "", kw)
+            sym=line; sub(/^(async def|def|class|function|func|fn|type|struct|enum|trait|interface|module)[ \t]+/, "", sym)
+            sub(/[^A-Za-z0-9_].*/, "", sym)
+          } else if (match(line, /^[A-Za-z_][A-Za-z0-9_]*[ \t]*\(\)/)) {
+            kw="function"; sym=line; sub(/[ \t]*\(\).*/, "", sym)
+          } else next
+          f=$1; sub(/^\.\//, "", f)
+          printf "{\"file\":\"%s\",\"line\":%s,\"kind\":\"%s\",\"symbol\":\"%s\"}\n", f, $2, kw, sym
+        }' > "$tmp"
+  fi
+  mv -f "$tmp" "$idx"
+  n=$(wc -l < "$idx" | tr -d ' ')
+  echo "indexed $repo — $n symbols → $idx" >&2
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  find)
+    sym="${2:-}"; [ -n "$sym" ] || { echo "usage: lm index find <symbol> [dir]" >&2; exit 2; }
+    repo="$(resolve_dir "${3:-.}")"; idx="$(idx_path "$repo")"
+    if is_stale "$repo" "$idx"; then echo "(index stale — rebuilding)" >&2; build "$repo"; fi
+    # Exact matches first, then substring; cap so a one-letter query can't flood.
+    { jq -r --arg s "$sym" 'select(.symbol == $s) | "\(.file):\(.line)\t\(.kind)\t\(.symbol)"' "$idx"
+      jq -r --arg s "$sym" 'select(.symbol != $s and (.symbol | contains($s))) | "\(.file):\(.line)\t\(.kind)\t\(.symbol)"' "$idx"
+    } | head -50 | column -t -s $'\t'
+    ;;
+  status)
+    repo="$(resolve_dir "${2:-.}")"; idx="$(idx_path "$repo")"
+    if [ -f "$idx" ]; then
+      printf 'map      %s\nsymbols  %s\nbuilt    %s\nstale    %s\n' \
+        "$idx" "$(wc -l < "$idx" | tr -d ' ')" \
+        "$(date -r "$idx" '+%Y-%m-%d %H:%M')" \
+        "$(is_stale "$repo" "$idx" && echo yes || echo no)"
+    else
+      echo "no index for $repo — build: lm index $repo"
+    fi
+    ;;
+  -h|--help|help)
+    printf '%s%sindex%s %s— lean repo symbol map: build once, answer "where is X" instantly%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+    _sec USAGE
+    _cmd 'lm index [dir]'            'build/refresh the symbol map (default: cwd)'
+    _cmd 'lm index find <sym> [dir]' 'file:line lookup — auto-rebuilds when stale'
+    _cmd 'lm index status [dir]'     'map location, size, freshness'
+    _sec NOTES
+    printf '  %smaps live centrally (logs/index/) — indexing a repo never writes into it%s\n' "$Dm" "$Rs"
+    printf '  %sengine: universal-ctags if installed (brew install universal-ctags), else built-in rg patterns%s\n' "$Dm" "$Rs"
+    ;;
+  *)
+    repo="$(resolve_dir "${1:-.}")"
+    build "$repo"
+    ;;
+esac

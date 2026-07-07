@@ -24,6 +24,7 @@ overview() {
   printf '  %s%-20s%s %sjudge if a local model is trustworthy — reliability/judgment eval%s\n' "$C" 'lm probe <model>' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sfan one intent across N files, judged (batch runner)%s\n' "$C" 'lm fleet <intent> …' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sopencode on the local code model — auto pin/unpin around the session%s\n' "$C" 'lm opencode [args]' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %srepo symbol map — build once, "where is X" instantly%s\n' "$C" 'lm index [find X]' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
@@ -161,6 +162,7 @@ case "${1:-}" in
   review)   shift; exec "$BIN/review" "$@" ;;
   probe)    shift; exec "$BIN/probe" "$@" ;;
   fleet)    shift; exec "$DIR/lib/fleet" "$@" ;;
+  index)    shift; exec "$DIR/lib/repo-index" "$@" ;;
   opencode)
     # Run opencode against the local code tier without paying the no-idle tax:
     # lease the model for the session (bounded — self-heals if we die hard),
