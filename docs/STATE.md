@@ -15,7 +15,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 |---|---|---|
 | `q "..."` | quick local LLM — answers, macOS commands (`q cmd`), titles; `--json`/`--format SCHEMA` (constrained decoding → `.data`), `--glow`; `q history`/`show N` | `q -h` |
 | `imagine "..."` | local image gen (Flux/Qwen on GPU); `--enhance --from --style --neg --seed`; `history`/`show`/`critique` | `imagine -h` |
-| `see <img> [q]` | local vision — structural read or grounded answer; **good-but-verify text**; `--ui` = sectioned UI inventory (elements/hierarchy/icons/patterns, big-tier routed, lease-aware); `--json`, `--glow`; `see history`/`show N` | `see -h` |
+| `see <img> [q]` | local vision — structural read or grounded answer; **good-but-verify text**; `--ui` = sectioned UI inventory (elements/hierarchy/icons/patterns, big-tier routed, lease-aware) · `--ui --json` = schema-constrained `.data` · `--menubar` = capture+read the live top strip; `--json`, `--glow`; `see history`/`show N` | `see -h` |
 | `review <pr#\|file\|dir>` | local code review — PR/files/folders/stdin; `--full` (whole files via API, no checkout), `--findings` (schema-constrained objects), `--glow` | `review -h` |
 | `lm probe <model>` | judgment eval — the gate that decides if a model earns a tier | `lm probe` |
 | `lm fleet <intent> <files…>` | batch fan-out: N files × one intent, concurrency-capped, Judge-gated, run record | `lm fleet -h` |

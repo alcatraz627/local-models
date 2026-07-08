@@ -24,15 +24,19 @@ MODEL="${VISION_MODEL:-gemma4:26b}"
 MODEL_SET=false
 MODE=text
 UI=false
+MENUBAR=false
 GLOW=false
 positionals=()
 LOG="$DIR/logs/see-history.jsonl"
+UI_SCHEMA="$DIR/intents/ui-inventory.schema.json"
 
 show_help() {
   printf '%s%ssee%s %s— read an image into text with a local vision model%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
   _cmd 'see <image> ["question"]' 'describe an image, or answer a question about it'
   _cmd 'see <image> --ui'         'UI mode: enumerated elements, layout, hierarchy, icons, patterns'
+  _cmd 'see --menubar ["q"]'      'capture the live macOS menu-bar strip, then read it (implies --ui)'
+  _cmd 'see <image> --ui --json'  'UI mode as a schema-constrained object in .data (regions/elements/…)'
   _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
   _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
   _sec EXAMPLES
@@ -40,15 +44,19 @@ show_help() {
   _ex 'see chart.png "is it trending up?"'     '# grounded answer'
   _ex 'see dashboard.png --ui'                 '# sectioned inventory of a website/app/widget UI'
   _ex 'see menu.png --ui "which item is on?"'  '# UI inventory + a focused answer'
+  _ex 'see --menubar "which app is focused?"'  '# grab + read the top strip (crop-first beats full-screen)'
+  _ex 'see panel.png --ui --json | jq .data'   '# structured elements array for an agent'
   _ex 'see mockup.png --json'                  '# {ok,text,model,ms} for Claude to read'
   _sec OPTIONS
   _opt '--ui'          'UI-inventory read for screenshots/mocks (KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE)'
-  _opt '--json'        'one JSON object on stdout, no ANSI'
+  _opt '--menubar'     'screencapture the main-display top strip and --ui it (needs Screen Recording perm)'
+  _opt '--json'        'one JSON object on stdout, no ANSI; with --ui adds parsed .data (schema-constrained)'
   _opt '--glow'        'render the read through glow (TTY-only, no-op without glow)'
   _opt '-m, --model M' "vision model (default: \$VISION_MODEL = $MODEL)"
   _opt '-h, --help'    'this help'
   _sec NOTES
   printf '  %slocal-only · the image is never uploaded · model loads on demand, unloads after%s\n' "$Dm" "$Rs"
+  printf '  %s--menubar reads black while a fullscreen app is frontmost (macOS hides the menu bar then)%s\n' "$Dm" "$Rs"
 }
 
 emit_error() { # CODE MESSAGE EXIT
@@ -73,12 +81,36 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --json)     MODE=json; shift ;;
     --ui)       UI=true; shift ;;
+    --menubar)  MENUBAR=true; UI=true; shift ;;
     --glow)     GLOW=true; shift ;;
     -m|--model) MODEL="$2"; MODEL_SET=true; shift 2 ;;
     -h|--help)  show_help; exit 0 ;;
     *)          positionals+=("$1"); shift ;;
   esac
 done
+
+# --menubar: the "image" is a fresh capture of the main display's top strip, so
+# every positional is the (optional) question. Grab the whole display then crop
+# the strip with sips (always present, pixel-space — no retina point/pixel math,
+# no PIL dependency). A too-wide screencapture -R errors instead of clamping, so
+# capture-then-crop is the portable path. The temp file is cleaned on exit.
+if $MENUBAR; then
+  command -v screencapture >/dev/null 2>&1 || emit_error no_screencapture "screencapture not found (macOS only)" 12
+  MB_DIR="$(mktemp -d "${TMPDIR:-/tmp}/see-menubar.XXXXXX")"
+  # extend the existing cursor-restore trap with temp cleanup
+  trap '{ [ -t 1 ] && printf "\033[?25h"; [ -t 2 ] && printf "\033[?25h" >&2; } 2>/dev/null; rm -rf "$MB_DIR" 2>/dev/null; true' EXIT INT TERM
+  MB_IMG="$MB_DIR/strip.png"
+  screencapture -x "$MB_DIR/full.png" 2>/dev/null
+  [ -s "$MB_DIR/full.png" ] || emit_error capture_failed "screencapture produced nothing — grant Screen Recording permission to your terminal" 12
+  read -r MB_W MB_H < <(sips -g pixelWidth -g pixelHeight "$MB_DIR/full.png" 2>/dev/null | awk '/pixel/{print $2}' | paste -sd' ' -)
+  # menu-bar height as ~4% of the display, floored/capped so it covers 1x, retina,
+  # and notch configs without dragging in much window content below.
+  MB_STRIP=$(( MB_H * 4 / 100 )); [ "$MB_STRIP" -lt 44 ] && MB_STRIP=44; [ "$MB_STRIP" -gt 100 ] && MB_STRIP=100
+  cp "$MB_DIR/full.png" "$MB_IMG"
+  sips -c "$MB_STRIP" "$MB_W" --cropOffset 0 0 "$MB_IMG" >/dev/null 2>&1 \
+    || emit_error crop_failed "sips could not crop the menu-bar strip" 12
+  positionals=("$MB_IMG" "${positionals[@]}")
+fi
 
 if [ "${#positionals[@]}" -eq 0 ]; then
   [ "$MODE" = text ] && { show_help; exit 0; }
@@ -101,6 +133,11 @@ ollama_up || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 
 # evicted by a hardcoded keep_alive:0.
 if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
 
+# Constrained-decoding schema, set only for --ui --json (mirrors q's --format):
+# passed to Ollama's `format` field so the model's output IS schema-valid JSON,
+# handed back pre-parsed in the envelope's .data.
+FMT=""
+
 if $UI; then
   # The UI-inventory lens — the one specialized mode the vision-lenses review
   # (docs/08, Outcome) sanctioned once a real caller existed. Sections are fixed
@@ -116,7 +153,13 @@ if $UI; then
   # config.sh UI_VISION_MODEL) — measured better at structure/state.
   $MODEL_SET || MODEL="${UI_VISION_MODEL:-$MODEL}"
   SYS="You are a precise UI analyst reading a computer-interface screenshot for a downstream agent. Report only what is visibly present."
-  USER="Analyze this interface screenshot (website, app window, dashboard, menu-bar widget, dropdown, or mock). Scan systematically before writing: top edge, left edge, main area, right edge, bottom edge — window title bars, filter rows, and status footers all count. Output EXACTLY these seven markdown sections, in order, each heading bare (never copy instruction text into the output):
+  if [ "$MODE" = json ]; then
+    # Structured variant: same discipline, JSON shape. Ollama enforces the schema.
+    [ -f "$UI_SCHEMA" ] || emit_error format_unreadable "UI schema missing: $UI_SCHEMA" 12
+    FMT="$(jq -c . "$UI_SCHEMA" 2>/dev/null)" || emit_error format_invalid "UI schema is not valid JSON: $UI_SCHEMA" 12
+    USER="Analyze this interface screenshot (website, app window, dashboard, menu-bar widget, dropdown, or mock) and return a JSON object describing it. Scan every edge — title bars, filter rows, status footers all count. Fields: kind (one line), theme (light/dark/unsure), regions (each with name, position, and an elements array of {type, text VERBATIM including counts, state}), icons (each {where, shape, likely_meaning}), palette (3-5 dominant colors in plain words), accent (the accent color and what carries it). Enumerate ONLY what is visibly present — never invent an element, value, or state; use \"[unsure]\" for anything not clearly legible; check which element actually carries the highlight before marking it selected. For long repeated lists, include the first few rows then one element whose text is the on-screen total (e.g. \"… showing 457\")."
+  else
+    USER="Analyze this interface screenshot (website, app window, dashboard, menu-bar widget, dropdown, or mock). Scan systematically before writing: top edge, left edge, main area, right edge, bottom edge — window title bars, filter rows, and status footers all count. Output EXACTLY these seven markdown sections, in order, each heading bare (never copy instruction text into the output):
 ## KIND
 One line: what this interface is and its apparent purpose.
 ## LAYOUT
@@ -132,6 +175,7 @@ Repeated formatting conventions: e.g. cards: icon + title + big value + delta, o
 ## PALETTE
 Coarse only: light or dark theme (as a guess), the 3-5 dominant colors in plain words, and the accent color plus what carries it. The caller must verify before citing.
 Anti-fabrication (critical): enumerate ONLY what is visibly present. Never pad a section to look complete — a short honest section beats a full invented one. Write [unsure] for anything not clearly legible; never invent an element, value, or state. Before claiming an element is selected or active, check which item actually carries the highlight."
+  fi
   [ -n "$QUERY" ] && USER="$USER
 Additional focus: $QUERY"
 elif [ -n "$QUERY" ]; then
@@ -152,16 +196,19 @@ fi
 # heredocs inside $(...).)
 t0=$(python3 -c 'import time; print(int(time.time()*1000))')
 set +e
-TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" 2>&1 <<'PY'
+TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" "$FMT" 2>&1 <<'PY'
 import sys, json, base64, urllib.request, urllib.error
-model, sysp, user, img, host, keep = sys.argv[1:7]
+model, sysp, user, img, host, keep, fmt = sys.argv[1:8]
 try:
     with open(img, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
-    body = json.dumps({"model": model, "stream": False, "keep_alive": int(keep), "think": False,
-                       "options": {"temperature": 0, "num_ctx": 8192, "num_predict": -1},
-                       "messages": [{"role": "system", "content": sysp},
-                                    {"role": "user", "content": user, "images": [b64]}]}).encode()
+    payload = {"model": model, "stream": False, "keep_alive": int(keep), "think": False,
+               "options": {"temperature": 0, "num_ctx": 8192, "num_predict": -1},
+               "messages": [{"role": "system", "content": sysp},
+                            {"role": "user", "content": user, "images": [b64]}]}
+    if fmt:  # constrained decoding: Ollama forces schema-valid JSON output
+        payload["format"] = json.loads(fmt)
+    body = json.dumps(payload).encode()
     req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=180) as r:
@@ -188,7 +235,7 @@ end=$(python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo
 ms=$(( end - t0 ))
 
 # History is best-effort — never break the answer on a log failure.
-READ_MODE=general; if $UI; then READ_MODE=ui; fi
+READ_MODE=general; if $MENUBAR; then READ_MODE=menubar; elif $UI; then READ_MODE=ui; fi
 mkdir -p "$DIR/logs"
 jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg img "$IMG" --arg p "$QUERY" \
    --arg m "$MODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
@@ -196,7 +243,14 @@ jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg img "$IMG" --arg p "$QUER
    >> "$LOG" 2>/dev/null || true
 
 if [ "$MODE" = json ]; then
-  jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" '{ok:true, text:$t, model:$m, ms:$ms}'
+  # --ui --json: hand consumers the parsed object in .data (null if the model
+  # somehow broke schema), not a JSON string to re-parse. Mirrors q --format.
+  if [ -n "$FMT" ]; then
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" \
+       '{ok:true, text:$t, model:$m, ms:$ms, data:($t | try fromjson catch null)}'
+  else
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" '{ok:true, text:$t, model:$m, ms:$ms}'
+  fi
 else
   if $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then
     printf '%s\n' "$TEXT" | glow -

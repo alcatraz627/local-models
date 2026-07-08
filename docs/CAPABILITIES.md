@@ -70,11 +70,21 @@ see ~/Desktop/shot.png                          # verbatim text + UI + layout + 
 see chart.png "is the trend up or down?"        # grounded answer
 see dashboard.png --ui                          # UI inventory: KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE
 see menu.png --ui "which item is enabled?"      # UI inventory + a focused answer
+see --menubar "which app is focused?"           # capture the live macOS top strip, then --ui it
+see panel.png --ui --json | jq .data            # schema-constrained {kind,theme,regions[].elements[],icons,palette}
 see mockup.png --json                           # {ok,text,model,ms} for an agent
 see photo.png --glow                            # rendered read
 see ui.png -m gemma4:26b                        # the stronger general-scene reasoner
 see history · see show -1                       # every read is logged, replayable
 ```
+
+`--menubar` screencaptures the main display's top strip and reads it (cropping first
+is the biggest quality lever for widgets — a full-screen frame buries the strip);
+needs Screen Recording permission, and reads the frontmost app's content instead of
+the menu bar while a fullscreen app is active. `--ui --json` returns the inventory as
+a schema-constrained object in `.data` (`intents/ui-inventory.schema.json`, Ollama
+`format` enforcement, same contract as `q --format`) for agents that consume elements
+rather than read markdown.
 
 `--ui` is the sectioned UI-inventory read for websites/apps/widgets/mocks — enumerated
 elements with verbatim labels and states, visual hierarchy, icon best-effort, formatting
