@@ -26,6 +26,7 @@ overview() {
   printf '  %s%-20s%s %sopencode on the local code model — auto pin/unpin around the session%s\n' "$C" 'lm opencode [args]' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %srepo symbol map — build once, "where is X" instantly%s\n' "$C" 'lm index [find X]' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sthe gemini lane — huge-context ingestion, ideation (wrapper-only)%s\n' "$C" 'lm gemini "..."' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %scheck enumerable UI claims against a screenshot (local verify gate)%s\n' "$C" 'lm ui-verify <img> …' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
@@ -168,6 +169,7 @@ case "${1:-}" in
   fleet)    shift; exec "$DIR/lib/fleet" "$@" ;;
   index)    shift; exec "$DIR/lib/repo-index" "$@" ;;
   gemini)   shift; exec "$DIR/lib/gemini" "$@" ;;
+  ui-verify) shift; exec "$DIR/lib/ui-verify" "$@" ;;
   opencode)
     # Run opencode against the local code tier without paying the no-idle tax:
     # lease the model for the session (bounded — self-heals if we die hard),

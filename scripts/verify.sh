@@ -11,7 +11,10 @@
 #   imagine generation (GPU, ~min) · lm opencode session (loads 23GB coder) ·
 #   MLX re-benchmarks (docs/05 §1 procedure) · probe suite (lm probe <model>) ·
 #   scheduled firings themselves (test-fire: gcc-schedule run <name>) ·
-#   guard-model-tier LIVE block (needs a real Agent dispatch from a session).
+#   guard-model-tier LIVE block (needs a real Agent dispatch from a session) ·
+#   lm ui-verify full gate (a --ui big-tier read + judge, ~40s — run one by hand:
+#   lm ui-verify <shot> "claim") · see --ui/--crop/--menubar reads (big tier;
+#   the artifact-store check below exercises the plain-see path only).
 set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
@@ -22,7 +25,7 @@ skip() { printf '  \033[2mskip\033[0m %s\n' "$1"; }
 
 echo "── syntax ──"
 SYN_FAIL=0
-for f in bin/lm bin/q bin/see bin/review bin/warm lib/fleet lib/repo-index lib/gemini scripts/self-audit.sh scripts/verify.sh; do
+for f in bin/lm bin/q bin/see bin/review bin/warm lib/fleet lib/repo-index lib/gemini lib/ui-verify scripts/self-audit.sh scripts/verify.sh; do
   bash -n "$f" 2>/dev/null || { bad "syntax: $f"; SYN_FAIL=1; }
 done
 # bin/probe is python — compile-check, don't bash -n it.
@@ -61,6 +64,19 @@ elif [ "$(printf '%s' "$R" | jq -r .ok 2>/dev/null)" = "true" ]; then
   A=$(./bin/lm gemini --timeout 90 ask "What TOML file was ingested into this session? Filename only." 2>/dev/null || true)
   printf '%s' "$A" | grep -qi "complete" && ok "lm gemini session memory (ask)" || skip "session memory inconclusive (answer: ${A:0:40})"
 else bad "lm gemini: $R"; fi
+
+echo "── see: artifact store (small vision tier) ──"
+R=$(./bin/see presets/skybound-isles.png --json 2>/dev/null)
+A=$(printf '%s' "$R" | jq -r '.artifact // empty' 2>/dev/null)
+if [ "$(printf '%s' "$R" | jq -r .ok 2>/dev/null)" = "true" ] && [ -n "$A" ]; then
+  ok "see --json envelope + artifact field"
+  { ls "$A"/source.* >/dev/null 2>&1 && [ -f "$A/read.md" ] && [ -f "$A/meta.json" ]; } \
+    && ok "artifact folder complete (source + read.md + meta.json)" || bad "artifact folder incomplete: $A"
+  [ "$(./bin/see open -1)" = "$A" ] && ok "see open -1 → same artifact" || bad "see open -1 mismatch"
+else bad "see --json: $R"; fi
+
+echo "── ui-verify: help + dispatch (full gate not run — see header) ──"
+./bin/lm ui-verify >/dev/null 2>&1 && ok "lm ui-verify dispatch + help" || bad "lm ui-verify dispatch"
 
 echo "── histories + timeline ──"
 for h in logs/q-history.jsonl logs/see-history.jsonl logs/fleet-history.jsonl logs/gem-history.jsonl; do

@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "claim": { "type": "string" },
+          "verdict": { "type": "string", "enum": ["pass", "fail", "unsure"] },
+          "evidence": { "type": "string" }
+        },
+        "required": ["claim", "verdict", "evidence"]
+      }
+    }
+  },
+  "required": ["results"]
+}

@@ -366,11 +366,14 @@ jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg p "$QUERY" \
 if [ "$MODE" = json ]; then
   # --ui --json: hand consumers the parsed object in .data (null if the model
   # somehow broke schema), not a JSON string to re-parse. Mirrors q --format.
+  # artifact = the read's folder (source copy + read.md), for evidence trails.
   if [ -n "$FMT" ]; then
-    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" \
-       '{ok:true, text:$t, model:$m, ms:$ms, data:($t | try fromjson catch null)}'
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
+       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end),
+         data:($t | try fromjson catch null)}'
   else
-    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" '{ok:true, text:$t, model:$m, ms:$ms}'
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
+       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end)}'
   fi
 else
   if $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then

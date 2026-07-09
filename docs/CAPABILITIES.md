@@ -72,11 +72,22 @@ see dashboard.png --ui                          # UI inventory: KIND/LAYOUT/HIER
 see menu.png --ui "which item is enabled?"      # UI inventory + a focused answer
 see --menubar "which app is focused?"           # capture the live macOS top strip, then --ui it
 see panel.png --ui --json | jq .data            # schema-constrained {kind,theme,regions[].elements[],icons,palette}
-see mockup.png --json                           # {ok,text,model,ms} for an agent
+see mockup.png --json                           # {ok,text,model,ms,artifact} for an agent
+see shot.png --region left --ui                 # crop first, then read — small crops read near-perfectly
+see shot.png --crop 800x600+0+120 "count?"      # exact pixel window (WxH+X+Y from top-left)
+see more "what does the badge say?"             # drill into the LAST image (from its artifact copy)
 see photo.png --glow                            # rendered read
 see ui.png -m gemma4:26b                        # the stronger general-scene reasoner
 see history · see show -1                       # every read is logged, replayable
+see open -1 · see note "obs…"                   # the read's artifact folder · append a note to it
 ```
+
+Every read lands one discoverable **artifact folder** — `outputs/see/<ts>-<mode>-<img>/`
+with the image *as read* (the crop / menubar strip, which would otherwise die with the
+temp dir), `read.md`, `meta.json`, and `notes.md` via `see note`. `see open N` jumps to
+it, `see more` re-targets it for follow-ups, and the newest 150 are kept. History lines
+carry `artifact` + `crop` fields; the `--json` envelope exposes `artifact` for agents
+building evidence trails.
 
 `--menubar` screencaptures the main display's top strip and reads it (cropping first
 is the biggest quality lever for widgets — a full-screen frame buries the strip);
@@ -94,6 +105,22 @@ batches. Benchmarked vs gemini vision on 15 real screenshots:
 `.claude/output/20260708-vision-ui-batch/report.md` (gemini wins exact-string fidelity,
 `see --ui` wins speed/cost/privacy; crop menu-bar strips before reading). Vision via the
 gemini lane: `lm gemini "describe @shot.png"`.
+
+### UI claim verification — `lm ui-verify`
+
+The $0 verification gate for UI work: after a change, enumerable claims ("the Save
+button is disabled", "the count shows 457") are checked mechanically against a
+`see --ui --json` inventory, judged strictly by the local warm tier (pass / fail /
+unsure — and unsure never passes). Aesthetics are not enumerable; those stay with
+Claude (see the gcc `/ui-gripe` and `/designer-reviewer` skills, which run `see --ui`
+as their structural first pass).
+
+```bash
+lm ui-verify shot.png "there is a Save button" "3 tabs are visible"
+lm ui-verify shot.png --region top "the Logs tab is selected"    # crop = near-perfect reads
+lm ui-verify shot.png "count shows 457" --json | jq .results     # for review agents
+# exit 0 = every claim passed · exit 1 = any fail/unsure · evidence cites the artifact
+```
 
 ## 4 · Code review — `review`
 

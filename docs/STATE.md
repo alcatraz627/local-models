@@ -1,6 +1,6 @@
 # local-models — STATE (agent handoff / index)
 
-Single source of truth for where this project is. Read this first. Last updated 2026-07-07.
+Single source of truth for where this project is. Read this first. Last updated 2026-07-09.
 
 **What it is:** a local-model toolkit on an Apple-Silicon Mac (M5 Pro, 64 GB), running alongside
 cloud Claude. Hard rule: **no idle performance penalty** — nothing heavy resident unless invoked.
@@ -15,7 +15,8 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 |---|---|---|
 | `q "..."` | quick local LLM — answers, macOS commands (`q cmd`), titles; `--json`/`--format SCHEMA` (constrained decoding → `.data`), `--glow`; `q history`/`show N` | `q -h` |
 | `imagine "..."` | local image gen (Flux/Qwen on GPU); `--enhance --from --style --neg --seed`; `history`/`show`/`critique` | `imagine -h` |
-| `see <img> [q]` | local vision — structural read or grounded answer; **good-but-verify text**; `--ui` = sectioned UI inventory (elements/hierarchy/icons/patterns, big-tier routed, lease-aware) · `--ui --json` = schema-constrained `.data` · `--menubar` = capture+read the live top strip; `--json`, `--glow`; `see history`/`show N` | `see -h` |
+| `see <img> [q]` | local vision — structural read or grounded answer; **good-but-verify text**; `--ui` = sectioned UI inventory (elements/hierarchy/icons/patterns, big-tier routed, lease-aware) · `--ui --json` = schema-constrained `.data` · `--menubar` = capture+read the live top strip · `--crop WxH+X+Y`/`--region top…center` = crop-then-read (small crops read near-perfectly) · `see more "q"` = drill into the last image; every read lands `outputs/see/<ts>-…/` (source copy + read.md + meta.json; `see open N` · `see note "…"`) | `see -h` |
+| `lm ui-verify <img> "claim"…` | the $0 UI verification gate — enumerable claims judged strictly against a `see --ui --json` inventory (pass/fail/unsure; unsure never passes; exit 0 only when all pass); `--region/--crop` for focused reads, `--json` for agents | `lm ui-verify -h` |
 | `review <pr#\|file\|dir>` | local code review — PR/files/folders/stdin; `--full` (whole files via API, no checkout), `--findings` (schema-constrained objects), `--glow` | `review -h` |
 | `lm probe <model>` | judgment eval — the gate that decides if a model earns a tier | `lm probe` |
 | `lm fleet <intent> <files…>` | batch fan-out: N files × one intent, concurrency-capped, Judge-gated, run record | `lm fleet -h` |
@@ -52,8 +53,11 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 - `bin/` — `lm q imagine warm see review probe lm-serve` · `_lib.sh` (colors/help/jsonl-history/
   residency/`resolve_tier`) · `config.sh` (tier vars)
-- `lib/` — orchestration internals, NOT on PATH: `fleet` (fan-out runner) · `repo-index`
-- `intents/` — the registry + `review-findings.schema.json` (constrained-decode schema)
+- `lib/` — orchestration internals, NOT on PATH: `fleet` (fan-out runner) · `repo-index` ·
+  `gemini` (the gemini lane) · `ui-verify` (the UI claim gate)
+- `intents/` — the registry + schemas: `review-findings` · `ui-inventory` · `ui-verify`
+- `outputs/see/` — the vision artifact store (one folder per read: source copy as read,
+  read.md, meta.json, notes.md; newest 150 kept; `see open N`)
 - `scripts/self-audit.sh` — the weekly feedback sink
 - **`scripts/verify.sh` — the one-command smoke battery (~30s): run after ANY change and at
   session start after a handoff.** 23 checks: syntax, doctor, q envelope+format, fleet+lease,
@@ -76,6 +80,15 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (chronological, most recent first)
 
+- **2026-07-09 (session local-next-a4):** **see artifact store** (every read → one
+  discoverable folder; fixes the --menubar dead-path defect) + **crop-then-read**
+  (`--crop`/`--region`, sips order pinned) + **`see more`/`open`/`note`** drill-down verbs;
+  **`lm ui-verify`** — the $0 UI claim gate (strict pass/fail/unsure judge over the --ui
+  inventory, live-verified on ground truth); **gemini session self-heal** (vanished chat
+  store no longer kills ask/ingest; reset surfaced, never silent) — the @-token report
+  (prop-…-63) did NOT reproduce on 0.43.0, closed with evidence; gcc side: `/ui-gripe`
+  confusion-forensics skill + designer-reviewer/web-design see-wiring committed;
+  `local-models-next` schedule retired; verify.sh now 28 checks.
 - **2026-07-07 (session local-agent-9c):** MLX measured + decided (format-routed; Q4_K_M kept;
   NVFP4 judgment-terseness regression caught by the probe — re-quantized weights need re-gating);
   **`lm fleet`** built + exercised (envelope+judge gate, salvage-first, warm-routed lease);

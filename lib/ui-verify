@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# ui-verify — check enumerable UI claims against a screenshot, entirely locally.
+#
+# The $0 verification gate for UI work: after a change, claims like "the save
+# button is disabled" or "the count shows 457" are mechanically checkable — no
+# cloud vision spend, no trusting the implementer. `see --ui --json` reads the
+# pixels into a schema-constrained inventory (measured: zero fabrications on
+# enumerables); a local judge then rules pass/fail/unsure per claim, strictly,
+# defaulting to unsure. Judgment about aesthetics stays with Claude — this gate
+# only rules on what is enumerable.
+#
+#   lm ui-verify shot.png "there is a Save button" "the count shows 457"
+#   lm ui-verify shot.png --region top "the tab 'Logs' is selected" --json
+#
+# Exit: 0 = every claim passed · 1 = any claim failed OR unsure (strict gate:
+# unverifiable never passes) · 2 usage · 10/12 upstream tool/file errors.
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"
+
+SCHEMA="$DIR/intents/ui-verify.schema.json"
+MODE=text
+BIG=false
+REGION=""
+CROP=""
+positionals=()
+
+show_help() {
+  printf '%s%slm ui-verify%s %s— check enumerable UI claims against a screenshot, locally%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  _sec USAGE
+  _cmd 'lm ui-verify <image> "claim" ["claim"…]' 'verify each claim against a local --ui read'
+  _sec EXAMPLES
+  _ex 'lm ui-verify shot.png "there is a Save button" "3 tabs are visible"' ''
+  _ex 'lm ui-verify shot.png --region top "the Logs tab is selected"'       '# crop first — small crops read near-perfectly'
+  _ex 'lm ui-verify shot.png "count shows 457" --json | jq .results'        '# machine mode for review agents'
+  _sec OPTIONS
+  _opt '--region NAME' 'verify against a named crop (top|bottom|left|right|center)'
+  _opt '--crop WxH+X+Y' 'verify against an exact pixel window'
+  _opt '--big'         'judge on the big tier instead of the warm default'
+  _opt '--json'        'machine mode: {ok, verdict, pass, fail, unsure, results, artifact}'
+  _opt '-h, --help'    'this help'
+  _sec NOTES
+  printf '  %sstrict gate: unsure never passes · aesthetics are NOT enumerable — this checks facts only%s\n' "$Dm" "$Rs"
+  printf '  %sthe inventory read lands an artifact (see open -1) — cite it as evidence%s\n' "$Dm" "$Rs"
+}
+
+emit_error() { # CODE MESSAGE EXIT
+  if [ "$MODE" = json ]; then jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}'
+  else echo "lm ui-verify: $2" >&2; fi
+  exit "$3"
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help)  show_help; exit 0 ;;
+    --json)     MODE=json; shift ;;
+    --big)      BIG=true; shift ;;
+    --region)   REGION="$2"; shift 2 ;;
+    --crop)     CROP="$2"; shift 2 ;;
+    *)          positionals+=("$1"); shift ;;
+  esac
+done
+
+IMG="${positionals[0]:-}"
+[ -n "$IMG" ] || { show_help; exit 0; }
+[ "${#positionals[@]}" -ge 2 ] || emit_error invalid_args 'need at least one claim: lm ui-verify <image> "claim"' 2
+[ -f "$IMG" ] || emit_error img_unreadable "no such file: $IMG" 12
+[ -f "$SCHEMA" ] || emit_error format_unreadable "verdict schema missing: $SCHEMA" 12
+
+# 1) Ground truth: the schema-constrained UI inventory (big tier, lease-aware).
+see_args=("$IMG" --ui --json)
+[ -n "$REGION" ] && see_args+=(--region "$REGION")
+[ -n "$CROP" ]   && see_args+=(--crop "$CROP")
+ENV_JSON="$("$DIR/bin/see" "${see_args[@]}")" \
+  || emit_error inventory_failed "see --ui --json failed: $(printf '%s' "$ENV_JSON" | jq -r '.message // "unknown"' 2>/dev/null)" 10
+INV="$(printf '%s' "$ENV_JSON" | jq -c '.data // empty')"
+[ -n "$INV" ] || emit_error inventory_failed "see returned no schema-valid inventory (.data is null)" 10
+ARTIFACT="$(printf '%s' "$ENV_JSON" | jq -r '.artifact // ""')"
+
+# 2) Number the claims for the judge.
+CLAIMS_BLOCK="$(i=0; for c in "${positionals[@]:1}"; do i=$((i+1)); printf '%d. %s\n' "$i" "$c"; done)"
+
+# 3) Judge each claim strictly against the inventory. The inventory is itself a
+# local read — exact strings are good-but-verify — so the rubric biases to
+# unsure, and unsure does NOT pass the gate. Constrained decoding guarantees
+# the verdict shape.
+JUDGE_PROMPT="You are a strict verification judge. The context document is a UI inventory JSON: the ground-truth machine read of a screenshot (regions with elements carrying verbatim text and state, icons, palette, theme). Evaluate each claim below STRICTLY against that inventory only.
+Verdicts: pass = the inventory clearly supports the claim. fail = the inventory clearly contradicts it. unsure = the inventory cannot decide it (element absent, text marked [unsure], claim about something not enumerable such as beauty or clarity). Never guess — when in doubt, unsure. Minor near-miss spellings of the same word count as support.
+For evidence, quote the deciding inventory fragment (or name what is absent).
+Return one result per claim, in order.
+Claims:
+$CLAIMS_BLOCK"
+
+q_args=(--json --format "$SCHEMA" --ctx - --ctx-name "ui-inventory.json")
+$BIG && q_args+=(--big)
+t0=$(date +%s)
+Q_ENV="$(printf '%s' "$INV" | "$DIR/bin/q" "${q_args[@]}" "$JUDGE_PROMPT")" \
+  || emit_error judge_failed "q judge call failed: $(printf '%s' "$Q_ENV" | jq -r '.message // "unknown"' 2>/dev/null)" 10
+RESULTS="$(printf '%s' "$Q_ENV" | jq -c '.data.results // empty')"
+[ -n "$RESULTS" ] || emit_error judge_failed "judge returned no schema-valid results" 10
+ms=$(( ($(date +%s) - t0) * 1000 ))
+
+PASS=$(printf '%s' "$RESULTS" | jq '[.[] | select(.verdict == "pass")] | length')
+FAIL=$(printf '%s' "$RESULTS" | jq '[.[] | select(.verdict == "fail")] | length')
+UNSURE=$(printf '%s' "$RESULTS" | jq '[.[] | select(.verdict == "unsure")] | length')
+VERDICT=pass; [ "$FAIL" -gt 0 ] || [ "$UNSURE" -gt 0 ] && VERDICT=fail
+
+if [ "$MODE" = json ]; then
+  printf '%s' "$RESULTS" | jq -c --arg v "$VERDICT" --argjson p "$PASS" --argjson f "$FAIL" \
+    --argjson u "$UNSURE" --arg art "$ARTIFACT" --argjson ms "$ms" \
+    '{ok:true, verdict:$v, pass:$p, fail:$f, unsure:$u, ms:$ms,
+      artifact:(if $art == "" then null else $art end), results:.}'
+else
+  printf '%s' "$RESULTS" | jq -r '.[] |
+    (if .verdict == "pass" then "✓" elif .verdict == "fail" then "✗" else "?" end)
+    + " " + .claim + "\n    └ " + .evidence'
+  printf '%s%d pass · %d fail · %d unsure → %s%s\n' "$Dm" "$PASS" "$FAIL" "$UNSURE" "$VERDICT" "$Rs" >&2 || true
+  [ -n "$ARTIFACT" ] && printf '%sevidence: %s%s\n' "$Dm" "$ARTIFACT" "$Rs" >&2 || true
+fi
+[ "$VERDICT" = pass ] && exit 0 || exit 1
