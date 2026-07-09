@@ -1,0 +1,15 @@
+[
+{"id":"corrections-max","type":"exact","q":"What is the maximum number of patterns mistake-patterns.md may hold, and what happens when it is full?","expected":"20 max; merge similar ones or drop the oldest with only 1 occurrence","source":"rules/corrections.md"},
+{"id":"commit-scan","type":"procedure","q":"In the its-my-claude repo (~/.claude), what must run before git add, and what do you do if it produces any output?","expected":"the secret-scan (rg over token patterns) runs BEFORE git add; ANY output means STOP, do not commit","source":"COMMIT.md"},
+{"id":"gate-mute","type":"exact","q":"How do you mute the declared-ready Stop gate, and what is the scope of that mute?","expected":"touch ~/.claude/.no-declared-ready-gate; machine-wide across all sessions until removed","source":"rules/exercise-based-verification.md"},
+{"id":"subagent-ceiling","type":"cross-doc","q":"Which model is the hard ceiling for sub-agents, and what is the flagship model reserved for?","expected":"Opus is the hard ceiling at any nesting depth; the flagship (fable/mythos) is for the supervising main loop only","source":"rules/model-tier-routing.md"},
+{"id":"bash-version","type":"exact","q":"What bash version ships on macOS according to the shell rules, what feature is missing, and what is the workaround?","expected":"bash 3.2; no associative arrays (declare -A); shebang /opt/homebrew/bin/bash if available or delegate to Python","source":"rules/shell.md"},
+{"id":"diagram-width","type":"number","q":"What is the maximum width in characters for ASCII diagrams?","expected":"78 chars","source":"conventions/ascii-diagrams.md"},
+{"id":"cron-retire","type":"procedure","q":"When retiring a cron, what is the two-step delete?","expected":"delete the job AND its calendar event, in the same change","source":"rules/scheduling-discipline.md"},
+{"id":"agent-tag","type":"exact","q":"What tag format marks agent-note comments in code, and how must they relate to human comments?","expected":"[claude@<ts>]; kept as a SEPARATE block from human comments, never mixed","source":"rules/comments.md"},
+{"id":"ctx-70","type":"procedure","q":"What should happen when a session approaches 70% context usage?","expected":"proactively offer a structured state summary (WAL checkpoint + /core-dump mini) before compaction","source":"features/context-retention.md"},
+{"id":"proposals-file","type":"paths","q":"Where is the cross-session improvement backlog stored, and which script files into it?","expected":"~/.claude/proposals.jsonl via ~/.claude/scripts/propose.sh","source":"features/proposals.md"},
+{"id":"wal-retention","type":"number","q":"How many sessions of WAL entries are kept in wal.jsonl?","expected":"only the last 2 sessions","source":"features/wal.md"},
+{"id":"NEG-k8s","type":"negative","q":"What Kubernetes cluster do the gcc automations deploy to?","expected":"NOT IN CONTEXT","source":"(absent from corpus)"},
+{"id":"NEG-dbpass","type":"negative","q":"What is the database password rotation schedule?","expected":"NOT IN CONTEXT","source":"(absent from corpus)"}
+]

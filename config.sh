@@ -38,3 +38,6 @@ VISION_MODEL="${VISION_MODEL:-minicpm-v}"
 # proportions, per-element states — while matching its verbatim recall.
 # `see -m <model>` still overrides.
 UI_VISION_MODEL="${UI_VISION_MODEL:-$BIG_MODEL}"
+
+# Embedder for `lm rag` (local vector index; 274MB, 768-dim, on-demand load).
+RAG_EMBED_MODEL="${RAG_EMBED_MODEL:-nomic-embed-text}"

@@ -170,6 +170,7 @@ case "${1:-}" in
   index)    shift; exec "$DIR/lib/repo-index" "$@" ;;
   gemini)   shift; exec "$DIR/lib/gemini" "$@" ;;
   ui-verify) shift; exec "$DIR/lib/ui-verify" "$@" ;;
+  rag)      shift; exec "$DIR/lib/rag" "$@" ;;
   opencode)
     # Run opencode against the local code tier without paying the no-idle tax:
     # lease the model for the session (bounded — self-heals if we die hard),

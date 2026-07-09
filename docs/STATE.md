@@ -80,6 +80,12 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (chronological, most recent first)
 
+- **2026-07-10 (session local-next-a4):** **RAG swim test** — built a full local RAG lane
+  (nomic-embed-text + sqlite-vec + q-grounded answers, conductor-drives-retrieval per docs/03),
+  ingested 88 gcc doc files (865 chunks, 17s, $0), and ran a 13-question grader-authored eval:
+  12/13 correct, 0 fabrications, 2/2 negative probes refused; the one miss root-caused to
+  heading-dominated chunk embeddings (fact under an unrelated heading). Kept as ARCHIVAL only.
+  Also: env-access convention recorded (config.sh = single definition point).
 - **2026-07-09 (session local-next-a4):** **see artifact store** (every read → one
   discoverable folder; fixes the --menubar dead-path defect) + **crop-then-read**
   (`--crop`/`--region`, sips order pinned) + **`see more`/`open`/`note`** drill-down verbs;
@@ -112,7 +118,11 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - **Governor policy table** — pair with the gcc **model-tier harness** task (user notes captured
   2026-07-07: Opus daily driver, Fable rare, sub-agents ≤ opus, local + gemini-flash integration,
   hook nudge, pairing tools — see the gcc proposals backlog).
-- **Local RAG / embedder** (deferred, noted) — revisit via simonw/llm ecosystem if q ergonomics stall.
+- **Local RAG / embedder** — TESTED AND ARCHIVED 2026-07-10 (not adopted, user call: test-only).
+  The swim test scored 12/13 with zero fabrications over the gcc doc corpus; report:
+  `.claude/output/20260710-rag-swim-test/report.md`. Scaffolding kept as an archival asset:
+  `lib/rag` + `lib/rag.py` (dispatchable via `lm rag`, unadvertised in the menu), embedder
+  `nomic-embed-text` on disk, index rebuildable in ~20s. Revisit only on a real need.
 - **`procedures/*.toml` + `lm run`** — gated until a 2nd real multi-step recipe exists.
 - **MTP speculative decode** — unmeasured (`-mtp-*` tags + `OLLAMA_MLX_MTP_*`).
 - **`review-pr` worktree variant** · **`--web` for q** (needs search-backend decision) ·
