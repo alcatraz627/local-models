@@ -18,7 +18,10 @@ source "$DIR/bin/_lib.sh"
 # A cold model-load via the ollama API can leave the terminal cursor hidden;
 # `see` doesn't emit cursor codes itself, but it guarantees the cursor is shown
 # again on exit (any path) so it never leaves the terminal in a bad state.
-trap '{ [ -t 1 ] && printf "\033[?25h"; [ -t 2 ] && printf "\033[?25h" >&2; } 2>/dev/null; true' EXIT INT TERM
+# The same trap sweeps the run's temp dir (menubar captures, crop scratch) —
+# by then the artifact store has already copied what must survive.
+SEE_TMP=""
+trap '{ [ -t 1 ] && printf "\033[?25h"; [ -t 2 ] && printf "\033[?25h" >&2; } 2>/dev/null; [ -n "$SEE_TMP" ] && rm -rf "$SEE_TMP" 2>/dev/null; true' EXIT INT TERM
 
 MODEL="${VISION_MODEL:-gemma4:26b}"
 MODEL_SET=false
@@ -26,8 +29,12 @@ MODE=text
 UI=false
 MENUBAR=false
 GLOW=false
+CROP=""
+REGION=""
 positionals=()
 LOG="$DIR/logs/see-history.jsonl"
+ART_ROOT="$DIR/outputs/see"
+ART_KEEP=150   # newest artifact folders kept; older ones pruned each run
 UI_SCHEMA="$DIR/intents/ui-inventory.schema.json"
 
 show_help() {
@@ -38,24 +45,31 @@ show_help() {
   _cmd 'see --menubar ["q"]'      'capture the live macOS menu-bar strip, then read it (implies --ui)'
   _cmd 'see <image> --ui --json'  'UI mode as a schema-constrained object in .data (regions/elements/…)'
   _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
+  _cmd 'see more ["q"] [flags]'   'follow-up read of the LAST image (from its artifact copy)'
   _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
+  _cmd 'see open [N]'             'print (and reveal, if TTY) the artifact folder of read N (default -1)'
+  _cmd 'see note [N] "text"'      'append a note to read N'\''s artifact folder (default -1 = latest)'
   _sec EXAMPLES
   _ex 'see ~/Desktop/shot.png'                 '# verbatim text + UI + layout'
   _ex 'see chart.png "is it trending up?"'     '# grounded answer'
   _ex 'see dashboard.png --ui'                 '# sectioned inventory of a website/app/widget UI'
-  _ex 'see menu.png --ui "which item is on?"'  '# UI inventory + a focused answer'
+  _ex 'see shot.png --region left --ui'        '# crop first, then read — small crops read near-perfectly'
+  _ex 'see shot.png --crop 800x600+0+120 "?"'  '# exact pixel window (WxH+X+Y from top-left)'
+  _ex 'see more "what does the badge say?"'    '# drill into the image you just read'
   _ex 'see --menubar "which app is focused?"'  '# grab + read the top strip (crop-first beats full-screen)'
   _ex 'see panel.png --ui --json | jq .data'   '# structured elements array for an agent'
-  _ex 'see mockup.png --json'                  '# {ok,text,model,ms} for Claude to read'
   _sec OPTIONS
   _opt '--ui'          'UI-inventory read for screenshots/mocks (KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE)'
   _opt '--menubar'     'screencapture the main-display top strip and --ui it (needs Screen Recording perm)'
+  _opt '--crop WxH+X+Y' 'read only this pixel window of the image (crop-then-read lifts recall)'
+  _opt '--region NAME' 'named crop: top|bottom (third) · left|right (half) · center (middle quarter)'
   _opt '--json'        'one JSON object on stdout, no ANSI; with --ui adds parsed .data (schema-constrained)'
   _opt '--glow'        'render the read through glow (TTY-only, no-op without glow)'
   _opt '-m, --model M' "vision model (default: \$VISION_MODEL = $MODEL)"
   _opt '-h, --help'    'this help'
   _sec NOTES
   printf '  %slocal-only · the image is never uploaded · model loads on demand, unloads after%s\n' "$Dm" "$Rs"
+  printf '  %severy read lands outputs/see/<ts>-<mode>-<img>/ (source copy + read.md + meta.json) — see open -1%s\n' "$Dm" "$Rs"
   printf '  %s--menubar reads black while a fullscreen app is frontmost (macOS hides the menu bar then)%s\n' "$Dm" "$Rs"
 }
 
@@ -75,6 +89,35 @@ case "${1:-}" in
   show)    jsonl_entry "$LOG" "${2:-}" \
              '"# see \(.img)  ·  \(.ts)  ·  \(.model)  ·  \(.ms)ms\n\n\(.response)"'
            exit $? ;;
+  # `more` = re-target the LAST image without retyping its path. Prefers the
+  # artifact copy (survives temp cleanup — the original --menubar strip is long
+  # gone) over the original path. Remaining args pass through, so
+  # `see more --ui "q"` works exactly like a fresh invocation.
+  more)    shift
+           LAST="$(jsonl_entry "$LOG" -1 '(.artifact // "") + "\t" + .img' 2>/dev/null)" \
+             || { echo "see: no history yet" >&2; exit 12; }
+           ART_PREV="${LAST%%	*}"; ORIG_PREV="${LAST#*	}"
+           IMG_R=""
+           if [ -n "$ART_PREV" ]; then IMG_R="$(ls "$ART_PREV"/source.* 2>/dev/null | head -1)"; fi
+           [ -n "$IMG_R" ] || { [ -f "$ORIG_PREV" ] && IMG_R="$ORIG_PREV"; }
+           [ -n "$IMG_R" ] || { echo "see: last image is gone ($ORIG_PREV) and no artifact copy exists" >&2; exit 12; }
+           exec "$0" "$IMG_R" "$@" ;;
+  open)    ART="$(jsonl_entry "$LOG" "${2:--1}" '.artifact // empty')" || exit 1
+           { [ -n "$ART" ] && [ -d "$ART" ]; } \
+             || { echo "see: that read has no artifact folder (pre-artifact-store entry?)" >&2; exit 12; }
+           printf '%s\n' "$ART"
+           if [ -t 1 ] && command -v open >/dev/null 2>&1; then open "$ART"; fi
+           exit 0 ;;
+  note)    shift
+           N=-1; case "${1:-}" in -[0-9]*|[0-9]*) N="$1"; shift ;; esac
+           [ $# -gt 0 ] || { echo 'usage: see note [N] "text"' >&2; exit 2; }
+           ART="$(jsonl_entry "$LOG" "$N" '.artifact // empty')" || exit 1
+           { [ -n "$ART" ] && [ -d "$ART" ]; } \
+             || { echo "see: that read has no artifact folder to note into" >&2; exit 12; }
+           [ -f "$ART/notes.md" ] || printf '# notes\n\n' > "$ART/notes.md"
+           printf -- '- %s — %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$ART/notes.md"
+           echo "noted → $ART/notes.md"
+           exit 0 ;;
 esac
 
 while [ $# -gt 0 ]; do
@@ -82,6 +125,8 @@ while [ $# -gt 0 ]; do
     --json)     MODE=json; shift ;;
     --ui)       UI=true; shift ;;
     --menubar)  MENUBAR=true; UI=true; shift ;;
+    --crop)     CROP="$2"; shift 2 ;;
+    --region)   REGION="$2"; shift 2 ;;
     --glow)     GLOW=true; shift ;;
     -m|--model) MODEL="$2"; MODEL_SET=true; shift 2 ;;
     -h|--help)  show_help; exit 0 ;;
@@ -96,9 +141,9 @@ done
 # capture-then-crop is the portable path. The temp file is cleaned on exit.
 if $MENUBAR; then
   command -v screencapture >/dev/null 2>&1 || emit_error no_screencapture "screencapture not found (macOS only)" 12
-  MB_DIR="$(mktemp -d "${TMPDIR:-/tmp}/see-menubar.XXXXXX")"
-  # extend the existing cursor-restore trap with temp cleanup
-  trap '{ [ -t 1 ] && printf "\033[?25h"; [ -t 2 ] && printf "\033[?25h" >&2; } 2>/dev/null; rm -rf "$MB_DIR" 2>/dev/null; true' EXIT INT TERM
+  [ -n "$CROP$REGION" ] && emit_error invalid_args "--menubar already crops the strip; drop --crop/--region" 2
+  SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
+  MB_DIR="$SEE_TMP"
   MB_IMG="$MB_DIR/strip.png"
   screencapture -x "$MB_DIR/full.png" 2>/dev/null
   [ -s "$MB_DIR/full.png" ] || emit_error capture_failed "screencapture produced nothing — grant Screen Recording permission to your terminal" 12
@@ -117,12 +162,55 @@ if [ "${#positionals[@]}" -eq 0 ]; then
   emit_error invalid_args "no image given" 2
 fi
 IMG="${positionals[0]}"; QUERY="${positionals[*]:1}"
+ORIG_IMG="$IMG"   # what the caller named — meta/history cite this, not the crop temp
 
 [ -f "$IMG" ] || emit_error img_unreadable "no such file: $IMG" 12
 case "$(file -b --mime-type "$IMG" 2>/dev/null)" in
   image/*) : ;;
   *) emit_error not_an_image "'$IMG' is not an image ($(file -b "$IMG" 2>/dev/null))" 12 ;;
 esac
+
+# ── Crop-then-read ──
+# The July-08 benchmark's strongest lesson: small crops read near-perfectly, so
+# cropping before reading lifts recall at $0. sips argument order (pinned
+# empirically 2026-07-09): -c takes HEIGHT WIDTH; --cropOffset takes offsetY
+# offsetX. The model reads the crop; the artifact store keeps it as source.
+CROP_DESC=""
+if [ -n "$CROP$REGION" ]; then
+  { [ -n "$CROP" ] && [ -n "$REGION" ]; } && emit_error invalid_args "pick one of --crop / --region" 2
+  read -r IW IH < <(sips -g pixelWidth -g pixelHeight "$IMG" 2>/dev/null | awk '/pixel/{print $2}' | paste -sd' ' -)
+  [ -n "$IW" ] && [ -n "$IH" ] || emit_error crop_failed "could not read image dimensions" 12
+  if [ -n "$REGION" ]; then
+    case "$REGION" in
+      top)    CW=$IW; CH=$((IH / 3)); CX=0; CY=0 ;;
+      bottom) CW=$IW; CH=$((IH / 3)); CX=0; CY=$((IH - IH / 3)) ;;
+      left)   CW=$((IW / 2)); CH=$IH; CX=0; CY=0 ;;
+      right)  CW=$((IW / 2)); CH=$IH; CX=$((IW - IW / 2)); CY=0 ;;
+      center) CW=$((IW / 2)); CH=$((IH / 2)); CX=$((IW / 4)); CY=$((IH / 4)) ;;
+      *) emit_error invalid_args "--region must be top|bottom|left|right|center, got '$REGION'" 2 ;;
+    esac
+  else
+    CW="${CROP%%x*}"; _rest="${CROP#*x}"
+    CH="${_rest%%+*}"; _rest="${_rest#*+}"
+    CX="${_rest%%+*}"; CY="${_rest#*+}"
+    for _v in "$CW" "$CH" "$CX" "$CY"; do
+      [[ "$_v" =~ ^[0-9]+$ ]] || emit_error invalid_args "--crop expects WxH+X+Y (pixels from top-left), got '$CROP'" 2
+    done
+    { [ "$CX" -lt "$IW" ] && [ "$CY" -lt "$IH" ]; } \
+      || emit_error invalid_args "--crop offset ($CX,$CY) is outside the ${IW}x${IH} image" 2
+    [ $((CX + CW)) -le "$IW" ] || CW=$((IW - CX))   # clamp to the image, don't error
+    [ $((CY + CH)) -le "$IH" ] || CH=$((IH - CY))
+  fi
+  { [ "$CW" -ge 1 ] && [ "$CH" -ge 1 ]; } || emit_error invalid_args "crop window is empty" 2
+  [ -n "$SEE_TMP" ] || SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
+  case "$IMG" in *.*) _ext="${IMG##*.}" ;; *) _ext=png ;; esac
+  CROP_IMG="$SEE_TMP/crop.$_ext"
+  cp -f "$IMG" "$CROP_IMG"
+  sips -c "$CH" "$CW" --cropOffset "$CY" "$CX" "$CROP_IMG" >/dev/null 2>&1 \
+    || emit_error crop_failed "sips could not crop ${CW}x${CH}+${CX}+${CY}" 12
+  CROP_DESC="${CW}x${CH}+${CX}+${CY}${REGION:+ ($REGION)}"
+  IMG="$CROP_IMG"
+fi
 
 ollama_up || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
 
@@ -234,12 +322,45 @@ end=$(python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo
 [[ "$end" =~ ^[0-9]+$ ]] || end="$t0"
 ms=$(( end - t0 ))
 
-# History is best-effort — never break the answer on a log failure.
+# ── Artifact store + history (both best-effort — never break the answer) ──
+# Every read lands one discoverable folder: outputs/see/<ts>-<mode>-<img>/ with
+# the image AS READ (the crop / menubar strip — those temp files die on exit),
+# the read itself, and machine metadata. `see open N` finds it; `see note` and
+# `see more` build on it. Pruned to the newest $ART_KEEP folders.
 READ_MODE=general; if $MENUBAR; then READ_MODE=menubar; elif $UI; then READ_MODE=ui; fi
+ART=""
+NOW_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+if mkdir -p "$ART_ROOT" 2>/dev/null; then
+  slug="$(printf '%s' "$(basename "${ORIG_IMG%.*}")" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//; s/-$//' | cut -c1-40)"
+  [ -n "$slug" ] || slug=img
+  ART="$ART_ROOT/$(date -u +%Y%m%dT%H%M%SZ)-$READ_MODE-$slug"
+  [ -e "$ART" ] && ART="$ART-$$"
+  if mkdir "$ART" 2>/dev/null; then
+    case "$IMG" in *.*) _sext="${IMG##*.}" ;; *) _sext=png ;; esac
+    cp -f "$IMG" "$ART/source.$_sext" 2>/dev/null || true
+    { printf '# see %s read — %s\n\n- image: %s\n' "$READ_MODE" "$NOW_TS" "$ORIG_IMG"
+      [ -n "$CROP_DESC" ] && printf -- '- crop: %s\n' "$CROP_DESC"
+      [ -n "$QUERY" ] && printf -- '- question: %s\n' "$QUERY"
+      printf -- '- model: %s · %dms\n\n---\n\n%s\n' "$MODEL" "$ms" "$TEXT"
+    } > "$ART/read.md" 2>/dev/null || true
+    jq -cn --arg ts "$NOW_TS" --arg src "$ORIG_IMG" --arg crop "$CROP_DESC" \
+       --arg mode "$READ_MODE" --arg model "$MODEL" --argjson ms "$ms" --arg p "$QUERY" \
+       '{ts:$ts, source:$src, crop:(if $crop == "" then null else $crop end), mode:$mode,
+         model:$model, ms:$ms, prompt:(if $p == "" then null else $p end)}' \
+       > "$ART/meta.json" 2>/dev/null || true
+    ls -1t "$ART_ROOT" 2>/dev/null | tail -n +$((ART_KEEP + 1)) \
+      | while IFS= read -r _old; do rm -rf "${ART_ROOT:?}/$_old"; done 2>/dev/null || true
+  else
+    ART=""
+  fi
+fi
 mkdir -p "$DIR/logs"
-jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg img "$IMG" --arg p "$QUERY" \
+jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg p "$QUERY" \
    --arg m "$MODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
-   '{ts:$ts, img:$img, prompt:(if $p == "" then null else $p end), mode:$rm, model:$m, ms:$ms, response:$r}' \
+   --arg crop "$CROP_DESC" --arg art "$ART" \
+   '{ts:$ts, img:$img, prompt:(if $p == "" then null else $p end), mode:$rm,
+     crop:(if $crop == "" then null else $crop end), model:$m, ms:$ms,
+     artifact:(if $art == "" then null else $art end), response:$r}' \
    >> "$LOG" 2>/dev/null || true
 
 if [ "$MODE" = json ]; then
@@ -259,6 +380,6 @@ else
   fi
   # Integer ms, no awk — robust even on an interrupted run. The TTY guard must
   # not become the exit code (non-TTY text-mode success would exit 1).
-  [ -t 2 ] && printf '%s· %s · %dms%s\n' "$Dm" "$MODEL" "$ms" "$Rs" >&2
+  [ -t 2 ] && printf '%s· %s · %dms%s%s\n' "$Dm" "$MODEL" "$ms" "${ART:+ · see open -1}" "$Rs" >&2
 fi
 exit 0
