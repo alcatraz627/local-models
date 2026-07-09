@@ -143,15 +143,33 @@ if [ "$KIND" != oneshot ]; then
   fi
 fi
 
+run_once() { # one backend attempt with the current SESS_ARGS; sets OUT + rc
+  set +e
+  if [ -n "$CTX" ]; then
+    OUT="$(printf '%s' "$CTX" | run_gemini "${SESS_ARGS[@]}" 2>&1)"
+  else
+    OUT="$(run_gemini "${SESS_ARGS[@]}" </dev/null 2>&1)"
+  fi
+  rc=$?
+  set -e
+}
+
 t0=$(date +%s)
-set +e
-if [ -n "$CTX" ]; then
-  OUT="$(printf '%s' "$CTX" | run_gemini "${SESS_ARGS[@]}" 2>&1)"
-else
-  OUT="$(run_gemini "${SESS_ARGS[@]}" </dev/null 2>&1)"
+run_once
+# Self-heal a vanished session. gemini-cli keeps its chat store under
+# ~/.gemini/tmp/<project>/chats and cleans it on its own schedule, so our cached
+# UUID can point at nothing — resume then errors instead of creating. Mint a
+# fresh session and retry once. Continuity is lost (ingested context is gone),
+# so the reset is surfaced, never silent.
+SESSION_RESET=false
+if [ "$rc" -ne 0 ] && [ "$KIND" != oneshot ] \
+   && printf '%s' "$OUT" | grep -qi 'Searched for sessions\|--list-sessions'; then
+  NEW_ID="$(uuidgen | tr 'A-Z' 'a-z')"
+  printf '%s\n' "$NEW_ID" > "$ID_FILE"
+  SESS_ARGS=(--session-id "$NEW_ID")
+  SESSION_RESET=true
+  run_once
 fi
-rc=$?
-set -e
 ms=$(( ($(date +%s) - t0) * 1000 ))
 
 if [ "$rc" -ne 0 ]; then
@@ -169,12 +187,15 @@ fi
 # as-is; consumers treat gemini content as untrusted input anyway (the wrapper
 # guarantees structure, not truth).
 TEXT="$(printf '%s' "$OUT" | sed -E '/^Ripgrep is not available/d; /^\[STARTUP\]/d')"
-log_line "$KIND" "$TEXT" "$ms"
+log_line "$([ "$SESSION_RESET" = true ] && echo "$KIND+reset" || echo "$KIND")" "$TEXT" "$ms"
 if [ "$MODE" = json ]; then
   jq -cn --arg t "$TEXT" --arg m "$GEMINI_MODEL" --argjson ms "$ms" \
     --arg s "$([ "$KIND" = oneshot ] && echo "" || echo "$SESSION")" \
-    '{ok:true, text:$t, model:$m, ms:$ms, session:(if $s == "" then null else $s end)}'
+    --argjson reset "$SESSION_RESET" \
+    '{ok:true, text:$t, model:$m, ms:$ms, session:(if $s == "" then null else $s end)}
+     + (if $reset then {session_reset:true, note:"session store was cleaned externally — a fresh session was created; previously ingested context is gone (re-run ingest)"} else {} end)'
 else
+  [ "$SESSION_RESET" = true ] && printf 'lm gemini: note — the session store was cleaned externally; started a fresh session (ingested context is gone, re-run ingest)\n' >&2
   printf '%s\n' "$TEXT"
   # Stats are TTY-only; the guard must not become the script's exit code — a
   # machine caller in text mode would see exit 1 on every success.
