@@ -26,17 +26,21 @@ MODE=text
 BIG=false
 REGION=""
 CROP=""
+APP=""
 positionals=()
 
 show_help() {
   printf '%s%slm ui-verify%s %s— check enumerable UI claims against a screenshot, locally%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
   _cmd 'lm ui-verify <image> "claim" ["claim"…]' 'verify each claim against a local --ui read'
+  _cmd 'lm ui-verify --app <Name> "claim" […]'   'verify against the LIVE accessibility tree (exact, no pixels)'
   _sec EXAMPLES
   _ex 'lm ui-verify shot.png "there is a Save button" "3 tabs are visible"' ''
   _ex 'lm ui-verify shot.png --region top "the Logs tab is selected"'       '# crop first — small crops read near-perfectly'
+  _ex 'lm ui-verify --app Finder "there is a Force Quit menu item"'         '# semantic ground truth from the AX tree'
   _ex 'lm ui-verify shot.png "count shows 457" --json | jq .results'        '# machine mode for review agents'
   _sec OPTIONS
+  _opt '--app NAME'    'read the running app'\''s accessibility tree instead of a screenshot (needs ax + Accessibility perm)'
   _opt '--region NAME' 'verify against a named crop (top|bottom|left|right|center)'
   _opt '--crop WxH+X+Y' 'verify against an exact pixel window'
   _opt '--big'         'judge on the big tier instead of the warm default'
@@ -58,43 +62,63 @@ while [ $# -gt 0 ]; do
     -h|--help)  show_help; exit 0 ;;
     --json)     MODE=json; shift ;;
     --big)      BIG=true; shift ;;
+    --app)      APP="$2"; shift 2 ;;
     --region)   REGION="$2"; shift 2 ;;
     --crop)     CROP="$2"; shift 2 ;;
     *)          positionals+=("$1"); shift ;;
   esac
 done
 
-IMG="${positionals[0]:-}"
-[ -n "$IMG" ] || { show_help; exit 0; }
-[ "${#positionals[@]}" -ge 2 ] || emit_error invalid_args 'need at least one claim: lm ui-verify <image> "claim"' 2
-[ -f "$IMG" ] || emit_error img_unreadable "no such file: $IMG" 12
 [ -f "$SCHEMA" ] || emit_error format_unreadable "verdict schema missing: $SCHEMA" 12
 
-# 1) Ground truth: the schema-constrained UI inventory (big tier, lease-aware).
-see_args=("$IMG" --ui --json)
-[ -n "$REGION" ] && see_args+=(--region "$REGION")
-[ -n "$CROP" ]   && see_args+=(--crop "$CROP")
-ENV_JSON="$("$DIR/bin/see" "${see_args[@]}")" \
-  || emit_error inventory_failed "see --ui --json failed: $(printf '%s' "$ENV_JSON" | jq -r '.message // "unknown"' 2>/dev/null)" 10
-INV="$(printf '%s' "$ENV_JSON" | jq -c '.data // empty')"
-[ -n "$INV" ] || emit_error inventory_failed "see returned no schema-valid inventory (.data is null)" 10
-ARTIFACT="$(printf '%s' "$ENV_JSON" | jq -r '.artifact // ""')"
+# 1) Ground truth — two evidence lanes:
+#    image lane: see --ui --json (schema-constrained VLM inventory; good-but-verify)
+#    app lane (--app): the LIVE accessibility tree via `ax` (semantic and exact,
+#    but only covers what the app exposes to accessibility)
+if [ -n "$APP" ]; then
+  { [ -n "$REGION" ] || [ -n "$CROP" ]; } && emit_error invalid_args "--app reads the live AX tree; --region/--crop apply to images only" 2
+  [ "${#positionals[@]}" -ge 1 ] || emit_error invalid_args 'need at least one claim: lm ui-verify --app <Name> "claim"' 2
+  command -v ax >/dev/null 2>&1 || emit_error ax_missing "ax not installed — cargo install --git https://github.com/watzon/ax-cli" 12
+  RAW_TREE="$(ax tree --app "$APP" -d 8 --json 2>&1)" \
+    || emit_error ax_failed "ax tree failed for '$APP': $(printf '%s' "$RAW_TREE" | head -1)" 10
+  # Strip nulls/empty-children recursively — trees are mostly null padding.
+  INV="$(printf '%s' "$RAW_TREE" | jq -c 'walk(if type == "object" then with_entries(select(.value != null and .value != [])) else . end)' 2>/dev/null)"
+  [ -n "$INV" ] && [ "$INV" != "null" ] || emit_error ax_failed "ax returned no parseable tree for '$APP'" 10
+  ARTIFACT=""
+  CLAIM_ARGS=("${positionals[@]}")
+  INV_DESC="the LIVE macOS accessibility tree of the app '$APP' (nested elements with role, title, value, description — exact, read from the running app, not from pixels)"
+else
+  IMG="${positionals[0]:-}"
+  [ -n "$IMG" ] || { show_help; exit 0; }
+  [ "${#positionals[@]}" -ge 2 ] || emit_error invalid_args 'need at least one claim: lm ui-verify <image> "claim"' 2
+  [ -f "$IMG" ] || emit_error img_unreadable "no such file: $IMG" 12
+  see_args=("$IMG" --ui --json)
+  [ -n "$REGION" ] && see_args+=(--region "$REGION")
+  [ -n "$CROP" ]   && see_args+=(--crop "$CROP")
+  ENV_JSON="$("$DIR/bin/see" "${see_args[@]}")" \
+    || emit_error inventory_failed "see --ui --json failed: $(printf '%s' "$ENV_JSON" | jq -r '.message // "unknown"' 2>/dev/null)" 10
+  INV="$(printf '%s' "$ENV_JSON" | jq -c '.data // empty')"
+  [ -n "$INV" ] || emit_error inventory_failed "see returned no schema-valid inventory (.data is null)" 10
+  ARTIFACT="$(printf '%s' "$ENV_JSON" | jq -r '.artifact // ""')"
+  CLAIM_ARGS=("${positionals[@]:1}")
+  INV_DESC="a UI inventory JSON: the ground-truth machine read of a screenshot (regions with elements carrying verbatim text and state, icons, palette, theme)"
+fi
 
 # 2) Number the claims for the judge.
-CLAIMS_BLOCK="$(i=0; for c in "${positionals[@]:1}"; do i=$((i+1)); printf '%d. %s\n' "$i" "$c"; done)"
+CLAIMS_BLOCK="$(i=0; for c in "${CLAIM_ARGS[@]}"; do i=$((i+1)); printf '%d. %s\n' "$i" "$c"; done)"
 
 # 3) Judge each claim strictly against the inventory. The inventory is itself a
 # local read — exact strings are good-but-verify — so the rubric biases to
 # unsure, and unsure does NOT pass the gate. Constrained decoding guarantees
 # the verdict shape.
-JUDGE_PROMPT="You are a strict verification judge. The context document is a UI inventory JSON: the ground-truth machine read of a screenshot (regions with elements carrying verbatim text and state, icons, palette, theme). Evaluate each claim below STRICTLY against that inventory only.
+JUDGE_PROMPT="You are a strict verification judge. The context document is $INV_DESC. Evaluate each claim below STRICTLY against that inventory only.
 Verdicts: pass = the inventory clearly supports the claim. fail = the inventory clearly contradicts it. unsure = the inventory cannot decide it (element absent, text marked [unsure], claim about something not enumerable such as beauty or clarity). Never guess — when in doubt, unsure. Minor near-miss spellings of the same word count as support.
 For evidence, quote the deciding inventory fragment (or name what is absent).
 Return one result per claim, in order.
 Claims:
 $CLAIMS_BLOCK"
 
-q_args=(--json --format "$SCHEMA" --ctx - --ctx-name "ui-inventory.json")
+q_args=(--json --format "$SCHEMA" --ctx - --ctx-name "ui-inventory.json" --max-ctx 32000)
 $BIG && q_args+=(--big)
 t0=$(date +%s)
 Q_ENV="$(printf '%s' "$INV" | "$DIR/bin/q" "${q_args[@]}" "$JUDGE_PROMPT")" \

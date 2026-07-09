@@ -27,6 +27,7 @@ MODEL="${VISION_MODEL:-gemma4:26b}"
 MODEL_SET=false
 MODE=text
 UI=false
+OCR=false
 MENUBAR=false
 GLOW=false
 CROP=""
@@ -60,6 +61,7 @@ show_help() {
   _ex 'see panel.png --ui --json | jq .data'   '# structured elements array for an agent'
   _sec OPTIONS
   _opt '--ui'          'UI-inventory read for screenshots/mocks (KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE)'
+  _opt '--ocr'         'EXACT text via Apple Vision (no model, ~instant) — verbatim but unstructured; composes with --crop'
   _opt '--menubar'     'screencapture the main-display top strip and --ui it (needs Screen Recording perm)'
   _opt '--crop WxH+X+Y' 'read only this pixel window of the image (crop-then-read lifts recall)'
   _opt '--region NAME' 'named crop: top|bottom (third) · left|right (half) · center (middle quarter)'
@@ -124,6 +126,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --json)     MODE=json; shift ;;
     --ui)       UI=true; shift ;;
+    --ocr)      OCR=true; shift ;;
     --menubar)  MENUBAR=true; UI=true; shift ;;
     --crop)     CROP="$2"; shift 2 ;;
     --region)   REGION="$2"; shift 2 ;;
@@ -212,6 +215,24 @@ if [ -n "$CROP$REGION" ]; then
   IMG="$CROP_IMG"
 fi
 
+# ── OCR fast path (--ocr): Apple Vision exact text, no model, no server ──
+# The complement to the VLM read: verbatim-but-unstructured vs structured-but-
+# good-verify. Composes with --crop/--region (crop-then-OCR reads tiny regions
+# exactly). Query text is ignored — OCR extracts, it doesn't answer.
+if $OCR; then
+  $UI && ! $MENUBAR && emit_error invalid_args "--ocr is exact extraction, --ui is a structured model read — pick one (or run both as two calls)" 2
+  command -v mac-ocr >/dev/null 2>&1 || emit_error ocr_missing "mac-ocr not installed — npm install -g mac-ocr" 12
+  [ -n "$QUERY" ] && [ "$MODE" = text ] && echo "see: note — --ocr ignores the question; extracting text only" >&2
+  t0=$(python3 -c 'import time; print(int(time.time()*1000))')
+  set +e
+  TEXT="$(mac-ocr "$IMG" 2>&1)"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] && emit_error ocr_failed "${TEXT:-Apple Vision OCR failed}" 10
+  [ -n "$TEXT" ] || TEXT="(no text recognized)"
+  MODEL="apple-vision"
+else
+# ── model path (everything below to the matching fi is skipped under --ocr) ──
 ollama_up || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
 
 # Don't disturb the warm pin / an active lease: keep_alive is last-writer-wins
@@ -316,6 +337,8 @@ if [ "$rc" -ne 0 ]; then
   emit_error model_error "${TEXT:-vision request failed}" 10
 fi
 [ -n "$TEXT" ] || emit_error model_error "no content from the model" 10
+fi
+# ── shared tail: timing, artifact store, history, output ──
 # Guard the end-timestamp: an interrupted run must not feed a blank/garbage value
 # into the arithmetic (which then poisoned the old awk stats line).
 end=$(python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo "$t0")
@@ -328,6 +351,7 @@ ms=$(( end - t0 ))
 # the read itself, and machine metadata. `see open N` finds it; `see note` and
 # `see more` build on it. Pruned to the newest $ART_KEEP folders.
 READ_MODE=general; if $MENUBAR; then READ_MODE=menubar; elif $UI; then READ_MODE=ui; fi
+if $OCR; then READ_MODE=ocr; $MENUBAR && READ_MODE=ocr-menubar; fi
 ART=""
 NOW_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 if mkdir -p "$ART_ROOT" 2>/dev/null; then

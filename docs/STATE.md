@@ -15,8 +15,8 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 |---|---|---|
 | `q "..."` | quick local LLM — answers, macOS commands (`q cmd`), titles; `--json`/`--format SCHEMA` (constrained decoding → `.data`), `--glow`; `q history`/`show N` | `q -h` |
 | `imagine "..."` | local image gen (Flux/Qwen on GPU); `--enhance --from --style --neg --seed`; `history`/`show`/`critique` | `imagine -h` |
-| `see <img> [q]` | local vision — structural read or grounded answer; **good-but-verify text**; `--ui` = sectioned UI inventory (elements/hierarchy/icons/patterns, big-tier routed, lease-aware) · `--ui --json` = schema-constrained `.data` · `--menubar` = capture+read the live top strip · `--crop WxH+X+Y`/`--region top…center` = crop-then-read (small crops read near-perfectly) · `see more "q"` = drill into the last image; every read lands `outputs/see/<ts>-…/` (source copy + read.md + meta.json; `see open N` · `see note "…"`) | `see -h` |
-| `lm ui-verify <img> "claim"…` | the $0 UI verification gate — enumerable claims judged strictly against a `see --ui --json` inventory (pass/fail/unsure; unsure never passes; exit 0 only when all pass); `--region/--crop` for focused reads, `--json` for agents | `lm ui-verify -h` |
+| `see <img> [q]` | local vision — structural read or grounded answer; **good-but-verify text**; `--ui` = sectioned UI inventory (elements/hierarchy/icons/patterns, big-tier routed, lease-aware) · `--ui --json` = schema-constrained `.data` · `--ocr` = EXACT text via Apple Vision (no model, ~300ms) · `--menubar` = capture+read the live top strip · `--crop WxH+X+Y`/`--region top…center` = crop-then-read (small crops read near-perfectly) · `see more "q"` = drill into the last image; every read lands `outputs/see/<ts>-…/` (source copy + read.md + meta.json; `see open N` · `see note "…"`) | `see -h` |
+| `lm ui-verify <img> "claim"…` | the $0 UI verification gate — enumerable claims judged strictly (pass/fail/unsure; unsure never passes; exit 0 only when all pass) against either a `see --ui --json` inventory (screenshots) or `--app <Name>` = the LIVE accessibility tree via `ax` (native apps, exact); `--region/--crop` for focused reads, `--json` for agents | `lm ui-verify -h` |
 | `review <pr#\|file\|dir>` | local code review — PR/files/folders/stdin; `--full` (whole files via API, no checkout), `--findings` (schema-constrained objects), `--glow` | `review -h` |
 | `lm probe <model>` | judgment eval — the gate that decides if a model earns a tier | `lm probe` |
 | `lm fleet <intent> <files…>` | batch fan-out: N files × one intent, concurrency-capped, Judge-gated, run record | `lm fleet -h` |
@@ -80,6 +80,16 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (chronological, most recent first)
 
+- **2026-07-10 (session local-next-a4, later):** **capability wave A+C** from the augmentation
+  research (throughput facets dropped by user call — capability-per-workflow only):
+  `see --ocr` (Apple Vision exact text via mac-ocr, composes with crop); `lm ui-verify --app`
+  (LIVE accessibility-tree evidence lane via `ax` v0.3.0 — the UI-reading trio is now AX/exact ·
+  --ui/structured · --ocr/verbatim); `lm gemini ingest-repo` (repomix-packed, artifact-ignoring);
+  Context7 MCP added user-scope. Bug archaeology: the rejected @-token report reproduced on the
+  first real pack — TRUE mechanism is plan-mode gemini invoking its read tool on paths inside
+  provided content; fixed (no-tools directive + error-strip + digest trim), atoned the
+  synthetic-only-repro dismissal, corrected proposal filed. New tools on the box: mac-ocr,
+  ax, repomix. User doctrine recorded: images are ephemeral — parse-now over recall.
 - **2026-07-10 (session local-next-a4):** **RAG swim test** — built a full local RAG lane
   (nomic-embed-text + sqlite-vec + q-grounded answers, conductor-drives-retrieval per docs/03),
   ingested 88 gcc doc files (865 chunks, 17s, $0), and ran a 13-question grader-authored eval:

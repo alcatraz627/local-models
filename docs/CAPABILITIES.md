@@ -73,6 +73,8 @@ see menu.png --ui "which item is enabled?"      # UI inventory + a focused answe
 see --menubar "which app is focused?"           # capture the live macOS top strip, then --ui it
 see panel.png --ui --json | jq .data            # schema-constrained {kind,theme,regions[].elements[],icons,palette}
 see mockup.png --json                           # {ok,text,model,ms,artifact} for an agent
+see receipt.png --ocr                           # EXACT text via Apple Vision — no model, ~300ms, verbatim
+see shot.png --ocr --region top                 # crop-then-OCR: exact text from one region
 see shot.png --region left --ui                 # crop first, then read — small crops read near-perfectly
 see shot.png --crop 800x600+0+120 "count?"      # exact pixel window (WxH+X+Y from top-left)
 see more "what does the badge say?"             # drill into the LAST image (from its artifact copy)
@@ -118,9 +120,16 @@ as their structural first pass).
 ```bash
 lm ui-verify shot.png "there is a Save button" "3 tabs are visible"
 lm ui-verify shot.png --region top "the Logs tab is selected"    # crop = near-perfect reads
+lm ui-verify --app Finder "there is a Force Quit menu item"      # LIVE accessibility tree — exact, no pixels
 lm ui-verify shot.png "count shows 457" --json | jq .results     # for review agents
 # exit 0 = every claim passed · exit 1 = any fail/unsure · evidence cites the artifact
 ```
+
+Two evidence lanes: screenshots go through `see --ui --json` (general, good-but-verify);
+running apps go through the accessibility tree via `ax` (`--app` — semantic and exact,
+covers whatever the app exposes to accessibility; needs the Accessibility permission).
+The trio for reading a UI: **AX tree** (native apps, exact) · **`see --ui`** (any pixels,
+structured) · **`see --ocr`** (any pixels, verbatim text).
 
 ## 4 · Code review — `review`
 
@@ -236,6 +245,7 @@ Throughput + huge-context work on a separate, abundant budget (model pinned
 lm gemini "brainstorm 20 names for this tool"    # one-shot
 cat big-spec.md | lm gemini "list the risks"     # piped stdin becomes context
 lm gemini ingest src/*.py docs/*.md              # feed a corpus into THIS project's session
+lm gemini ingest-repo [dir]                      # pack a whole repo (repomix, gitignore-aware, ~70% compressed) and ingest it
 lm gemini ask "where is auth handled?"           # query the session (--session NAME = cross-project)
 lm gemini --json "..."                           # {ok, text, model, ms, session} for agents
 lm gemini history · show -1                      # every call logged (gem-history.jsonl)

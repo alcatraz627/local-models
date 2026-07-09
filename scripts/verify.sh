@@ -78,6 +78,17 @@ else bad "see --json: $R"; fi
 echo "── ui-verify: help + dispatch (full gate not run — see header) ──"
 ./bin/lm ui-verify >/dev/null 2>&1 && ok "lm ui-verify dispatch + help" || bad "lm ui-verify dispatch"
 
+echo "── see --ocr: Apple Vision exact-text lane (no model) ──"
+if command -v mac-ocr >/dev/null 2>&1; then
+  R=$(./bin/see presets/skybound-isles.png --ocr --json 2>/dev/null)
+  [ "$(printf '%s' "$R" | jq -r .model 2>/dev/null)" = "apple-vision" ] && ok "see --ocr envelope (apple-vision)" || bad "see --ocr: $R"
+else skip "mac-ocr not installed (npm install -g mac-ocr)"; fi
+
+echo "── ax: accessibility lane present (ui-verify --app dependency) ──"
+if command -v ax >/dev/null 2>&1; then
+  [ -n "$(ax list 2>/dev/null | head -2)" ] && ok "ax list (Accessibility perm live)" || bad "ax installed but list empty — check Accessibility permission"
+else skip "ax not installed (cargo install --git https://github.com/watzon/ax-cli)"; fi
+
 echo "── histories + timeline ──"
 for h in logs/q-history.jsonl logs/see-history.jsonl logs/fleet-history.jsonl logs/gem-history.jsonl; do
   [ -f "$h" ] && jq -es . "$h" >/dev/null 2>&1 && ok "parses: $h" || bad "missing/corrupt: $h"
@@ -90,7 +101,11 @@ bash scripts/self-audit.sh >/dev/null 2>&1 && [ -f "logs/self-audit/$(date +%Y%m
 echo "── gcc hooks (pipe-tests) ──"
 H=~/.claude/scripts/hooks/guard-model-tier.sh
 [ "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"fable","prompt":"x"}}' | "$H" | jq -r .decision 2>/dev/null)" = "block" ] && ok "guard-model-tier: fable → block" || bad "guard-model-tier block path"
-echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"prompt":"x"}}' | "$H" | jq -e .hookSpecificOutput >/dev/null 2>&1 && ok "guard-model-tier: unpinned → warn" || bad "guard-model-tier warn path"
+if [ -f "$HOME/.claude/.model-tier-off" ]; then
+  skip "guard-model-tier warn path — muted machine-wide (~/.claude/.model-tier-off exists; silence is correct)"
+else
+  echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"prompt":"x"}}' | "$H" | jq -e .hookSpecificOutput >/dev/null 2>&1 && ok "guard-model-tier: unpinned → warn" || bad "guard-model-tier warn path"
+fi
 [ -z "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"sonnet","prompt":"x"}}' | "$H")" ] && ok "guard-model-tier: pinned → silent" || bad "guard-model-tier silent path"
 echo '{"session_id":"verify","tool_name":"Read","tool_input":{"file_path":"'"$DIR"'/presets/skybound-isles.png"}}' | ~/.claude/scripts/hooks/log-image-reads.sh && [ -n "$(tail -1 ~/.claude/logs/image-reads.jsonl | jq -r .est_tokens 2>/dev/null)" ] && ok "log-image-reads" || bad "log-image-reads"
 
