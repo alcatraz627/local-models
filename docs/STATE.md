@@ -78,65 +78,45 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - LaunchAgents: `com.alcatraz.local-models-ollama` · `com.alcatraz.warm-morning` ·
   `com.alcatraz.warm-evening-off` · `com.alcatraz.lm-self-audit`
 
-## DONE (chronological, most recent first)
+## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
-- **2026-07-10 (session local-next-a4, later):** **capability wave A+C** from the augmentation
-  research (throughput facets dropped by user call — capability-per-workflow only):
-  `see --ocr` (Apple Vision exact text via mac-ocr, composes with crop); `lm ui-verify --app`
-  (LIVE accessibility-tree evidence lane via `ax` v0.3.0 — the UI-reading trio is now AX/exact ·
-  --ui/structured · --ocr/verbatim); `lm gemini ingest-repo` (repomix-packed, artifact-ignoring);
-  Context7 MCP added user-scope. Bug archaeology: the rejected @-token report reproduced on the
-  first real pack — TRUE mechanism is plan-mode gemini invoking its read tool on paths inside
-  provided content; fixed (no-tools directive + error-strip + digest trim), atoned the
-  synthetic-only-repro dismissal, corrected proposal filed. New tools on the box: mac-ocr,
-  ax, repomix. User doctrine recorded: images are ephemeral — parse-now over recall.
-- **2026-07-10 (session local-next-a4):** **RAG swim test** — built a full local RAG lane
-  (nomic-embed-text + sqlite-vec + q-grounded answers, conductor-drives-retrieval per docs/03),
-  ingested 88 gcc doc files (865 chunks, 17s, $0), and ran a 13-question grader-authored eval:
-  12/13 correct, 0 fabrications, 2/2 negative probes refused; the one miss root-caused to
-  heading-dominated chunk embeddings (fact under an unrelated heading). Kept as ARCHIVAL only.
-  Also: env-access convention recorded (config.sh = single definition point).
-- **2026-07-09 (session local-next-a4):** **see artifact store** (every read → one
-  discoverable folder; fixes the --menubar dead-path defect) + **crop-then-read**
-  (`--crop`/`--region`, sips order pinned) + **`see more`/`open`/`note`** drill-down verbs;
-  **`lm ui-verify`** — the $0 UI claim gate (strict pass/fail/unsure judge over the --ui
-  inventory, live-verified on ground truth); **gemini session self-heal** (vanished chat
-  store no longer kills ask/ingest; reset surfaced, never silent) — the @-token report
-  (prop-…-63) did NOT reproduce on 0.43.0, closed with evidence; gcc side: `/ui-gripe`
-  confusion-forensics skill + designer-reviewer/web-design see-wiring committed;
-  `local-models-next` schedule retired; verify.sh now 28 checks.
-- **2026-07-07 (session local-agent-9c):** MLX measured + decided (format-routed; Q4_K_M kept;
-  NVFP4 judgment-terseness regression caught by the probe — re-quantized weights need re-gating);
-  **`lm fleet`** built + exercised (envelope+judge gate, salvage-first, warm-routed lease);
-  **finish-a-codebase exercise 16/16** (probe/fixtures/unfinished-v1, evidence+delta retries);
-  **`q --format`** constrained decoding + **`review --findings`**; **`--glow`** on q/see/review;
-  **warm leases** (`warm on <tier> [ttl]`, `off all`) + **`lm opencode`** wrapper + scheduled
-  warmth; **feedback sink** (failures logged, see/fleet histories, unified timeline, weekly
-  self-audit); **`lm index`** symbol map; OpenCode wired to local models.
-- **2026-07-05:** `see` (MiniCPM-V default after ground-truth bake-off) · `review`/`--full`/
-  `--repo`/`review-pr` · `probe` harness + `lm probe` · history QoL (negative indexing, hints).
-  **Task #8 gate GREEN:** qwen3.6 9/9 beat qwen3-coder-next 7/9 (51 GB reclaimed) → orchestration
-  spine justified.
-- **2026-06:** q/imagine/lm core, _lib.sh consolidation, programmatic API v1 (q-spec §API),
-  intents-as-data registry, server+warm policy, model-tier research + decisions (docs/03/04/05),
-  fleet design (docs/09), implementation plan (docs/07).
+- **2026-07-10 · capability wave:** `see --ocr` (Apple Vision exact text) · `ui-verify --app`
+  (live AX-tree evidence via `ax`) · `gemini ingest-repo` (repomix) · Context7 MCP · gcc skills
+  wired + maiden-tested (/ui-gripe found a real pricing-copy bug on run #1). The gemini "@-token"
+  bug's true mechanism found + fixed (plan-mode model reads paths mentioned in piped content).
+- **2026-07-10 · RAG swim test:** full local RAG lane built, evaled 12/13 / 0 fabrications over
+  the gcc docs, then ARCHIVED by user call (parse-now > recall) —
+  `.claude/output/20260710-rag-swim-test/report.md`
+- **2026-07-09 · vision wave:** see artifact store (`outputs/see/`, fixes --menubar dead path) ·
+  `--crop`/`--region` crop-then-read · `more`/`open`/`note` verbs · `lm ui-verify` v1 (screenshot
+  lane) · gemini session self-heal · /ui-gripe skill authored.
+- **2026-07-07 · agent wave:** MLX verdict (docs/05 §1, Q4_K_M kept) · `lm fleet` · 16/16
+  codebase-finisher under a pytest judge · `q --format` · warm leases + `lm opencode` +
+  scheduled warmth · feedback sink + weekly self-audit · `lm index`.
+- **2026-07-05:** `see` (bake-off: minicpm-v) · `review`/`review-pr` · `probe` harness ·
+  code-tier gate GREEN (qwen3.6 9/9, 51 GB reclaimed).
+- **2026-06:** q/imagine/lm core · intents-as-data · server+warm policy · the research base
+  (docs/03/04/05/09, `.claude/output/2026061*` + `2026062*`).
 
-## PENDING
+## PENDING — what can be done next (with the first command to run)
 
-- **Fleet at real volume** (parked, actively noted) — first genuine Claude-called sweep over real
-  work; measures the cloud-dispatch offset. The runner is ready.
-- **Governor policy table** — pair with the gcc **model-tier harness** task (user notes captured
-  2026-07-07: Opus daily driver, Fable rare, sub-agents ≤ opus, local + gemini-flash integration,
-  hook nudge, pairing tools — see the gcc proposals backlog).
-- **Local RAG / embedder** — TESTED AND ARCHIVED 2026-07-10 (not adopted, user call: test-only).
-  The swim test scored 12/13 with zero fabrications over the gcc doc corpus; report:
-  `.claude/output/20260710-rag-swim-test/report.md`. Scaffolding kept as an archival asset:
-  `lib/rag` + `lib/rag.py` (dispatchable via `lm rag`, unadvertised in the menu), embedder
-  `nomic-embed-text` on disk, index rebuildable in ~20s. Revisit only on a real need.
-- **`procedures/*.toml` + `lm run`** — gated until a 2nd real multi-step recipe exists.
-- **MTP speculative decode** — unmeasured (`-mtp-*` tags + `OLLAMA_MLX_MTP_*`).
-- **`review-pr` worktree variant** · **`--web` for q** (needs search-backend decision) ·
-  **imagegen §8 upgrades** (registry adds, `--good`, upscale) · **dev-ControlNet** (gated FLUX.1-dev).
+- **Fleet over a real code task** — the one fleet leg still unexercised: a genuine Claude-called
+  sweep over real files. First command: `lm fleet review src/*.ts --judge 'npx tsc --noEmit'`
+  (or any intent × file-set with a mechanical judge). Measures the cloud-dispatch offset.
+- **Governor policy table** — codify when work routes local/gemini/cloud (user notes 2026-07-07;
+  pairs with the gcc model-tier harness + the Jul-28 telemetry review).
+- **MTP speculative decode measurement** — the July research claims +74% throughput on the MLX
+  path and contradicts this doc's earlier note about Ollama `-mtp-*` flags; one measurement
+  session settles both. Start: check `ollama show` / server log for MTP surface on current build.
+  (Counter-finding to keep: draft-model spec-dec REGRESSES on llama.cpp/Metal — never enable it
+  on GGUF tiers.)
+- **Gated / deferred:** `procedures/*.toml` + `lm run` (needs a 2nd real recipe) ·
+  `review-pr` worktree variant · `q --web` (search-backend decision) · imagegen §8 upgrades ·
+  dev-ControlNet · voice lane (whisper.cpp ears + Kokoro voice — researched, fits zero-idle,
+  waiting on user want).
+- **Archived, not pending:** the RAG lane (see DONE; `lm rag` dispatchable, unadvertised;
+  rebuild ≈20s). The Jul-10 augmentation research digest ranks further candidates:
+  `.claude/output/20260710-augment-research/digest.md`
 
 ## Key lessons (load-bearing)
 
@@ -151,3 +131,9 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   converges never; the delta converged in one round (unfinished-v1 RESULTS.md).
 - **Conductor pipelines are bash, never inline zsh** — zsh `echo` expands `\n` inside JSON envelopes.
 - A tool isn't delivered until it's **on PATH and invoked as a bare command**.
+- **Synthetic repro ≠ workload repro** — a bug report is only cleared by replaying the reporter's
+  workload class; six synthetic shapes all passed while the first real 1.3MB pack failed.
+- **Pick the evidence lane by surface:** AX tree for running native apps (exact), `see --ui` for
+  any pixels (structured), `see --ocr` for verbatim strings. Verify before quoting; judge natively.
+- **Vision trust boundary (measured):** zero fabrications on enumerables, weak on aesthetics —
+  local vision is a verifier and checklist-generator, never a critic.
