@@ -25,7 +25,7 @@ skip() { printf '  \033[2mskip\033[0m %s\n' "$1"; }
 
 echo "── syntax ──"
 SYN_FAIL=0
-for f in bin/lm bin/q bin/see bin/review bin/warm lib/fleet lib/repo-index lib/gemini lib/ui-verify scripts/self-audit.sh scripts/verify.sh; do
+for f in bin/lm bin/q bin/see bin/review bin/warm lib/fleet lib/repo-index lib/gemini lib/ui-verify lib/websearch scripts/self-audit.sh scripts/verify.sh; do
   bash -n "$f" 2>/dev/null || { bad "syntax: $f"; SYN_FAIL=1; }
 done
 # bin/probe is python — compile-check, don't bash -n it.
@@ -42,6 +42,15 @@ printf '{"type":"object","properties":{"word":{"type":"string"}},"required":["wo
 R=$(./bin/q --json --format /tmp/verify-schema.$$.json --timeout 60 "Reply with word=ok" 2>/dev/null)
 [ -n "$(printf '%s' "$R" | jq -r '.data.word // empty' 2>/dev/null)" ] && ok "q --format → parsed .data" || bad "q --format: $R"
 rm -f /tmp/verify-schema.$$.json 2>/dev/null || true
+
+echo "── q --diy: planner emits a valid plan (warm tier) ──"
+R=$(./bin/q --json --no-stats --timeout 60 --intent diy-plan --format intents/diy-plan.schema.json "kill whatever is on port 9999" 2>/dev/null)
+[ -n "$(printf '%s' "$R" | jq -r '.data.intent // empty' 2>/dev/null)" ] && ok "diy planner → schema-valid plan (.data.intent set)" || bad "diy planner: $R"
+
+echo "── websearch (skips cleanly offline) ──"
+if W=$(./lib/websearch "ollama github" -n 2 --json 2>/dev/null) && [ "$(printf '%s' "$W" | jq -r .ok)" = "true" ]; then
+  ok "websearch → $(printf '%s' "$W" | jq '.results | length') results"
+else skip "websearch unreachable (offline or DDG layout change — check by hand if online)"; fi
 
 echo "── fleet: fan-out + judge + lease + run history ──"
 if ./bin/lm fleet summarize intents/ask.toml -m qwen2.5-coder:3b >/dev/null 2>&1; then
@@ -80,8 +89,11 @@ echo "── ui-verify: help + dispatch (full gate not run — see header) ─�
 
 echo "── see --ocr: Apple Vision exact-text lane (no model) ──"
 if command -v mac-ocr >/dev/null 2>&1; then
-  R=$(./bin/see presets/skybound-isles.png --ocr --json 2>/dev/null)
+  # The fixture carries known text at known corners (the art presets have none).
+  R=$(./bin/see probe/fixtures/ocr-fixture.png --ocr --json 2>/dev/null)
   [ "$(printf '%s' "$R" | jq -r .model 2>/dev/null)" = "apple-vision" ] && ok "see --ocr envelope (apple-vision)" || bad "see --ocr: $R"
+  [ "$(printf '%s' "$R" | jq -r '.data.words[0].pos // empty' 2>/dev/null)" = "top-left" ] \
+    && ok "see --ocr --json → positioned words (VERIFY FIXTURE @ top-left)" || bad "see --ocr positions wrong/missing"
 else skip "mac-ocr not installed (npm install -g mac-ocr)"; fi
 
 echo "── ax: accessibility lane present (ui-verify --app dependency) ──"

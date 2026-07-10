@@ -48,6 +48,7 @@ show_help() {
   _cmd 'q history [N|--json]'   'recent queries, numbered (default 15)'
   _cmd 'q show N'               'full prompt + response of entry N'
   _cmd 'q intents'              'list available intents (the registry)'
+  _cmd 'q models'               'usable models + tiers (= lm models; ★ default · ● resident)'
   _sec EXAMPLES
   _ex 'q "how do I check disk usage"'        '# terse answer'
   _ex 'q -c "and sorted by size?"'           '# follow-up with context'
@@ -62,6 +63,8 @@ show_help() {
   _ex 'q show 14'                            '# full prompt + response of entry 14'
   _sec OPTIONS
   _opt '--think'        'show the reasoning trace (dimmed, on stderr; off by default)'
+  _opt '--web'          'search the web first (DDG, no key) and answer from the results, cited'
+  _opt '--diy'          'let q route itself: a planner pass picks intent/web/file/tier, narrated in gray'
   _opt '--no-stats'     'hide the gray token line (text mode; machine modes always carry the counts)'
   _opt '-c, --continue [N]' 'continue last exchange / entry N'
   _opt '--big / --code' 'use the big (reasoning) / code tier for this call'
@@ -96,7 +99,7 @@ show_history() {
 }
 show_entry() {
   jsonl_entry "$LOG" "${1:-}" \
-    '"#\($i)  \(.ts)  [\(.intent)]  \(.ms)ms  \(.model)\n\nPROMPT:\n\(.prompt)\n\nRESPONSE:\n\(.response)"'
+    '"#\($i)  \(.ts)  [\(.intent)]  \(.ms)ms  \(.model)\(if .diy then "\nDIY: " + .diy.trace else "" end)\n\nPROMPT:\n\(.prompt)\n\nRESPONSE:\n\(.response)"'
 }
 
 # Subcommands: help, history, show, and the warm toggle.
@@ -109,6 +112,7 @@ case "${1:-}" in
                          show_history "${1:-15}"; exit 0 ;;
   show)                  shift; show_entry "${1:-}"; exit 0 ;;
   intents)               list_intents; exit 0 ;;
+  models)                exec "$DIR/bin/lm" models "${@:2}" ;;
   on|off|status|restart) exec "$DIR/bin/warm" "$@" ;;
 esac
 
@@ -129,6 +133,9 @@ MODE=text          # text (human) | json (one object) | stream (NDJSON)
 CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0; FORMAT_FILE=""; GLOW=false
 CONT=false; CONT_N=""; USER_MODEL=false; USER_INTENT=false
 STATS=true         # gray token line at the end (text mode); --no-stats mutes
+WEB=false          # --web: search + feed results as context (conductor fetches)
+WEB_QUERY=""       # focused query (set by --diy's plan; --web defaults to the prompt)
+DIY=false          # --diy: a planner pass picks intent/web/file/tier from the prompt
 
 # Pull leading flags; everything else is positional.
 positionals=()
@@ -136,6 +143,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --think) THINK=true; shift ;;
     --raw)   RAW=true; shift ;;
+    --web)   WEB=true; shift ;;
+    --diy)   DIY=true; shift ;;
     --no-stats) STATS=false; shift ;;
     --json)        MODE=json; shift ;;
     --stream-json) MODE=stream; shift ;;
@@ -182,6 +191,169 @@ trap 'emit_error cancelled "cancelled by client" 130' TERM INT
 # error, not a bash arithmetic stderr leak or an uncaught python ValueError.
 [[ "$MAX_CTX" =~ ^[0-9]+$ ]] || emit_error invalid_args "--max-ctx must be a non-negative integer, got '$MAX_CTX'" 2
 [[ "$TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || emit_error invalid_args "--timeout must be seconds (number), got '$TIMEOUT'" 2
+
+# ── --diy: plan, then execute ──
+# The warm model reads the prompt and emits a PLAN as schema-constrained data
+# (intents/diy-plan.toml + .schema.json); THIS script validates and executes it.
+# Capability selection belongs to the model, execution stays with the conductor
+# (docs/03) — and every step is narrated on the gray stderr channel, so nothing
+# needs permission and nothing happens silently. Explicit flags always win:
+# a user-chosen intent/model/ctx is never overridden by the plan.
+if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
+  _dim=""; _rs=""; [ -t 2 ] && { _dim=$'\033[2m'; _rs=$'\033[0m'; }
+  PLAN_ENV="$("$0" --json --no-stats --timeout 25 --intent diy-plan \
+    --format "$INTENT_DIR/diy-plan.schema.json" "$QUERY" 2>/dev/null)" || PLAN_ENV=""
+  PLAN="$(printf '%s' "$PLAN_ENV" | jq -c '.data // empty' 2>/dev/null)"
+  if [ -n "$PLAN" ]; then
+    p_intent=$(printf '%s' "$PLAN" | jq -r '.intent // "ask"')
+    p_web=$(printf '%s' "$PLAN" | jq -r '.needs_web // false')
+    p_wq=$(printf '%s' "$PLAN" | jq -r '.web_query // ""')
+    p_file=$(printf '%s' "$PLAN" | jq -r '.file_path // ""')
+    p_img=$(printf '%s' "$PLAN" | jq -r '.image_path // ""')
+    p_probe=$(printf '%s' "$PLAN" | jq -r '.local_probe // ""')
+    p_tier=$(printf '%s' "$PLAN" | jq -r '.tier // "small"')
+    p_why=$(printf '%s' "$PLAN" | jq -r '.reason // ""')
+    trace="· diy: ${p_why:-routed} → intent=$p_intent · tier=$p_tier"
+    # An image prompt is a job for `see`, not q — hand the whole call over.
+    if [ -n "$p_img" ]; then
+      p_img_x="${p_img/#\~/$HOME}"
+      if [ -f "$p_img_x" ]; then
+        [ "$MODE" = text ] && printf '%s%s · image → see%s\n' "$_dim" "$trace" "$_rs" >&2
+        exec "$DIR/bin/see" "$p_img_x" "$QUERY"
+      fi
+    fi
+    $USER_INTENT || { intent_exists "$p_intent" && INTENT="$p_intent"; }
+    $USER_MODEL  || MODEL="$(resolve_tier "$p_tier")"
+    if [ "$p_web" = true ]; then
+      # A shell-command answer is composed offline; search results only
+      # contaminate it (observed: a stray repo from the results got cloned
+      # into the command). Honor web for cmd only with a focused query.
+      if [ "$p_intent" = cmd ] && [ -z "$p_wq" ]; then
+        trace="$trace · web dropped (cmd composes offline)"
+      else
+        WEB=true; WEB_QUERY="$p_wq"
+        wq_disp="${p_wq:-(the prompt)}"; trace="$trace · web=\"${wq_disp:0:48}\""
+      fi
+    fi
+    if [ -n "$p_file" ] && [ -z "$CTX_FILE" ]; then
+      p_file_x="${p_file/#\~/$HOME}"
+      if [ -f "$p_file_x" ]; then CTX_FILE="$p_file_x"; trace="$trace · file=$(basename "$p_file_x")"
+      else trace="$trace · file=$p_file (not found, skipped)"; fi
+    fi
+    # Probe scan: like the file scan, extraction beats model recall — when the
+    # prompt asks about a version and names a word that IS an installed command,
+    # that's the probe, whether or not the planner said so.
+    RAW_PROMPT="${positionals[*]}"   # scans read the user's words, never the assembled query
+    if [ -z "$p_probe" ] && [[ "$RAW_PROMPT" == *ersion* ]]; then
+      set -f
+      for w in $RAW_PROMPT; do
+        w_c="${w%%[,.;:!?\"\')]}"
+        case "$w_c" in
+          ''|?|??|the|and|check|latest|local|online|tell|have|one|version|not|now|are|was|what|which|with|from|test|time|man|cat|find|open) continue ;;
+        esac
+        if command -v "$w_c" >/dev/null 2>&1; then p_probe="$w_c --version"; break; fi
+      done
+      set +f
+    fi
+    # OS-version asks have no command word to scan for — a fixed two-entry map
+    # covers the macOS case ("what macOS do I have") with the bare-but-safe
+    # sw_vers, which the strict shape below would otherwise refuse.
+    if [ -z "$p_probe" ]; then
+      case "$(printf '%s' "$RAW_PROMPT" | tr 'A-Z' 'a-z')" in
+        *"mac os"*|*macos*|*"os x"*|*osx*) [[ "$RAW_PROMPT" == *ersion* ]] && p_probe="sw_vers" ;;
+      esac
+    fi
+    # Local probe: version/status of an installed tool, model-suggested but
+    # conductor-VALIDATED — strict shape (one bare command + one version verb)
+    # or an exact entry in the tiny bare-probe whitelist; command must exist,
+    # 5s cap. Output rides into the prompt as ground truth. Anything outside
+    # is refused with a trace, never run.
+    if [ -n "$p_probe" ]; then
+      case "$p_probe" in
+        sw_vers|"uname -r") : ;;   # whitelisted bare probes (no version verb exists)
+        *) if ! [[ "$p_probe" =~ ^([A-Za-z0-9_.-]+)\ (--version|-V|version)$ ]]; then p_probe="__rejected__:$p_probe"; fi ;;
+      esac
+    fi
+    if [ -n "$p_probe" ] && [ "${p_probe#__rejected__:}" = "$p_probe" ]; then
+      probe_cmd="${p_probe%% *}"; probe_arg="${p_probe#* }"; [ "$probe_arg" = "$p_probe" ] && probe_arg=""
+      if command -v "$probe_cmd" >/dev/null 2>&1; then
+        # shellcheck disable=SC2086 — probe_arg is one validated verb, not user input
+        PROBE_OUT="$(perl -e 'my $p=fork; if($p==0){setpgrp(0,0); exec(@ARGV) or exit 127} local $SIG{ALRM}=sub{kill "KILL",-$p}; alarm 5; waitpid($p,0)' \
+                     "$probe_cmd" $probe_arg 2>&1 | head -3)" || PROBE_OUT=""
+        if [ -n "$PROBE_OUT" ]; then
+          QUERY="$QUERY
+
+<input name=\"local-probe\" cmd=\"$p_probe\">
+$PROBE_OUT
+</input>"
+          trace="$trace · probe=\`$p_probe\`"
+          # A version-compare needs a focused search, and the probe names the
+          # subject better than the user's sentence ever will.
+          if $WEB && [ -z "$WEB_QUERY" ]; then
+            WEB_QUERY="$probe_cmd latest version release"
+            trace="$trace · web→\"$WEB_QUERY\""
+          fi
+        else
+          trace="$trace · probe=\`$p_probe\` (no output, skipped)"
+        fi
+      else
+        trace="$trace · probe skipped ('$probe_cmd' not installed)"
+      fi
+    elif [ -n "$p_probe" ]; then
+      trace="$trace · probe rejected (\"${p_probe#__rejected__:}\" outside the safe shape)"
+    fi
+    # Deterministic assist: the planner sometimes misses a path the prompt
+    # plainly names — the conductor greps the prompt words for a real file
+    # (tolerating trailing punctuation). Images hand the whole call to `see`;
+    # readable text loads as context; a named path that does NOT exist gets an
+    # honest note so the answer says "no such file", not "I cannot access files".
+    # Models suggest, the script verifies (and beats them at exact).
+    if [ -z "$CTX_FILE" ]; then
+      missing_note=""
+      set -f
+      for w in $RAW_PROMPT; do
+        w_clean="${w%%[,.;:!?\"\')]}"
+        w_x="${w_clean/#\~/$HOME}"
+        if [ ! -f "$w_x" ]; then
+          # Path-shaped but absent → remember the first one for the honesty note.
+          case "$w_clean" in
+            */*|*.png|*.jpg|*.jpeg|*.webp|*.pdf|*.md|*.txt|*.csv|*.json)
+              [ -n "$missing_note" ] || { [ -e "$w_x" ] || missing_note="$w_clean"; } ;;
+          esac
+          continue
+        fi
+        case "$(file -b --mime-type "$w_x" 2>/dev/null)" in
+          image/*)
+            if [ "$MODE" = text ]; then printf '%s%s · image=%s (prompt-scan) → see%s\n' "$_dim" "$trace" "$(basename "$w_x")" "$_rs" >&2; fi
+            set +f
+            exec "$DIR/bin/see" "$w_x" "$QUERY" ;;
+        esac
+        if [ "$(file -b --mime-encoding "$w_x" 2>/dev/null)" != binary ]; then
+          CTX_FILE="$w_x"; missing_note=""; trace="$trace · file=$(basename "$w_x") (prompt-scan)"; break
+        fi
+      done
+      set +f
+      if [ -n "$missing_note" ]; then
+        QUERY="$QUERY
+
+(Note from the runtime: no file exists at \"$missing_note\" — say so plainly.)"
+        trace="$trace · file=$missing_note NOT FOUND"
+      fi
+    fi
+    # Web questions routed to a document intent with no document resolve to ask
+    # HERE, silently — the final trace line shows the real intent, instead of a
+    # second "doc-intent w/o doc" line on every web question. The ctx gate stays
+    # as the backstop for the rare non-web case (piped docs arrive after this).
+    if $WEB && intent_needs_ctx "$INTENT" && [ -z "$CTX_FILE" ]; then INTENT=ask; fi
+    trace="${trace/intent=$p_intent/intent=$INTENT}"  # reflect the resolution in the line
+    # The routing is history too (histories are the API): q show N explains why
+    # a past answer searched, probed, or loaded a file.
+    DIY_LOG="$(jq -cn --argjson plan "${PLAN:-null}" --arg trace "$trace" '{plan:$plan, trace:$trace}' 2>/dev/null)" || DIY_LOG=""
+    if [ "$MODE" = text ]; then printf '%s%s%s\n' "$_dim" "$trace" "$_rs" >&2; fi
+  else
+    if [ "$MODE" = text ]; then printf '%s· diy: planner unavailable — running plain%s\n' "$_dim" "$_rs" >&2; fi
+  fi
+fi
 
 # Constrained decoding: --format FILE passes a JSON schema to Ollama's `format`
 # field, so the model's output IS schema-valid JSON. In --json mode the envelope
@@ -255,13 +427,21 @@ fi
 # getting a confident "I can't access your filesystem" instead of an answer.
 # Require real context, and if they named an existing file, point at the fix.
 if intent_needs_ctx "$INTENT" && [ -z "$CTX" ]; then
-  hint="'$INTENT' needs a document — pass the file with --ctx <path> (or pipe it in)."
-  set -f
-  for w in $QUERY; do
-    [ -f "$w" ] && { hint="$hint You named '$w' in the prompt (that's just text) — try: q $INTENT --ctx '$w'"; break; }
-  done
-  set +f
-  emit_error ctx_required "$hint" 2
+  if $DIY; then
+    # --diy never hard-fails on its own routing: a doc intent that ended up
+    # docless (planner optimism) degrades to ask; web results, if any, still ride.
+    INTENT=ask
+    if [ "$MODE" = text ] && [ -t 2 ]; then printf '\033[2m· diy: doc-intent without a doc → ask\033[0m\n' >&2
+    elif [ "$MODE" = text ]; then echo "· diy: doc-intent without a doc → ask" >&2; fi
+  else
+    hint="'$INTENT' needs a document — pass the file with --ctx <path> (or pipe it in)."
+    set -f
+    for w in $QUERY; do
+      [ -f "$w" ] && { hint="$hint You named '$w' in the prompt (that's just text) — try: q $INTENT --ctx '$w'"; break; }
+    done
+    set +f
+    emit_error ctx_required "$hint" 2
+  fi
 fi
 
 if [ -z "$QUERY" ]; then
@@ -269,6 +449,30 @@ if [ -z "$QUERY" ]; then
   # caller bug and must be a structured error, never help text on stdout.
   [ "$MODE" = text ] && { show_help; exit 0; }
   emit_error invalid_args "no prompt or context provided" 2
+fi
+
+# ── --web: search first, answer from the results ──
+# The script fetches (lib/websearch: DDG lite, no key, top page extracted); the
+# model only reads. A dead network degrades to answering offline, narrated on
+# the gray channel — never a hard failure, never silent.
+if $WEB; then
+  [ -n "$WEB_QUERY" ] || WEB_QUERY="${positionals[*]}"
+  _dim=""; _rs=""; [ -t 2 ] && { _dim=$'\033[2m'; _rs=$'\033[0m'; }
+  WEB_OUT="$("$DIR/lib/websearch" "$WEB_QUERY" -n 5 --fetch 2>/dev/null)" || WEB_OUT=""
+  if [ -n "$WEB_OUT" ]; then
+    if [ "$MODE" = text ]; then
+      printf '%s· web: "%s" → %s results (top page fetched)%s\n' \
+        "$_dim" "${WEB_QUERY:0:60}" "$(printf '%s\n' "$WEB_OUT" | grep -c '^\[')" "$_rs" >&2
+    fi
+    QUERY="$QUERY
+
+<input name=\"web-results\" query=\"$WEB_QUERY\">
+$WEB_OUT
+</input>
+(Answer from the web results above; cite result numbers like [2]. If they do not contain the answer, say so.)"
+  else
+    if [ "$MODE" = text ]; then printf '%s· web: search unreachable — answering offline%s\n' "$_dim" "$_rs" >&2; fi
+  fi
 fi
 
 # -c: replay the target entry's whole conversation chain (entries sharing a cid)
@@ -329,10 +533,10 @@ if $GLOW && [ "$MODE" = text ] && [ -t 1 ] && command -v glow >/dev/null 2>&1; t
 # exec so python IS this process: a GUI host's SIGTERM must reach the signal
 # handlers (cancelled/130), not kill a bash wrapper around them (143).
 mkdir -p "$DIR/logs"
-exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" "$GLOW_OK" "$LEASE_HINT" <<'PY'
+exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" "$GLOW_OK" "$LEASE_HINT" "${DIY_LOG:-}" <<'PY'
 import sys, json, time, signal, urllib.request, urllib.error
 (model, sysp, query, think, keep, intent, logf,
- histjson, cid, mode, timeout, trunc, host, stats, fmt, glow, lease_hint) = sys.argv[1:18]
+ histjson, cid, mode, timeout, trunc, host, stats, fmt, glow, lease_hint, diyjson) = sys.argv[1:19]
 truncated = trunc == "true"
 
 def emit_err(code, msg, rc):
@@ -462,13 +666,19 @@ elif mode == "json":
 sys.stdout.flush()
 try:  # history is best-effort — never break the answer on a log failure
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    entry = {
+        "ts": ts, "cid": cid or ts,  # chain id: continued -> inherited, fresh -> own ts
+        "intent": intent, "model": model, "think": think == "true",
+        "prompt": query, "response": text,
+        "ms": ms,
+    }
+    if diyjson:  # --diy routing rides into history so `q show N` can explain it
+        try:
+            entry["diy"] = json.loads(diyjson)
+        except ValueError:
+            pass
     with open(logf, "a") as f:
-        f.write(json.dumps({
-            "ts": ts, "cid": cid or ts,  # chain id: continued -> inherited, fresh -> own ts
-            "intent": intent, "model": model, "think": think == "true",
-            "prompt": query, "response": text,
-            "ms": ms,
-        }) + "\n")
+        f.write(json.dumps(entry) + "\n")
 except Exception:
     pass
 # The lease nudge: 3+ cold loads of this model inside 5 minutes says the user

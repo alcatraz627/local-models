@@ -13,7 +13,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 | Command | What | Help |
 |---|---|---|
-| `q "..."` | quick local LLM — answers, macOS commands (`q cmd`), titles; `--json`/`--format SCHEMA` (constrained decoding → `.data`), `--glow`; `q history`/`show N` | `q -h` |
+| `q "..."` | quick local LLM — answers, macOS commands (`q cmd`), titles; `--json`/`--format SCHEMA` (constrained decoding → `.data`), `--glow`; **`--web`** = search-then-answer (DDG, cited) · **`--diy`** = self-routing (planner picks intent/web/file/image/tier, gray-narrated, flags win); `q history`/`show N` | `q -h` |
 | `imagine "..."` | local image gen (Flux/Qwen on GPU); `--enhance --from --style --neg --seed`; `history`/`show`/`critique` | `imagine -h` |
 | `see <img> [q]` | local vision — structural read or grounded answer; **good-but-verify text**; `--ui` = sectioned UI inventory (elements/hierarchy/icons/patterns, big-tier routed, lease-aware) · `--ui --json` = schema-constrained `.data` · `--ocr` = EXACT text via Apple Vision (no model, ~300ms) · `--menubar` = capture+read the live top strip · `--crop WxH+X+Y`/`--region top…center` = crop-then-read (small crops read near-perfectly) · `see more "q"` = drill into the last image; every read lands `outputs/see/<ts>-…/` (source copy + read.md + meta.json; `see open N` · `see note "…"`) | `see -h` |
 | `lm ui-verify <img> "claim"…` | the $0 UI verification gate — enumerable claims judged strictly (pass/fail/unsure; unsure never passes; exit 0 only when all pass) against either a `see --ui --json` inventory (screenshots) or `--app <Name>` = the LIVE accessibility tree via `ax` (native apps, exact); `--region/--crop` for focused reads, `--json` for agents | `lm ui-verify -h` |
@@ -80,6 +80,22 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-07-10 · compare + placement:** **`see diff A B`** — two-layer image compare for
+  recreate-with-a-freer-hand workflows (deterministic OCR text/position diff both sides +
+  one big-tier two-image judged report: TEXT CHANGES/LAYOUT SHIFTS/ADDED-REMOVED/STYLE/
+  FIDELITY NOTES; artifact stores both sources; `text_diff` in --json). **Positional OCR**:
+  `see --ocr --json` → `.data.words` with x/y/w/h + script-computed 3×3 `pos`;
+  **`ui-verify --boxes`** makes placement claims rulable (verified blind). Shakedown menu:
+  diy one-line traces · routing into q-history (`q show N` explains it) · websearch
+  release-domain rerank (turned the claude version-compare green — the general fix beat
+  the rejected lm-latest subsystem) · `lm doctor` optional-extras · residency-aware see
+  timeouts · `q models`.
+- **2026-07-10 · q adapts:** **`q --diy`** (plan-then-execute: warm model emits a
+  schema-constrained plan, the script validates + executes — web/file/image/tier/intent,
+  gray-narrated, deterministic prompt-scan backstop, doc-intents degrade instead of
+  erroring) + **`q --web`** (`lib/websearch`: DDG lite, no key, cited answers, offline
+  degrade). Also: LICENSE (MIT) · self-audit digest gains per-day error trend (acting on
+  the Jul-10 digest: 15/18 gemini errors were day-1 auth setup, not live) · verify.sh 32.
 - **2026-07-10 · capability wave:** `see --ocr` (Apple Vision exact text) · `ui-verify --app`
   (live AX-tree evidence via `ax`) · `gemini ingest-repo` (repomix) · Context7 MCP · gcc skills
   wired + maiden-tested (/ui-gripe found a real pricing-copy bug on run #1). The gemini "@-token"
@@ -111,7 +127,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   (Counter-finding to keep: draft-model spec-dec REGRESSES on llama.cpp/Metal — never enable it
   on GGUF tiers.)
 - **Gated / deferred:** `procedures/*.toml` + `lm run` (needs a 2nd real recipe) ·
-  `review-pr` worktree variant · `q --web` (search-backend decision) · imagegen §8 upgrades ·
+  `review-pr` worktree variant · imagegen §8 upgrades ·
   dev-ControlNet · voice lane (whisper.cpp ears + Kokoro voice — researched, fits zero-idle,
   waiting on user want).
 - **Archived, not pending:** the RAG lane (see DONE; `lm rag` dispatchable, unadvertised;

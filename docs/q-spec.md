@@ -179,6 +179,36 @@ Document-grounded intents (prompt-craft lives HERE, never in clients): `summariz
 `explain-code` (flags rm/curl-pipe-sh/sudo/cred access), `describe-data`, `qa` (document-only
 ground truth). q never prompts interactively in any mode, so no confirmation flow exists to break.
 
+## `--web` and `--diy` (adaptive capabilities, 2026-07-10)
+
+Both keep the docs/03 invariant: the model never touches a tool — the q script does.
+
+- **`--web`**: the script searches first (`lib/websearch`: DuckDuckGo lite, no API key,
+  top page's readable text fetched) and appends an `<input name="web-results">` block to
+  the prompt with a cite-[n] instruction. Network failure degrades to answering offline,
+  narrated on the gray stderr channel. Never a hard failure.
+- **`--diy`**: a planner pass first — the warm model classifies the prompt via constrained
+  decoding (`intents/diy-plan.toml` + `.schema.json`) into `{intent, needs_web, web_query,
+  file_path, image_path, tier, reason}`; the script then validates and executes: loads the
+  file as `--ctx`, turns on `--web`, switches tier, or hands the whole call to `see` for
+  images. A deterministic prompt-word scan backstops the planner's path extraction
+  (real files beat model recall). Explicit user flags always win over the plan; doc
+  intents that end up docless degrade to `ask` instead of erroring. Every decision is
+  one gray stderr line: `· diy: <reason> → intent=cmd · tier=small · web="…" · file=…`
+- **`local_probe`**: when the answer needs a local tool's version ("do I have the
+  latest claude?"), the plan may carry a probe — conductor-VALIDATED against the strict
+  shape `<tool> (--version|-V|version)`, command must exist, 5s process-group cap;
+  anything else is refused with a trace, never run. Output rides into the prompt as an
+  `<input name="local-probe">` block.
+- **Deterministic scans beat model recall** (shakedown finding, 2026-07-10): the small
+  planner routes well (intent/tier/web-judgment) but misses extraction — so the
+  conductor scans the RAW prompt words for real files (punctuation-tolerant; images →
+  `see`, text → ctx, named-but-absent paths → an honest "no such file" note) and for
+  installed commands when the prompt mentions a version. Search results are dropped for
+  `cmd` intents with no focused query (they contaminate composed commands — observed).
+- Planner cost: one warm-tier call (~1-3s). Plain `q` pays nothing — both are opt-in
+  flags; baking `--diy` into default `q` is a one-line default flip if it earns it.
+
 ## Integrations
 
 - **Tab-title auto-base** — `~/.claude/scripts/tab-title/hooks/auto-base.sh` (UserPromptSubmit,
