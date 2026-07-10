@@ -89,10 +89,11 @@ echo "── ui-verify: help + dispatch (full gate not run — see header) ─�
 
 echo "── see --ocr: Apple Vision exact-text lane (no model) ──"
 if command -v mac-ocr >/dev/null 2>&1; then
-  R=$(./bin/see presets/skybound-isles.png --ocr --json 2>/dev/null)
+  # The fixture carries known text at known corners (the art presets have none).
+  R=$(./bin/see probe/fixtures/ocr-fixture.png --ocr --json 2>/dev/null)
   [ "$(printf '%s' "$R" | jq -r .model 2>/dev/null)" = "apple-vision" ] && ok "see --ocr envelope (apple-vision)" || bad "see --ocr: $R"
-  [ -n "$(printf '%s' "$R" | jq -r '.data.words[0].pos // empty' 2>/dev/null)" ] \
-    && ok "see --ocr --json → positioned words (.data.words[].pos)" || bad "see --ocr positions missing"
+  [ "$(printf '%s' "$R" | jq -r '.data.words[0].pos // empty' 2>/dev/null)" = "top-left" ] \
+    && ok "see --ocr --json → positioned words (VERIFY FIXTURE @ top-left)" || bad "see --ocr positions wrong/missing"
 else skip "mac-ocr not installed (npm install -g mac-ocr)"; fi
 
 echo "── ax: accessibility lane present (ui-verify --app dependency) ──"
