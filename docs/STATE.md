@@ -88,8 +88,19 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   `--only`/`--grid` slice reruns diff a content-addressed cache and return just the delta
   (~0.06s, no model); every run journals to `logs/compare-history.jsonl`. Fixtures-first:
   `probe/fixtures/make-fixtures.py` (F2-F6) + `vis-battery.py` F1-F8 in verify.sh — the
-  fabrication guard (identical pair → all zero) runs on every change. The L2 judge
-  (`/vis-compare` gcc skill) is the next phase, not built. Design: `docs/10-visual-compare-design.md`.
+  fabrication guard (identical pair → all zero) runs on every change. Both L1 and the L2
+  judge were adversarially validated + hardened (L1: E3 population-weighting killed a
+  JPEG-re-encode fabrication; L2: a self-check that every measured claim trace to a cited
+  evidence path, after a dry-run judge fabricated grid coords). Design + built-vs-deferred:
+  `docs/10-visual-compare-design.md`.
+- **2026-07-10 · visual-compare L2 (judge):** **`/vis-compare` gcc skill** at
+  `~/.claude/skills/vis-compare/` — native-vision judgment over the L1 pack + contact
+  sheet, classifying each divergence against a user-editable `policy.md` (imitation
+  doctrine + 8-rung divergence ladder with canonical slugs + weight-aware floor) into
+  looks-worse / neutral / improvement / not-worth-chasing, never a raw score. `verdict.json`
+  contract, `--revisit` + `suppressions.jsonl` feedback (stable content-anchor fingerprints),
+  announce-before-spend. `policy.md` v1 is a DRAFT awaiting the user's taste edit. Phase
+  C (loop) / D (calibration) pending.
 - **2026-07-10 · compare + placement:** **`see diff A B`** — two-layer image compare for
   recreate-with-a-freer-hand workflows (deterministic OCR text/position diff both sides +
   one big-tier two-image judged report: TEXT CHANGES/LAYOUT SHIFTS/ADDED-REMOVED/STYLE/

@@ -1,6 +1,6 @@
 # Visual Compare — a full-stack capability for "does B faithfully imitate A?"
 
-<!-- sessions: local-next-a4@2026-07-10 · vis-compare-A@2026-07-10 · STATUS: Phase A (L1 evidence) BUILT — lib/vis-compare.py + see diff + F1-F8 battery; Phase B/C/D (judge/loop/calibration) pending -->
+<!-- sessions: local-next-a4@2026-07-10 · vis-compare-A@2026-07-10 · STATUS: Phase A (L1 evidence) + Phase B (L2 judge) BUILT — lib/vis-compare.py + see diff + F1-F8 battery (lm side); gcc skill /vis-compare + policy.md (judge side, ~/.claude/skills/vis-compare/); both adversarially validated + hardened. Phase C (loop) / D (calibration) pending -->
 
 The independent vision capability the recreate-with-a-freer-hand workflow needs:
 compare two images (or an image against a live surface), produce machine-measured
@@ -142,6 +142,14 @@ in the skill docs, not new binaries.
 ---
 
 ## 4 · L2 — the judge (gcc skill: `/vis-compare`)
+
+> **BUILT** at `~/.claude/skills/vis-compare/` (`SKILL.md` + `policy.md` v1 +
+> `runtime-notes.md`). Adversarially validated; the key hardening was an anti-fabrication
+> **self-check** (every `gestalt:false` value must trace to a cited evidence path) after a
+> dry-run judge fabricated grid coords for text divergences — prose rules don't bind a
+> model, a checkable step does. Canonical class slugs are pinned in `policy.md`;
+> suppression fingerprints key on stable content anchors (text string / palette hex), not
+> drift-prone grid coords. `policy.md` v1 is a DRAFT awaiting the user's taste edit.
 
 A sibling of `/ui-gripe` (same skeleton: fork, evidence-first, report contract).
 
