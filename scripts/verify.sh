@@ -100,7 +100,11 @@ bash scripts/self-audit.sh >/dev/null 2>&1 && [ -f "logs/self-audit/$(date +%Y%m
 
 echo "── gcc hooks (pipe-tests) ──"
 H=~/.claude/scripts/hooks/guard-model-tier.sh
-[ "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"fable","prompt":"x"}}' | "$H" | jq -r .decision 2>/dev/null)" = "block" ] && ok "guard-model-tier: fable → block" || bad "guard-model-tier block path"
+if [ -f "$HOME/.claude/.fable-subagent-promo" ]; then
+  skip "guard-model-tier fable block — BYPASSED by ~/.claude/.fable-subagent-promo (promo window, self-expires 2026-07-17). Every fable sub-agent dispatch currently passes. Delete the file to restore the hard block."
+else
+  [ "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"fable","prompt":"x"}}' | "$H" | jq -r .decision 2>/dev/null)" = "block" ] && ok "guard-model-tier: fable → block" || bad "guard-model-tier block path"
+fi
 if [ -f "$HOME/.claude/.model-tier-off" ]; then
   skip "guard-model-tier warn path — muted machine-wide (~/.claude/.model-tier-off exists; silence is correct)"
 else

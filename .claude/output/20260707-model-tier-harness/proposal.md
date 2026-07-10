@@ -268,9 +268,12 @@ antigravity migration decision by ~Nov 2026 (ahead of the Dec EOL).
 **Status: BUILT (2026-07-07, same session).** Phase A live: `rules/model-tier-routing.md`
 (+ CLAUDE.md Tier-0 brief, `features/model-tier-harness.md`, ceiling-rule cross-link) and
 `guard-model-tier.sh` — live-proven (haiku dispatch passed + logged; a real fable dispatch
-was hard-blocked). Phase B live: `lm gemini` with both `gemini_unavailable` variants
-verified against the real tier-ineligible auth; **happy path UNCONFIRMED until the human
-re-auths gemini (or sets GEMINI_API_KEY)** — the one open human action.
+was hard-blocked). Phase B live: `lm gemini` — happy path CONFIRMED 2026-07-10
+(`lm gemini "Reply with exactly: ok" --json` → `{"ok":true,"text":"ok",
+"model":"gemini-3.5-flash","ms":4000}`); auth resolved itself, no open human action.
+Phase C plan-time nudge live 2026-07-10: `nudge-model-plan.sh` (PreToolUse ·
+ExitPlanMode) nudges qualifying plans missing a `Model plan:` block; FP audit rides the
+Aug-04 tier-telemetry-review; antigravity migration decision remains ~Nov 2026.
 
 ---
 *Recon sources: `recon-gcc-surfaces.md` (300 lines) · `recon-gemini.md` (161 lines), both in
