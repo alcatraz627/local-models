@@ -255,15 +255,31 @@ if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
       done
       set +f
     fi
+    # OS-version asks have no command word to scan for — a fixed two-entry map
+    # covers the macOS case ("what macOS do I have") with the bare-but-safe
+    # sw_vers, which the strict shape below would otherwise refuse.
+    if [ -z "$p_probe" ]; then
+      case "$(printf '%s' "$RAW_PROMPT" | tr 'A-Z' 'a-z')" in
+        *"mac os"*|*macos*|*"os x"*|*osx*) [[ "$RAW_PROMPT" == *ersion* ]] && p_probe="sw_vers" ;;
+      esac
+    fi
     # Local probe: version/status of an installed tool, model-suggested but
-    # conductor-VALIDATED — strict shape (one bare command + one version verb),
-    # command must exist, 5s cap. Output rides into the prompt as ground truth.
-    # Anything outside the shape is refused with a trace, never run.
+    # conductor-VALIDATED — strict shape (one bare command + one version verb)
+    # or an exact entry in the tiny bare-probe whitelist; command must exist,
+    # 5s cap. Output rides into the prompt as ground truth. Anything outside
+    # is refused with a trace, never run.
     if [ -n "$p_probe" ]; then
-      if [[ "$p_probe" =~ ^([A-Za-z0-9_.-]+)\ (--version|-V|version)$ ]] \
-         && command -v "${BASH_REMATCH[1]}" >/dev/null 2>&1; then
+      case "$p_probe" in
+        sw_vers|"uname -r") : ;;   # whitelisted bare probes (no version verb exists)
+        *) if ! [[ "$p_probe" =~ ^([A-Za-z0-9_.-]+)\ (--version|-V|version)$ ]]; then p_probe="__rejected__:$p_probe"; fi ;;
+      esac
+    fi
+    if [ -n "$p_probe" ] && [ "${p_probe#__rejected__:}" = "$p_probe" ]; then
+      probe_cmd="${p_probe%% *}"; probe_arg="${p_probe#* }"; [ "$probe_arg" = "$p_probe" ] && probe_arg=""
+      if command -v "$probe_cmd" >/dev/null 2>&1; then
+        # shellcheck disable=SC2086 — probe_arg is one validated verb, not user input
         PROBE_OUT="$(perl -e 'my $p=fork; if($p==0){setpgrp(0,0); exec(@ARGV) or exit 127} local $SIG{ALRM}=sub{kill "KILL",-$p}; alarm 5; waitpid($p,0)' \
-                     ${BASH_REMATCH[1]} ${BASH_REMATCH[2]} 2>&1 | head -3)" || PROBE_OUT=""
+                     "$probe_cmd" $probe_arg 2>&1 | head -3)" || PROBE_OUT=""
         if [ -n "$PROBE_OUT" ]; then
           QUERY="$QUERY
 
@@ -271,12 +287,20 @@ if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
 $PROBE_OUT
 </input>"
           trace="$trace · probe=\`$p_probe\`"
+          # A version-compare needs a focused search, and the probe names the
+          # subject better than the user's sentence ever will.
+          if $WEB && [ -z "$WEB_QUERY" ]; then
+            WEB_QUERY="$probe_cmd latest version release"
+            trace="$trace · web→\"$WEB_QUERY\""
+          fi
         else
           trace="$trace · probe=\`$p_probe\` (no output, skipped)"
         fi
       else
-        trace="$trace · probe rejected (\"${p_probe:0:32}\" outside <tool> --version shape)"
+        trace="$trace · probe skipped ('$probe_cmd' not installed)"
       fi
+    elif [ -n "$p_probe" ]; then
+      trace="$trace · probe rejected (\"${p_probe#__rejected__:}\" outside the safe shape)"
     fi
     # Deterministic assist: the planner sometimes misses a path the prompt
     # plainly names — the conductor greps the prompt words for a real file

@@ -290,6 +290,21 @@ Additional focus: $QUERY"
 elif [ -n "$QUERY" ]; then
   SYS="You are a precise visual assistant. Report only what is actually visible — never fabricate factual specifics (on-screen text, identity, counts, colors); if those aren't legible, say so. But when the user asks for an interpretation, a mood, or a description in a particular style, you MAY go beyond the literal — ground it in what's visible, and do not refuse."
   USER="$QUERY"
+  # Text-extraction questions get OCR ground truth injected: the VLM
+  # paraphrases and boxes text; Apple Vision extracts it verbatim. ~300ms,
+  # and the model is told which is which. Fires only on text-shaped asks.
+  if command -v mac-ocr >/dev/null 2>&1; then
+    case "$(printf '%s' "$QUERY" | tr 'A-Z' 'a-z')" in
+      *text*|*say*|*says*|*written*|*word*|*read*|*label*|*caption*)
+        OCR_HINT="$(mac-ocr "$IMG" 2>/dev/null | head -c 4000)" || OCR_HINT=""
+        if [ -n "$OCR_HINT" ]; then
+          USER="$QUERY
+
+Verbatim OCR of this image (machine-extracted, trust for exact wording; use the image itself for layout/who-says-what):
+$OCR_HINT"
+        fi ;;
+    esac
+  fi
 else
   SYS="You are a precise visual parser for a downstream agent. First note what the image IS (UI/dashboard/document/chart/photo/artwork/AI-generated). Then: (1) transcribe ALL legible text VERBATIM and exactly — labels, values, code, messages — as a list, BEFORE any description; (2) report layout/structure and the detail that matters for the kind (dense UI → values + control states; charts → data/trends; photo/art → subject, composition, palette, mood). Anti-fabrication (critical): report ONLY what is visibly present — write [unsure] for anything not clearly legible; never invent an element, value, or control; and do NOT assign meanings to colors unless a visible legend defines them (describe a color as a color). This is a structural read; exact strings should be verified, not trusted blindly."
   USER="Describe this image."
