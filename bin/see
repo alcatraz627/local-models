@@ -32,6 +32,7 @@ MENUBAR=false
 GLOW=false
 CROP=""
 REGION=""
+EVIDENCE=""        # diff mode: the vis-compare evidence pack JSON (empty otherwise)
 positionals=()
 LOG="$DIR/logs/see-history.jsonl"
 ART_ROOT="$DIR/outputs/see"
@@ -289,45 +290,35 @@ if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
 FMT=""
 
 if $DIFF; then
-  # Layer 1 — deterministic text/position diff (Apple Vision both sides, the
-  # script matches and classifies; the model is told to trust this section).
+  # Layer 1 evidence — the deterministic $0 extractors (lib/vis-compare.py):
+  # E1 text/position diff (from Apple Vision, both sides), E3 palette/ΔE, E4
+  # perceptual hashes, E5 grid-ΔE heatmap, E6 edge/shape grid, plus the contact
+  # sheet and `next:` nudges. One source of truth for the whole pack; the model
+  # reads its text_summary as trusted fact. A failure here is soft — the visual
+  # read still runs, with a note.
   MACHINE_DIFF=""
+  [ -n "$SEE_TMP" ] || SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
+  VENV_PY="$DIR/.venv/bin/python"
   if command -v mac-ocr >/dev/null 2>&1; then
-    [ -n "$SEE_TMP" ] || SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
-    mac-ocr --format jsonl "$IMG"  > "$SEE_TMP/a.jsonl" 2>/dev/null || true
+    mac-ocr --format jsonl "$IMG"   > "$SEE_TMP/a.jsonl" 2>/dev/null || true
     mac-ocr --format jsonl "$IMG_B" > "$SEE_TMP/b.jsonl" 2>/dev/null || true
-    MACHINE_DIFF="$(python3 - "$SEE_TMP/a.jsonl" "$SEE_TMP/b.jsonl" <<'PY'
-import json, sys
-def load(p):
-    out = {}
-    try:
-        obs = json.load(open(p)).get("observations", [])
-    except Exception:
-        return out
-    for o in obs:
-        t = " ".join(o.get("text", "").split())
-        if not t:
-            continue
-        bb = o.get("boundingBox", {})
-        cx, cy = bb.get("x", 0) + bb.get("width", 0) / 2, bb.get("y", 0) + bb.get("height", 0) / 2
-        row = "top" if cy < 0.333 else ("middle" if cy < 0.667 else "bottom")
-        col = "left" if cx < 0.333 else ("center" if cx < 0.667 else "right")
-        pos = "center" if (row == "middle" and col == "center") else row + "-" + col
-        out.setdefault(t.lower(), {"text": t, "pos": set()})["pos"].add(pos)
-    return out
-A, B = load(sys.argv[1]), load(sys.argv[2])
-removed = [A[k] for k in A if k not in B]
-added   = [B[k] for k in B if k not in A]
-moved   = [(A[k]["text"], sorted(A[k]["pos"]), sorted(B[k]["pos"]))
-           for k in A if k in B and A[k]["pos"] != B[k]["pos"]]
-lines = []
-if removed: lines.append("REMOVED (in A only): " + " | ".join('"%s" [%s]' % (w["text"], ",".join(sorted(w["pos"]))) for w in removed[:25]))
-if added:   lines.append("ADDED (in B only): " + " | ".join('"%s" [%s]' % (w["text"], ",".join(sorted(w["pos"]))) for w in added[:25]))
-if moved:   lines.append("MOVED: " + " | ".join('"%s" %s -> %s' % (t, ",".join(pa), ",".join(pb)) for t, pa, pb in moved[:25]))
-if not lines: lines.append("(no text-layer differences detected)")
-print("\n".join(lines))
-PY
-)" || MACHINE_DIFF=""
+  fi
+  set +e
+  if [ -s "$SEE_TMP/a.jsonl" ] && [ -s "$SEE_TMP/b.jsonl" ]; then
+    EVIDENCE="$("$VENV_PY" "$DIR/lib/vis-compare.py" "$IMG" "$IMG_B" \
+      --ocr-a "$SEE_TMP/a.jsonl" --ocr-b "$SEE_TMP/b.jsonl" \
+      --contact "$SEE_TMP/contact.png" 2>"$SEE_TMP/vis.err")"
+  else
+    EVIDENCE="$("$VENV_PY" "$DIR/lib/vis-compare.py" "$IMG" "$IMG_B" \
+      --contact "$SEE_TMP/contact.png" 2>"$SEE_TMP/vis.err")"
+  fi
+  visrc=$?
+  set -e
+  if [ "$visrc" -ne 0 ] || [ -z "$EVIDENCE" ]; then
+    echo "see: evidence extractors failed — visual read only ($(head -c 160 "$SEE_TMP/vis.err" 2>/dev/null))" >&2
+    EVIDENCE=""
+  else
+    MACHINE_DIFF="$(printf '%s' "$EVIDENCE" | jq -r '.text_summary // ""' 2>/dev/null)" || MACHINE_DIFF=""
   fi
   $MODEL_SET || MODEL="${UI_VISION_MODEL:-$MODEL}"   # structure work → big tier, like --ui
   SYS="You are a precise UI-comparison analyst. The FIRST image is A (the reference); the SECOND image is B (the candidate/recreation). Report differences grounded in what is visible — never fabricate an element or value. B being different from A is not automatically wrong: separate what changed from whether it matters."
@@ -469,6 +460,14 @@ end=$(python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo
 [[ "$end" =~ ^[0-9]+$ ]] || end="$t0"
 ms=$(( end - t0 ))
 
+# Fold the VLM read into the pack's cost block so the pack is self-complete for
+# the self-audit stream (extractors + the one model seat this run spent).
+if $DIFF && [ -n "$EVIDENCE" ]; then
+  EVIDENCE="$(printf '%s' "$EVIDENCE" | jq -c --arg m "$MODEL" --argjson vms "$ms" \
+    '.cost.model_calls = [{seat:"local-read", model:$m, ms:$vms}]
+     | .cost.wall_ms = ((.cost.extractors_ms // 0) + $vms)' 2>/dev/null || printf '%s' "$EVIDENCE")"
+fi
+
 # ── Artifact store + history (both best-effort — never break the answer) ──
 # Every read lands one discoverable folder: outputs/see/<ts>-<mode>-<img>/ with
 # the image AS READ (the crop / menubar strip — those temp files die on exit),
@@ -490,6 +489,13 @@ if mkdir -p "$ART_ROOT" 2>/dev/null; then
     if $DIFF; then
       case "$IMG_B" in *.*) _bext="${IMG_B##*.}" ;; *) _bext=png ;; esac
       cp -f "$IMG_B" "$ART/source-b.$_bext" 2>/dev/null || true
+      # the evidence pack (artifact path patched in) + the contact sheet — the
+      # two files L2's judge reads: machine truth + one side-by-side attachment
+      if [ -n "$EVIDENCE" ]; then
+        printf '%s' "$EVIDENCE" | jq -c --arg art "$ART" '.artifact=$art' \
+          > "$ART/evidence.json" 2>/dev/null || printf '%s\n' "$EVIDENCE" > "$ART/evidence.json"
+      fi
+      [ -f "$SEE_TMP/contact.png" ] && cp -f "$SEE_TMP/contact.png" "$ART/contact.png" 2>/dev/null || true
     fi
     { printf '# see %s read — %s\n\n- image: %s\n' "$READ_MODE" "$NOW_TS" "$ORIG_IMG"
       [ -n "$CROP_DESC" ] && printf -- '- crop: %s\n' "$CROP_DESC"
@@ -517,6 +523,17 @@ jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg img2 "${IMG_B:-}" --arg p 
      artifact:(if $art == "" then null else $art end), response:$r}' \
    >> "$LOG" 2>/dev/null || true
 
+# compare-history: one line per diff run (successes AND failures) — the stream
+# the weekly self-audit reads; failure classes and cost trend over time here.
+if $DIFF && [ -n "$EVIDENCE" ]; then
+  printf '%s' "$EVIDENCE" | jq -c --arg ts "$NOW_TS" --arg art "$ART" --argjson ms "$ms" \
+    '{ts:$ts, a:.meta.a, b:.meta.b, modality:.meta.modality, comparable:.meta.comparable,
+      scores:.scores, wall_ms:$ms, extractors_ms:.cost.extractors_ms,
+      failures:(.failures|length), nudges:(.next|length),
+      artifact:(if $art=="" then null else $art end)}' \
+    >> "$DIR/logs/compare-history.jsonl" 2>/dev/null || true
+fi
+
 if [ "$MODE" = json ]; then
   # --ui --json: hand consumers the parsed object in .data (null if the model
   # somehow broke schema), not a JSON string to re-parse. Mirrors q --format.
@@ -530,11 +547,15 @@ if [ "$MODE" = json ]; then
     # top-left + the 3×3 pos label); .text stays the plain concatenation.
     jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" --argjson d "$OCR_DATA" \
        '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end), data:$d}'
+  elif $DIFF && [ -n "$EVIDENCE" ]; then
+    # --json for a diff: the full evidence pack under .evidence (schema docs/10
+    # §5), the standalone VLM prose in .text. The judge (L2) reads .evidence.
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" --argjson ev "$EVIDENCE" \
+       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end),
+         evidence:($ev + {artifact:(if $art == "" then null else $art end)})}'
   else
     jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
-       --arg td "${MACHINE_DIFF:-}" \
-       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end)}
-        + (if $td != "" then {text_diff:$td} else {} end)'
+       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end)}'
   fi
 else
   if $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then
@@ -545,5 +566,9 @@ else
   # Integer ms, no awk — robust even on an interrupted run. The TTY guard must
   # not become the exit code (non-TTY text-mode success would exit 1).
   [ -t 2 ] && printf '%s· %s · %dms%s%s\n' "$Dm" "$MODEL" "$ms" "${ART:+ · see open -1}" "$Rs" >&2
+  # next: nudges — rerun suggestions the extractors surfaced, each paste-ready
+  if $DIFF && [ -n "$EVIDENCE" ]; then
+    printf '%s' "$EVIDENCE" | jq -r '.next[]? | "  → " + .reason + "\n    " + .cmd' 2>/dev/null >&2 || true
+  fi
 fi
 exit 0

@@ -215,6 +215,55 @@ def e3_palette(a, b, k=6):
             "unmatched_b": unmatched_b, "avg_dE": avg}
 
 
+# ── E1 · text + position diff (from mac-ocr jsonl, fed by bin/see) ────────────
+def _load_ocr(path):
+    """Parse a mac-ocr `--format jsonl` file into {lowered_text: {text, pos}}.
+    mac-ocr emits one JSON object with an `observations` array; each carries the
+    text and a normalized top-left boundingBox. The 3×3 pos label matches the
+    grid `see --ocr` already computes, so labels stay consistent across the tool."""
+    try:
+        obs = json.load(open(path)).get("observations", [])
+    except Exception:
+        return {}, 0
+    out, words = {}, 0
+    for o in obs:
+        t = " ".join(o.get("text", "").split())
+        if not t:
+            continue
+        words += len(t.split())
+        bb = o.get("boundingBox", {})
+        cx = bb.get("x", 0) + bb.get("width", 0) / 2
+        cy = bb.get("y", 0) + bb.get("height", 0) / 2
+        row = "top" if cy < 0.333 else ("middle" if cy < 0.667 else "bottom")
+        col = "left" if cx < 0.333 else ("center" if cx < 0.667 else "right")
+        pos = "center" if (row == "middle" and col == "center") else row + "-" + col
+        out.setdefault(t.lower(), {"text": t, "pos": set()})["pos"].add(pos)
+    return out, words
+
+
+def e1_text_diff(a_jsonl, b_jsonl):
+    """REMOVED/ADDED/MOVED between two OCR reads, plus a human summary string
+    (for the VLM prompt) and each side's word count (for the modality probe)."""
+    A, wa = _load_ocr(a_jsonl)
+    B, wb = _load_ocr(b_jsonl)
+    removed = [A[k]["text"] for k in A if k not in B]
+    added = [B[k]["text"] for k in B if k not in A]
+    moved = [{"text": A[k]["text"], "from": sorted(A[k]["pos"]), "to": sorted(B[k]["pos"])}
+             for k in A if k in B and A[k]["pos"] != B[k]["pos"]]
+    lines = []
+    if removed:
+        lines.append("REMOVED (in A only): " + " | ".join('"%s"' % t for t in removed[:25]))
+    if added:
+        lines.append("ADDED (in B only): " + " | ".join('"%s"' % t for t in added[:25]))
+    if moved:
+        lines.append("MOVED: " + " | ".join('"%s" %s -> %s'
+                     % (m["text"], ",".join(m["from"]), ",".join(m["to"])) for m in moved[:25]))
+    if not lines:
+        lines.append("(no text-layer differences detected)")
+    return ({"removed": removed, "added": added, "moved": moved},
+            "\n".join(lines), wa, wb)
+
+
 # ── E0 · normalize + modality probe + comparability gate ──────────────────────
 def modality(a, b, words_a, words_b):
     """Which extractors apply. texty needs the text lanes (E1/E2); iconlike
@@ -249,12 +298,43 @@ def comparability(a, b, dhash_dist):
 ALL_EXTRACTORS = ["E3", "E4", "E5", "E6"]
 
 
+def _nudges(pack):
+    """The `next:` block — the tool telling the controlling agent when a rerun
+    would help, each an exact paste-ready command (agent-first-tools: errors and
+    hints propose the fix). Empty when nothing is worth rerunning."""
+    out = []
+    m, s = pack["meta"], pack["scores"]
+    a, b = m["a"], m["b"]
+    if m["comparable"] == "poor":
+        out.append({"reason": "pair not comparable (%s)" % (m.get("comparable_why") or "see meta"),
+                    "cmd": "see diff <cropped-A> <cropped-B>  # crop to a shared region first"})
+    if s.get("grid_delta_pct", 0) > 60:
+        out.append({"reason": "grid heatmap saturated (%.0f%% cells hot) — refine to localize"
+                    % s["grid_delta_pct"],
+                    "cmd": "see diff %s %s --grid 32" % (a, b)})
+    if m["modality"] == "texty" and pack.get("text_diff") and \
+       not (pack["text_diff"]["removed"] or pack["text_diff"]["added"] or pack["text_diff"]["moved"]):
+        # texty pair but E1 empty can mean OCR under-read (low contrast, small type)
+        if s.get("grid_delta_pct", 0) > 5:
+            out.append({"reason": "texty pair but text diff empty while pixels differ — OCR may have under-read",
+                        "cmd": "see diff %s %s --only E5,E6  # shape/color still differ; recheck text by eye" % (a, b)})
+    if s.get("dhash", 0) <= 6 and s.get("grid_delta_pct", 0) > 30:
+        out.append({"reason": "structure close but color/region diverges — likely a theme or palette shift",
+                    "cmd": "see diff %s %s --only E3  # inspect the palette pairs" % (a, b)})
+    return out
+
+
 def build_pack(a_path, b_path, grid=None, only=None,
-               words_a=None, words_b=None, text_diff=None, contact_path=None):
+               ocr_a=None, ocr_b=None, contact_path=None):
     t0 = time.time()
     failures = []
     a = Image.open(a_path).convert("RGB")
     b = Image.open(b_path).convert("RGB")
+
+    # E1 text diff + word counts, only when bin/see fed OCR jsonl for both sides
+    text_diff, text_summary, words_a, words_b = None, None, None, None
+    if ocr_a and ocr_b:
+        text_diff, text_summary, words_a, words_b = e1_text_diff(ocr_a, ocr_b)
 
     mod = modality(a, b, words_a, words_b)
     # grid resolution adapts to modality (icons want a finer relative grid);
@@ -287,10 +367,12 @@ def build_pack(a_path, b_path, grid=None, only=None,
     if "E6" in run:
         edge_shape = e6_edges(a, b, n)
 
-    # modality-driven silent skips (recorded, not run) — text lanes on non-texty
+    # modality-driven silent skips (recorded, not run). E1 runs only when texty
+    # AND OCR was fed; E2 (spacing deltas) is a texty-only lane, not yet built.
     skipped = []
-    if mod != "texty":
-        skipped += ["E1", "E2"]
+    if not (mod == "texty" and text_diff is not None):
+        skipped.append("E1")
+    skipped.append("E2")
     skipped += [e for e in ALL_EXTRACTORS if e not in run]
 
     # contact sheet — A | B | ΔE-heat tint (best-effort; a failure is soft)
@@ -310,6 +392,7 @@ def build_pack(a_path, b_path, grid=None, only=None,
     }
     if text_diff is not None:
         pack["text_diff"] = text_diff
+        pack["text_summary"] = text_summary
     if color:
         pack["color"] = color
     if grid_heat:
@@ -323,6 +406,7 @@ def build_pack(a_path, b_path, grid=None, only=None,
                     "model_calls": []}
     pack["failures"] = failures
     pack["params_hash"] = _params_hash(a_path, b_path, n, sorted(run))
+    pack["next"] = _nudges(pack)
     return pack
 
 
@@ -377,10 +461,8 @@ def main():
     ap.add_argument("--grid", type=int, default=None, help="grid N (4–64)")
     ap.add_argument("--only", default=None,
                     help="comma list of extractors to run (E3,E4,E5,E6)")
-    ap.add_argument("--words-a", type=int, default=None)
-    ap.add_argument("--words-b", type=int, default=None)
-    ap.add_argument("--text-diff", default=None,
-                    help="JSON string of the E1 text diff (from bin/see)")
+    ap.add_argument("--ocr-a", default=None, help="mac-ocr jsonl for A (enables E1 + modality)")
+    ap.add_argument("--ocr-b", default=None, help="mac-ocr jsonl for B")
     ap.add_argument("--contact", default=None, help="write contact sheet here")
     ap.add_argument("--json", action="store_true", help="(default) emit JSON")
     args = ap.parse_args()
@@ -392,10 +474,8 @@ def main():
             print(json.dumps({"error": "unknown extractor(s): %s" % bad,
                               "known": ALL_EXTRACTORS}), file=sys.stderr)
             return 2
-    td = json.loads(args.text_diff) if args.text_diff else None
     pack = build_pack(args.a, args.b, grid=args.grid, only=only,
-                      words_a=args.words_a, words_b=args.words_b,
-                      text_diff=td, contact_path=args.contact)
+                      ocr_a=args.ocr_a, ocr_b=args.ocr_b, contact_path=args.contact)
     print(json.dumps(pack))
     return 0
 
