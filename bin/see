@@ -46,6 +46,7 @@ show_help() {
   _cmd 'see --menubar ["q"]'      'capture the live macOS menu-bar strip, then read it (implies --ui)'
   _cmd 'see <image> --ui --json'  'UI mode as a schema-constrained object in .data (regions/elements/…)'
   _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
+  _cmd 'see diff <A> <B> ["focus"]' 'compare two similar images: machine text-diff + judged report'
   _cmd 'see more ["q"] [flags]'   'follow-up read of the LAST image (from its artifact copy)'
   _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
   _cmd 'see open [N]'             'print (and reveal, if TTY) the artifact folder of read N (default -1)'
@@ -164,7 +165,26 @@ if [ "${#positionals[@]}" -eq 0 ]; then
   [ "$MODE" = text ] && { show_help; exit 0; }
   emit_error invalid_args "no image given" 2
 fi
-IMG="${positionals[0]}"; QUERY="${positionals[*]:1}"
+
+# ── diff mode: `see diff A B ["focus"]` — compare two similar images ──
+# Built for recreate-with-a-freer-hand workflows: B is a re-imagining of A, and
+# the caller wants what changed, not pixel identity. Two layers: a deterministic
+# OCR text/position diff (the machine-verified facts), then one big-tier VLM
+# call that sees BOTH images with those facts injected as trusted evidence.
+DIFF=false; IMG_B=""
+if [ "${positionals[0]}" = "diff" ]; then
+  DIFF=true
+  IMG="${positionals[1]:-}"; IMG_B="${positionals[2]:-}"; QUERY="${positionals[*]:3}"
+  { [ -n "$IMG" ] && [ -n "$IMG_B" ]; } || emit_error invalid_args 'diff needs two images: see diff <ref> <candidate> ["focus"]' 2
+  { $UI || $OCR || $MENUBAR; } && emit_error invalid_args "diff is its own read — drop --ui/--ocr/--menubar" 2
+  [ -n "$CROP$REGION" ] && emit_error invalid_args "diff compares whole frames — crop the inputs first if needed" 2
+  for f in "$IMG" "$IMG_B"; do
+    [ -f "$f" ] || emit_error img_unreadable "no such file: $f" 12
+    case "$(file -b --mime-type "$f" 2>/dev/null)" in image/*) : ;; *) emit_error not_an_image "'$f' is not an image" 12 ;; esac
+  done
+else
+  IMG="${positionals[0]}"; QUERY="${positionals[*]:1}"
+fi
 ORIG_IMG="$IMG"   # what the caller named — meta/history cite this, not the crop temp
 
 [ -f "$IMG" ] || emit_error img_unreadable "no such file: $IMG" 12
@@ -268,7 +288,68 @@ if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
 # handed back pre-parsed in the envelope's .data.
 FMT=""
 
-if $UI; then
+if $DIFF; then
+  # Layer 1 — deterministic text/position diff (Apple Vision both sides, the
+  # script matches and classifies; the model is told to trust this section).
+  MACHINE_DIFF=""
+  if command -v mac-ocr >/dev/null 2>&1; then
+    [ -n "$SEE_TMP" ] || SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
+    mac-ocr --format jsonl "$IMG"  > "$SEE_TMP/a.jsonl" 2>/dev/null || true
+    mac-ocr --format jsonl "$IMG_B" > "$SEE_TMP/b.jsonl" 2>/dev/null || true
+    MACHINE_DIFF="$(python3 - "$SEE_TMP/a.jsonl" "$SEE_TMP/b.jsonl" <<'PY'
+import json, sys
+def load(p):
+    out = {}
+    try:
+        obs = json.load(open(p)).get("observations", [])
+    except Exception:
+        return out
+    for o in obs:
+        t = " ".join(o.get("text", "").split())
+        if not t:
+            continue
+        bb = o.get("boundingBox", {})
+        cx, cy = bb.get("x", 0) + bb.get("width", 0) / 2, bb.get("y", 0) + bb.get("height", 0) / 2
+        row = "top" if cy < 0.333 else ("middle" if cy < 0.667 else "bottom")
+        col = "left" if cx < 0.333 else ("center" if cx < 0.667 else "right")
+        pos = "center" if (row == "middle" and col == "center") else row + "-" + col
+        out.setdefault(t.lower(), {"text": t, "pos": set()})["pos"].add(pos)
+    return out
+A, B = load(sys.argv[1]), load(sys.argv[2])
+removed = [A[k] for k in A if k not in B]
+added   = [B[k] for k in B if k not in A]
+moved   = [(A[k]["text"], sorted(A[k]["pos"]), sorted(B[k]["pos"]))
+           for k in A if k in B and A[k]["pos"] != B[k]["pos"]]
+lines = []
+if removed: lines.append("REMOVED (in A only): " + " | ".join('"%s" [%s]' % (w["text"], ",".join(sorted(w["pos"]))) for w in removed[:25]))
+if added:   lines.append("ADDED (in B only): " + " | ".join('"%s" [%s]' % (w["text"], ",".join(sorted(w["pos"]))) for w in added[:25]))
+if moved:   lines.append("MOVED: " + " | ".join('"%s" %s -> %s' % (t, ",".join(pa), ",".join(pb)) for t, pa, pb in moved[:25]))
+if not lines: lines.append("(no text-layer differences detected)")
+print("\n".join(lines))
+PY
+)" || MACHINE_DIFF=""
+  fi
+  $MODEL_SET || MODEL="${UI_VISION_MODEL:-$MODEL}"   # structure work → big tier, like --ui
+  SYS="You are a precise UI-comparison analyst. The FIRST image is A (the reference); the SECOND image is B (the candidate/recreation). Report differences grounded in what is visible — never fabricate an element or value. B being different from A is not automatically wrong: separate what changed from whether it matters."
+  USER="Compare the two interface images (A = reference, first; B = candidate, second). Output EXACTLY these sections, each heading bare:
+## TEXT CHANGES
+Machine-verified text diff is provided below — restate it faithfully (do not re-derive text yourself), and add only what it cannot see (styling of changed text).
+## LAYOUT SHIFTS
+Regions/elements that moved or were resized between A and B, with before/after placement.
+## ADDED / REMOVED
+Whole elements or regions present in only one image (beyond bare text — controls, sections, imagery).
+## STYLE & COLOR
+Theme, palette, typography weight/size, spacing/density differences — coarse, no pixel guesses.
+## FIDELITY NOTES
+The judgment layer: which differences change function or information (missing data, lost affordance, changed state), versus cosmetic/free-hand choices. Flag anything in B that contradicts A's information.
+Anti-fabrication: describe ONLY what is visibly present; write [unsure] when not legible.${MACHINE_DIFF:+
+
+MACHINE-VERIFIED TEXT DIFF (trust this for exact wording/placement):
+$MACHINE_DIFF}"
+  [ -n "$QUERY" ] && USER="$USER
+
+Additional focus: $QUERY"
+elif $UI; then
   # The UI-inventory lens — the one specialized mode the vision-lenses review
   # (docs/08, Outcome) sanctioned once a real caller existed. Sections are fixed
   # so downstream agents can parse by heading. Deliberately NO pixel/spacing
@@ -341,21 +422,23 @@ fi
 # heredocs inside $(...).)
 t0=$(python3 -c 'import time; print(int(time.time()*1000))')
 set +e
-TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" "$FMT" 2>&1 <<'PY'
+TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" "$FMT" "${IMG_B:-}" 2>&1 <<'PY'
 import sys, json, base64, urllib.request, urllib.error
-model, sysp, user, img, host, keep, fmt = sys.argv[1:8]
+model, sysp, user, img, host, keep, fmt, img_b = sys.argv[1:9]
 # A resident model answers in seconds; a cold 17GB tier can spend minutes just
 # loading under disk/CPU contention. keep=-1 means resident (short clock);
 # keep=0 means this call pays the cold load (long clock). Observed: two
 # spurious timeouts on a busy box, 2026-07-10.
 REQ_TIMEOUT = 180 if keep == "-1" else 420
 try:
-    with open(img, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode()
+    imgs = []
+    for p in [img] + ([img_b] if img_b else []):
+        with open(p, "rb") as f:
+            imgs.append(base64.b64encode(f.read()).decode())
     payload = {"model": model, "stream": False, "keep_alive": int(keep), "think": False,
                "options": {"temperature": 0, "num_ctx": 8192, "num_predict": -1},
                "messages": [{"role": "system", "content": sysp},
-                            {"role": "user", "content": user, "images": [b64]}]}
+                            {"role": "user", "content": user, "images": imgs}]}
     if fmt:  # constrained decoding: Ollama forces schema-valid JSON output
         payload["format"] = json.loads(fmt)
     body = json.dumps(payload).encode()
@@ -393,6 +476,7 @@ ms=$(( end - t0 ))
 # `see more` build on it. Pruned to the newest $ART_KEEP folders.
 READ_MODE=general; if $MENUBAR; then READ_MODE=menubar; elif $UI; then READ_MODE=ui; fi
 if $OCR; then READ_MODE=ocr; $MENUBAR && READ_MODE=ocr-menubar; fi
+$DIFF && READ_MODE=diff
 ART=""
 NOW_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 if mkdir -p "$ART_ROOT" 2>/dev/null; then
@@ -403,6 +487,10 @@ if mkdir -p "$ART_ROOT" 2>/dev/null; then
   if mkdir "$ART" 2>/dev/null; then
     case "$IMG" in *.*) _sext="${IMG##*.}" ;; *) _sext=png ;; esac
     cp -f "$IMG" "$ART/source.$_sext" 2>/dev/null || true
+    if $DIFF; then
+      case "$IMG_B" in *.*) _bext="${IMG_B##*.}" ;; *) _bext=png ;; esac
+      cp -f "$IMG_B" "$ART/source-b.$_bext" 2>/dev/null || true
+    fi
     { printf '# see %s read — %s\n\n- image: %s\n' "$READ_MODE" "$NOW_TS" "$ORIG_IMG"
       [ -n "$CROP_DESC" ] && printf -- '- crop: %s\n' "$CROP_DESC"
       [ -n "$QUERY" ] && printf -- '- question: %s\n' "$QUERY"
@@ -420,10 +508,11 @@ if mkdir -p "$ART_ROOT" 2>/dev/null; then
   fi
 fi
 mkdir -p "$DIR/logs"
-jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg p "$QUERY" \
+jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg img2 "${IMG_B:-}" --arg p "$QUERY" \
    --arg m "$MODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
    --arg crop "$CROP_DESC" --arg art "$ART" \
-   '{ts:$ts, img:$img, prompt:(if $p == "" then null else $p end), mode:$rm,
+   '{ts:$ts, img:$img, img2:(if $img2 == "" then null else $img2 end),
+     prompt:(if $p == "" then null else $p end), mode:$rm,
      crop:(if $crop == "" then null else $crop end), model:$m, ms:$ms,
      artifact:(if $art == "" then null else $art end), response:$r}' \
    >> "$LOG" 2>/dev/null || true
@@ -443,7 +532,9 @@ if [ "$MODE" = json ]; then
        '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end), data:$d}'
   else
     jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
-       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end)}'
+       --arg td "${MACHINE_DIFF:-}" \
+       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end)}
+        + (if $td != "" then {text_diff:$td} else {} end)'
   fi
 else
   if $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then

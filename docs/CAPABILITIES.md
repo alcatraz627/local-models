@@ -81,6 +81,8 @@ see shot.png --ocr --json | jq .data.words      # positioned text: {text, x,y,w,
 see shot.png --ocr --region top                 # crop-then-OCR: exact text from one region
 see shot.png --region left --ui                 # crop first, then read — small crops read near-perfectly
 see shot.png --crop 800x600+0+120 "count?"      # exact pixel window (WxH+X+Y from top-left)
+see diff ref.png candidate.png                  # compare two similar UIs: machine text/position
+                                                #   diff + judged report (what changed vs what matters)
 see more "what does the badge say?"             # drill into the LAST image (from its artifact copy)
 see photo.png --glow                            # rendered read
 see ui.png -m gemma4:26b                        # the stronger general-scene reasoner

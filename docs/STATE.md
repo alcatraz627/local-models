@@ -80,6 +80,16 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-07-10 · compare + placement:** **`see diff A B`** — two-layer image compare for
+  recreate-with-a-freer-hand workflows (deterministic OCR text/position diff both sides +
+  one big-tier two-image judged report: TEXT CHANGES/LAYOUT SHIFTS/ADDED-REMOVED/STYLE/
+  FIDELITY NOTES; artifact stores both sources; `text_diff` in --json). **Positional OCR**:
+  `see --ocr --json` → `.data.words` with x/y/w/h + script-computed 3×3 `pos`;
+  **`ui-verify --boxes`** makes placement claims rulable (verified blind). Shakedown menu:
+  diy one-line traces · routing into q-history (`q show N` explains it) · websearch
+  release-domain rerank (turned the claude version-compare green — the general fix beat
+  the rejected lm-latest subsystem) · `lm doctor` optional-extras · residency-aware see
+  timeouts · `q models`.
 - **2026-07-10 · q adapts:** **`q --diy`** (plan-then-execute: warm model emits a
   schema-constrained plan, the script validates + executes — web/file/image/tier/intent,
   gray-narrated, deterministic prompt-scan backstop, doc-intents degrade instead of
