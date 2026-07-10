@@ -1,77 +1,110 @@
-# local-models
+<div align="center">
+  <img src="assets/banner.svg" alt="local-models — LLM, vision, and imagegen toolkit in a terminal window" width="640">
+</div>
 
-A local LLM subsystem for this machine (MacBook Pro M5 Pro, macOS / Apple Silicon),
-running alongside cloud Claude. Goal: quick local work with **zero idle penalty** —
-nothing heavy resident unless you ask for it.
+<h1 align="center">local-models</h1>
 
-**The full menu of what it can do, with examples: [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md)** ·
-current state: [`docs/STATE.md`](docs/STATE.md)
+<p align="center">
+  A local LLM, vision, and image-generation toolkit for Apple Silicon.<br>
+  Runs beside cloud Claude, costs nothing per call, and keeps zero models resident until you ask.
+</p>
 
-## Components
+<p align="center">
+  <img alt="platform" src="https://img.shields.io/badge/platform-macOS%20·%20Apple%20Silicon-black?logo=apple">
+  <img alt="backend" src="https://img.shields.io/badge/backend-Ollama-7c3aed">
+  <img alt="privacy" src="https://img.shields.io/badge/privacy-100%25%20local%20·%20zero%20cloud-16a34a">
+  <img alt="verify" src="https://img.shields.io/badge/verify.sh-29%20checks-0ea5e9">
+</p>
 
-- **Server** — self-hosted `ollama serve` via LaunchAgent `com.alcatraz.local-models-ollama`
-  (`bin/lm-serve`). Resource policy baked in: `MAX_LOADED_MODELS=2`, `keep_alive=0` default,
-  flash-attention + q8 KV cache. Owns `127.0.0.1:11434`. (The GUI Ollama.app is not used —
-  it ignored env vars.)
-- **`bin/warm`** — Tier W toggle. `warm on` keeps a small model resident for snappy use
-  (~5.6 GB); `warm off` returns to ~0. You pay the warm cost only when you want it.
-- **`bin/q`** — the quick companion (below).
-- **`bin/imagine`** — local image generation (mflux/Flux on the GPU); see below.
+---
 
-## `q` — the quick companion
+## About
 
-```
-q "how do I check disk usage"      # terse answer (≤2 sentences)
-q cmd "kill everything on 3001"    # ONE macOS command, no essay
-q title "<text>"                   # 2-5 word title (tab titles, fire-and-forget)
-q --think "harder question"        # allow the reasoning trace (off by default)
-q -m qwen2.5-coder:3b cmd "..."    # swap the model per call
-q on | off | status                # warm toggle (same as bin/warm)
-```
+This is a set of bare commands (`q`, `see`, `imagine`, `review`, `warm`, `lm …`) that put
+local models to work next to a cloud agent. The design bets are simple: **zero idle
+penalty** (nothing stays in RAM unless you pin or lease it), **trust comes from gates,
+not model confidence** (constrained decoding, judges, and verify batteries everywhere),
+and **histories are the API** (every call logs a JSONL line another tool can read).
 
-**Smart defaults** (baked in, so you don't retype them): macOS/Apple-Silicon is assumed —
-it only switches to Linux if you explicitly say "linux server/container"; the reasoning
-trace is off; it never asks clarifying questions — it assumes the most likely intent.
+It grew out of daily agent work, so the tools favor the things agents actually need:
+exact text from screenshots, pass/fail verification of UI claims, judged batch fan-out,
+and a cheap huge-context side lane. Everything has `-h`. The full menu with examples
+lives in [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md).
 
-Add `~/Code/local-models/bin` to your `PATH` to drop the path prefix.
-
-## Models
-
-| Model | Role |
-|---|---|
-| `gemma4-e4b-warm` | Tier W quick companion (num_ctx 8192, QAT 4-bit) |
-| `gemma4:26b` / `:31b` | heavier reasoning, on-demand |
-| `qwen2.5-coder:3b` | alternate for `cmd` via `-m` |
-
-## `imagine` — local image generation
-
-Runs 100% on your GPU (HuggingFace is only the one-time weight download). Observable: prints what
-it will do, shows live step progress, reports path/size/time, auto-opens, and logs every run.
+## Easy setup
 
 ```bash
-imagine "a neon city at night, rain"      # default model, model-aware steps, auto-opens
-imagine --enhance "tired dev at 3am"      # gemma4 expands your idea into a rich prompt
-imagine --from photo.png "make it 3d"     # img2img from an input image
-imagine --style photo "a corgi"           # style preset (photo|cinematic|anime|watercolor|3d|cyberpunk)
-imagine -m qwen "a sign that reads OPEN"  # swap model (qwen = legible text)
-imagine history    ·    imagine show N     # browse past generations (seeds, sizes, prompts)
+# 1. Clone
+git clone https://github.com/alcatraz627/local-models.git ~/Code/local-models
+cd ~/Code/local-models
+
+# 2. Backend + basics
+brew install ollama jq
+brew services start ollama        # or: bin/lm-serve installs a tuned LaunchAgent
+
+# 3. Models (the tiers config.sh expects; ~40 GB total, pull what you need)
+ollama pull gemma4:26b            # big tier: reasoning, UI reads
+ollama pull qwen3.6:35b-a3b       # code tier: review, fleet work
+ollama pull minicpm-v             # vision tier: see
+ollama create gemma4-e4b-warm -f modelfiles/gemma4-e4b-warm.Modelfile   # the warm companion
+
+# 4. Put the commands on PATH
+echo 'export PATH="$PATH:$HOME/Code/local-models/bin"' >> ~/.zshrc && exec zsh
+
+# 5. Check it works
+lm doctor                         # dependency + server + model health
+./scripts/verify.sh               # the 29-check smoke battery (~1 min)
 ```
 
-**Models** — registry lives in `bin/imagine` (`resolve_model`); add one = add a case line. Set the
-default with `IMAGINE_MODEL` in `config.sh`, override per-call with `-m`:
+Optional extras, each unlocking one capability:
 
-| Name | Strength | Cost |
+| Extra | Install | Unlocks |
 |---|---|---|
-| `schnell` (default) | fast, great light | weak text/coherence |
-| `flux2` | newer, better coherence | mid download |
-| `qwen` | **legible text**, strongest overall | bigger download, ~1–2 min |
-| `dev` | high quality | gated, slow, non-commercial |
+| `glow` | `brew install glow` | pretty terminal rendering (`--glow` flags) |
+| `mac-ocr` | `npm install -g mac-ocr` | `see --ocr` exact text via Apple Vision |
+| `ax` | `cargo install --git https://github.com/watzon/ax-cli` | `lm ui-verify --app` live accessibility-tree reads |
+| `repomix` | `npm install -g repomix` | `lm gemini ingest-repo` whole-repo packing |
+| mflux venv | `uv venv && uv pip install mflux` | `imagine` local image generation |
+| gemini-cli | `brew install gemini-cli` + API key in `~/.gemini/.env` | the `lm gemini` huge-context lane |
 
-First use of a model downloads its weights. **gemma4 can't generate images** (wrong architecture) —
-but `--enhance` uses it as the prompt engineer, and gemma4-vision can critique results (future loop).
+## Quick start
 
-## Docs
+```bash
+q cmd "free up port 3001"                      # one macOS command, no essay
+git diff | q commit                             # commit message from the diff
+see ~/Desktop/shot.png --ui                     # structured UI inventory of a screenshot
+see shot.png --ocr --region top                 # exact text from one region, ~300ms
+lm ui-verify --app Finder "there is a Trash menu item"   # pass/fail vs the live AX tree
+imagine --enhance "a cozy reading nook"         # local image gen with LLM prompt expansion
+lm fleet summarize docs/*.md                    # judged batch fan-out over files
+lm gemini ingest-repo . && lm gemini ask "where is retry handled?"   # ask the whole repo
+```
 
-- `docs/00-plan.md` — full plan + build log + V1 line.
-- `docs/TODO.md` — checklist (live status lives in the Task tool).
-- `docs/research/` — runtime / vision / image-gen research.
+## Commands
+
+| Command | What it does |
+|---|---|
+| `q "..."` | quick local answers; intents (`cmd`, `title`, `commit`…), `--format` schema-constrained JSON |
+| `see <img>` | vision reads: `--ui` structured inventory · `--ocr` exact text · `--crop/--region` · artifact store per read |
+| `lm ui-verify` | UI claim gate: screenshots or `--app` live accessibility trees; strict pass/fail/unsure |
+| `review <pr#\|path>` | local code review; `--findings` returns structured objects |
+| `imagine "..."` | image generation on the GPU (mflux); `redo/vary/refine`, history |
+| `lm fleet` | one intent × N files, concurrency-capped, judge-gated |
+| `lm index` | repo symbol map; "where is X" without a model call |
+| `lm gemini` | wrapper-only huge-context lane; per-project sessions, `ingest-repo` |
+| `warm on\|off [tier] [ttl]` | residency: pin the small companion or lease a big tier |
+| `lm status\|doctor\|timeline` | health and merged history across all tools |
+
+## Documentation
+
+| Document | What's in it |
+|---|---|
+| [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) | the full menu — every ability, grouped, with examples |
+| [`docs/STATE.md`](docs/STATE.md) | current state: architecture, DONE ledger, what can be done next |
+| [`docs/q-spec.md`](docs/q-spec.md) | the `q` contract: intents, envelope, constrained decoding |
+| [`docs/GOALS.md`](docs/GOALS.md) | per-command goals and design rationale |
+| [`docs/03-…`](docs/03-tool-orchestration-decision.md) / [`04-…`](docs/04-ollama-vs-llamacpp-decision.md) / [`05-…`](docs/05-perf-levers-and-usage-audit.md) | the standing decisions: models never drive tools · stay on Ollama · measured perf levers |
+| [`docs/09-local-fleet.md`](docs/09-local-fleet.md) | fleet design, derived from 269 real sub-agent dispatches |
+| [`docs/research/`](docs/research/) | dated research archives (runtime, vision, imagegen) |
+
+Personal toolkit, public repo. No license file yet; open an issue if you need one.
