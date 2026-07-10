@@ -107,6 +107,16 @@ lm_doctor() {
     check "on PATH: $c -> $BIN/$c"           sh -c "command -v $c | grep -q ."
   done
   check "logs dir writable"                  sh -c "mkdir -p '$DIR/logs' && touch '$DIR/logs/.w' && rm -f '$DIR/logs/.w'"
+  # Optional extras — each unlocks one capability; missing ones inform, never fail.
+  opt() { # BIN CAPABILITY INSTALL_HINT
+    if command -v "$1" >/dev/null 2>&1; then printf '  %sok%s   optional: %s (%s)\n' "$G" "$Rs" "$1" "$2"
+    else printf '  %s--%s   optional: %s missing — %s (unlocks %s)\n' "$Dm" "$Rs" "$1" "$3" "$2"; fi
+  }
+  opt mac-ocr "see --ocr exact text"            "npm install -g mac-ocr"
+  opt ax      "ui-verify --app AX-tree reads"   "cargo install --git https://github.com/watzon/ax-cli"
+  opt repomix "lm gemini ingest-repo packing"   "npm install -g repomix"
+  opt glow    "--glow pretty rendering"         "brew install glow"
+  opt gemini  "the lm gemini side lane"         "brew install gemini-cli + key in ~/.gemini/.env"
   if [ "$fails" -eq 0 ]; then echo "all checks passed"; else echo "$fails check(s) failed"; exit 1; fi
 }
 

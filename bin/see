@@ -225,10 +225,31 @@ if $OCR; then
   [ -n "$QUERY" ] && [ "$MODE" = text ] && echo "see: note — --ocr ignores the question; extracting text only" >&2
   t0=$(python3 -c 'import time; print(int(time.time()*1000))')
   set +e
-  TEXT="$(mac-ocr "$IMG" 2>&1)"
-  rc=$?
+  if [ "$MODE" = json ]; then
+    # jsonl carries per-fragment bounding boxes (normalized, top-left origin).
+    # The script computes the 3×3 grid label (pos) so consumers — and the small
+    # judge behind ui-verify --boxes — match labels instead of doing geometry.
+    OCR_RAW="$(mac-ocr --format jsonl "$IMG" 2>&1)"
+    rc=$?
+  else
+    TEXT="$(mac-ocr "$IMG" 2>&1)"
+    rc=$?
+  fi
   set -e
-  [ "$rc" -ne 0 ] && emit_error ocr_failed "${TEXT:-Apple Vision OCR failed}" 10
+  if [ "$MODE" = json ]; then
+    [ "$rc" -ne 0 ] && emit_error ocr_failed "${OCR_RAW:-Apple Vision OCR failed}" 10
+    TEXT="$(printf '%s' "$OCR_RAW" | jq -r '.text // ""' 2>/dev/null)"
+    OCR_DATA="$(printf '%s' "$OCR_RAW" | jq -c '{width, height, words: [.observations[] |
+      (.boundingBox.x + .boundingBox.width / 2) as $cx | (.boundingBox.y + .boundingBox.height / 2) as $cy |
+      (if $cy < 0.333 then "top" elif $cy < 0.667 then "middle" else "bottom" end) as $row |
+      (if $cx < 0.333 then "left" elif $cx < 0.667 then "center" else "right" end) as $col |
+      {text, conf: .confidence,
+       x: (.boundingBox.x * 1000 | round / 1000), y: (.boundingBox.y * 1000 | round / 1000),
+       w: (.boundingBox.width * 1000 | round / 1000), h: (.boundingBox.height * 1000 | round / 1000),
+       pos: (if $row == "middle" and $col == "center" then "center" else $row + "-" + $col end)}]}' 2>/dev/null)" || OCR_DATA=""
+  else
+    [ "$rc" -ne 0 ] && emit_error ocr_failed "${TEXT:-Apple Vision OCR failed}" 10
+  fi
   [ -n "$TEXT" ] || TEXT="(no text recognized)"
   MODEL="apple-vision"
 else
@@ -323,6 +344,11 @@ set +e
 TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" "$FMT" 2>&1 <<'PY'
 import sys, json, base64, urllib.request, urllib.error
 model, sysp, user, img, host, keep, fmt = sys.argv[1:8]
+# A resident model answers in seconds; a cold 17GB tier can spend minutes just
+# loading under disk/CPU contention. keep=-1 means resident (short clock);
+# keep=0 means this call pays the cold load (long clock). Observed: two
+# spurious timeouts on a busy box, 2026-07-10.
+REQ_TIMEOUT = 180 if keep == "-1" else 420
 try:
     with open(img, "rb") as f:
         b64 = base64.b64encode(f.read()).decode()
@@ -335,7 +361,7 @@ try:
     body = json.dumps(payload).encode()
     req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
                                  headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=180) as r:
+    with urllib.request.urlopen(req, timeout=REQ_TIMEOUT) as r:
         sys.stdout.write(json.load(r).get("message", {}).get("content", "").strip())
 except urllib.error.HTTPError as e:
     try: m = json.load(e).get("error", "HTTP %s" % e.code)
@@ -410,6 +436,11 @@ if [ "$MODE" = json ]; then
     jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
        '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end),
          data:($t | try fromjson catch null)}'
+  elif [ -n "${OCR_DATA:-}" ]; then
+    # --ocr --json: .data carries the positioned words (x/y/w/h normalized
+    # top-left + the 3×3 pos label); .text stays the plain concatenation.
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" --argjson d "$OCR_DATA" \
+       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end), data:$d}'
   else
     jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
        '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end)}'

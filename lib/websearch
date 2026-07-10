@@ -73,6 +73,20 @@ for i, (href, title) in enumerate(links[:n]):
 if not results:
     fail("no_results", "0 results for %r (endpoint layout change?)" % query)
 
+# Version/release-shaped queries: release pages beat blogspam, so stable-sort
+# authoritative release domains to the front (the top result is also what
+# --fetch reads). Everything else keeps DDG's order.
+if re.search(r"\b(latest|version|release[sd]?|changelog)\b", query, re.I):
+    def domain_rank(r):
+        u = r["url"]
+        if re.search(r"github\.com/[^/]+/[^/]+/(releases|tags)", u): return 0
+        if "github.com" in u or "gitlab.com" in u: return 1
+        if re.search(r"(changelog|releases?)\.", u) or "/changelog" in u or "/releases" in u: return 2
+        return 3
+    results.sort(key=domain_rank)
+    for i, r in enumerate(results, 1):
+        r["n"] = i
+
 page_text = None
 if fetch:
     try:

@@ -99,7 +99,7 @@ show_history() {
 }
 show_entry() {
   jsonl_entry "$LOG" "${1:-}" \
-    '"#\($i)  \(.ts)  [\(.intent)]  \(.ms)ms  \(.model)\n\nPROMPT:\n\(.prompt)\n\nRESPONSE:\n\(.response)"'
+    '"#\($i)  \(.ts)  [\(.intent)]  \(.ms)ms  \(.model)\(if .diy then "\nDIY: " + .diy.trace else "" end)\n\nPROMPT:\n\(.prompt)\n\nRESPONSE:\n\(.response)"'
 }
 
 # Subcommands: help, history, show, and the warm toggle.
@@ -340,6 +340,15 @@ $PROBE_OUT
         trace="$trace · file=$missing_note NOT FOUND"
       fi
     fi
+    # Web questions routed to a document intent with no document resolve to ask
+    # HERE, silently — the final trace line shows the real intent, instead of a
+    # second "doc-intent w/o doc" line on every web question. The ctx gate stays
+    # as the backstop for the rare non-web case (piped docs arrive after this).
+    if $WEB && intent_needs_ctx "$INTENT" && [ -z "$CTX_FILE" ]; then INTENT=ask; fi
+    trace="${trace/intent=$p_intent/intent=$INTENT}"  # reflect the resolution in the line
+    # The routing is history too (histories are the API): q show N explains why
+    # a past answer searched, probed, or loaded a file.
+    DIY_LOG="$(jq -cn --argjson plan "${PLAN:-null}" --arg trace "$trace" '{plan:$plan, trace:$trace}' 2>/dev/null)" || DIY_LOG=""
     if [ "$MODE" = text ]; then printf '%s%s%s\n' "$_dim" "$trace" "$_rs" >&2; fi
   else
     if [ "$MODE" = text ]; then printf '%s· diy: planner unavailable — running plain%s\n' "$_dim" "$_rs" >&2; fi
@@ -524,10 +533,10 @@ if $GLOW && [ "$MODE" = text ] && [ -t 1 ] && command -v glow >/dev/null 2>&1; t
 # exec so python IS this process: a GUI host's SIGTERM must reach the signal
 # handlers (cancelled/130), not kill a bash wrapper around them (143).
 mkdir -p "$DIR/logs"
-exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" "$GLOW_OK" "$LEASE_HINT" <<'PY'
+exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" "$GLOW_OK" "$LEASE_HINT" "${DIY_LOG:-}" <<'PY'
 import sys, json, time, signal, urllib.request, urllib.error
 (model, sysp, query, think, keep, intent, logf,
- histjson, cid, mode, timeout, trunc, host, stats, fmt, glow, lease_hint) = sys.argv[1:18]
+ histjson, cid, mode, timeout, trunc, host, stats, fmt, glow, lease_hint, diyjson) = sys.argv[1:19]
 truncated = trunc == "true"
 
 def emit_err(code, msg, rc):
@@ -657,13 +666,19 @@ elif mode == "json":
 sys.stdout.flush()
 try:  # history is best-effort — never break the answer on a log failure
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    entry = {
+        "ts": ts, "cid": cid or ts,  # chain id: continued -> inherited, fresh -> own ts
+        "intent": intent, "model": model, "think": think == "true",
+        "prompt": query, "response": text,
+        "ms": ms,
+    }
+    if diyjson:  # --diy routing rides into history so `q show N` can explain it
+        try:
+            entry["diy"] = json.loads(diyjson)
+        except ValueError:
+            pass
     with open(logf, "a") as f:
-        f.write(json.dumps({
-            "ts": ts, "cid": cid or ts,  # chain id: continued -> inherited, fresh -> own ts
-            "intent": intent, "model": model, "think": think == "true",
-            "prompt": query, "response": text,
-            "ms": ms,
-        }) + "\n")
+        f.write(json.dumps(entry) + "\n")
 except Exception:
     pass
 # The lease nudge: 3+ cold loads of this model inside 5 minutes says the user

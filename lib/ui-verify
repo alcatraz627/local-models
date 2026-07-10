@@ -24,6 +24,7 @@ source "$DIR/bin/_lib.sh"
 SCHEMA="$DIR/intents/ui-verify.schema.json"
 MODE=text
 BIG=false
+BOXES=false
 REGION=""
 CROP=""
 APP=""
@@ -43,6 +44,7 @@ show_help() {
   _opt '--app NAME'    'read the running app'\''s accessibility tree instead of a screenshot (needs ax + Accessibility perm)'
   _opt '--region NAME' 'verify against a named crop (top|bottom|left|right|center)'
   _opt '--crop WxH+X+Y' 'verify against an exact pixel window'
+  _opt '--boxes'       'add machine-measured text positions (3x3 grid) — makes placement claims rulable'
   _opt '--big'         'judge on the big tier instead of the warm default'
   _opt '--json'        'machine mode: {ok, verdict, pass, fail, unsure, results, artifact}'
   _opt '-h, --help'    'this help'
@@ -62,6 +64,7 @@ while [ $# -gt 0 ]; do
     -h|--help)  show_help; exit 0 ;;
     --json)     MODE=json; shift ;;
     --big)      BIG=true; shift ;;
+    --boxes)    BOXES=true; shift ;;
     --app)      APP="$2"; shift 2 ;;
     --region)   REGION="$2"; shift 2 ;;
     --crop)     CROP="$2"; shift 2 ;;
@@ -77,6 +80,7 @@ done
 #    but only covers what the app exposes to accessibility)
 if [ -n "$APP" ]; then
   { [ -n "$REGION" ] || [ -n "$CROP" ]; } && emit_error invalid_args "--app reads the live AX tree; --region/--crop apply to images only" 2
+  $BOXES && emit_error invalid_args "--boxes measures pixels; it applies to the image lane, not --app (AX trees carry no rendered positions here)" 2
   [ "${#positionals[@]}" -ge 1 ] || emit_error invalid_args 'need at least one claim: lm ui-verify --app <Name> "claim"' 2
   command -v ax >/dev/null 2>&1 || emit_error ax_missing "ax not installed — cargo install --git https://github.com/watzon/ax-cli" 12
   RAW_TREE="$(ax tree --app "$APP" -d 8 --json 2>&1)" \
@@ -102,6 +106,24 @@ else
   ARTIFACT="$(printf '%s' "$ENV_JSON" | jq -r '.artifact // ""')"
   CLAIM_ARGS=("${positionals[@]:1}")
   INV_DESC="a UI inventory JSON: the ground-truth machine read of a screenshot (regions with elements carrying verbatim text and state, icons, palette, theme)"
+  # --boxes: placement claims need measured positions, not the VLM's sense of
+  # layout — Apple Vision's boxes, reduced by the SCRIPT to 3×3 grid labels,
+  # ride along as a second machine-measured section. Judge matches labels;
+  # geometry never reaches the model.
+  if $BOXES; then
+    box_args=("$IMG" --ocr --json)
+    [ -n "$REGION" ] && box_args+=(--region "$REGION")
+    [ -n "$CROP" ]   && box_args+=(--crop "$CROP")
+    BOX_ENV="$("$DIR/bin/see" "${box_args[@]}" 2>/dev/null)" || BOX_ENV=""
+    POS_LIST="$(printf '%s' "$BOX_ENV" | jq -r '.data.words[]? | "[\(.pos)] \"\(.text)\""' 2>/dev/null)"
+    if [ -n "$POS_LIST" ]; then
+      INV="$INV
+
+POSITIONED TEXT (machine-measured by Apple Vision; 3x3 grid labels top-left..bottom-right; trust these for placement claims):
+$POS_LIST"
+      INV_DESC="$INV_DESC, followed by a POSITIONED TEXT section with machine-measured 3x3 grid positions for every text fragment"
+    fi
+  fi
 fi
 
 # 2) Number the claims for the judge.

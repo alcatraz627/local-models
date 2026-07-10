@@ -77,6 +77,7 @@ see --menubar "which app is focused?"           # capture the live macOS top str
 see panel.png --ui --json | jq .data            # schema-constrained {kind,theme,regions[].elements[],icons,palette}
 see mockup.png --json                           # {ok,text,model,ms,artifact} for an agent
 see receipt.png --ocr                           # EXACT text via Apple Vision — no model, ~300ms, verbatim
+see shot.png --ocr --json | jq .data.words      # positioned text: {text, x,y,w,h, pos: top-left..bottom-right}
 see shot.png --ocr --region top                 # crop-then-OCR: exact text from one region
 see shot.png --region left --ui                 # crop first, then read — small crops read near-perfectly
 see shot.png --crop 800x600+0+120 "count?"      # exact pixel window (WxH+X+Y from top-left)
@@ -124,6 +125,7 @@ as their structural first pass).
 lm ui-verify shot.png "there is a Save button" "3 tabs are visible"
 lm ui-verify shot.png --region top "the Logs tab is selected"    # crop = near-perfect reads
 lm ui-verify --app Finder "there is a Force Quit menu item"      # LIVE accessibility tree — exact, no pixels
+lm ui-verify shot.png --boxes "the count is in the top right"    # placement claims via measured positions
 lm ui-verify shot.png "count shows 457" --json | jq .results     # for review agents
 # exit 0 = every claim passed · exit 1 = any fail/unsure · evidence cites the artifact
 ```
