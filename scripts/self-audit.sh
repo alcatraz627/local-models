@@ -47,6 +47,11 @@ count() { [ -n "$1" ] && printf '%s\n' "$1" | wc -l | tr -d ' ' || echo 0; }
   printf '%s\n' "$Q" | jq -rs '[.[] | select(.error | not)] | group_by(.model)
     | map("- \(.[0].model): \((map(.ms) | add / length) | round)ms × \(length)") | .[]' 2>/dev/null || echo "- none"
   echo
+  echo "## gemini errors by day x class (trend beats totals — a burst on day 1 is not a live problem)"
+  printf '%s\n' "$GEM" | jq -rs '[.[] | select(.kind == "error")]
+    | group_by(.ts[0:10] + "|" + (.response | split(" ")[0] // "unknown"))
+    | map("- \(.[0].ts[0:10])  \(.[0].response | .[0:40])  × \(length)") | .[]' 2>/dev/null | head -8 || echo "- none"
+  echo
   echo "## fleet pass rates"
   printf '%s\n' "$FLEET" | jq -rs 'map("- \(.ts[0:10]) \(.intent) ×\(.items) → \(.pass)✓/\(.fail)✗ (\(.model), \(.wall_s)s)") | .[]' 2>/dev/null || echo "- none"
   echo

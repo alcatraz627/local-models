@@ -62,6 +62,8 @@ show_help() {
   _ex 'q show 14'                            '# full prompt + response of entry 14'
   _sec OPTIONS
   _opt '--think'        'show the reasoning trace (dimmed, on stderr; off by default)'
+  _opt '--web'          'search the web first (DDG, no key) and answer from the results, cited'
+  _opt '--diy'          'let q route itself: a planner pass picks intent/web/file/tier, narrated in gray'
   _opt '--no-stats'     'hide the gray token line (text mode; machine modes always carry the counts)'
   _opt '-c, --continue [N]' 'continue last exchange / entry N'
   _opt '--big / --code' 'use the big (reasoning) / code tier for this call'
@@ -129,6 +131,9 @@ MODE=text          # text (human) | json (one object) | stream (NDJSON)
 CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0; FORMAT_FILE=""; GLOW=false
 CONT=false; CONT_N=""; USER_MODEL=false; USER_INTENT=false
 STATS=true         # gray token line at the end (text mode); --no-stats mutes
+WEB=false          # --web: search + feed results as context (conductor fetches)
+WEB_QUERY=""       # focused query (set by --diy's plan; --web defaults to the prompt)
+DIY=false          # --diy: a planner pass picks intent/web/file/tier from the prompt
 
 # Pull leading flags; everything else is positional.
 positionals=()
@@ -136,6 +141,8 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --think) THINK=true; shift ;;
     --raw)   RAW=true; shift ;;
+    --web)   WEB=true; shift ;;
+    --diy)   DIY=true; shift ;;
     --no-stats) STATS=false; shift ;;
     --json)        MODE=json; shift ;;
     --stream-json) MODE=stream; shift ;;
@@ -182,6 +189,73 @@ trap 'emit_error cancelled "cancelled by client" 130' TERM INT
 # error, not a bash arithmetic stderr leak or an uncaught python ValueError.
 [[ "$MAX_CTX" =~ ^[0-9]+$ ]] || emit_error invalid_args "--max-ctx must be a non-negative integer, got '$MAX_CTX'" 2
 [[ "$TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || emit_error invalid_args "--timeout must be seconds (number), got '$TIMEOUT'" 2
+
+# ── --diy: plan, then execute ──
+# The warm model reads the prompt and emits a PLAN as schema-constrained data
+# (intents/diy-plan.toml + .schema.json); THIS script validates and executes it.
+# Capability selection belongs to the model, execution stays with the conductor
+# (docs/03) — and every step is narrated on the gray stderr channel, so nothing
+# needs permission and nothing happens silently. Explicit flags always win:
+# a user-chosen intent/model/ctx is never overridden by the plan.
+if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
+  _dim=""; _rs=""; [ -t 2 ] && { _dim=$'\033[2m'; _rs=$'\033[0m'; }
+  PLAN_ENV="$("$0" --json --no-stats --timeout 25 --intent diy-plan \
+    --format "$INTENT_DIR/diy-plan.schema.json" "$QUERY" 2>/dev/null)" || PLAN_ENV=""
+  PLAN="$(printf '%s' "$PLAN_ENV" | jq -c '.data // empty' 2>/dev/null)"
+  if [ -n "$PLAN" ]; then
+    p_intent=$(printf '%s' "$PLAN" | jq -r '.intent // "ask"')
+    p_web=$(printf '%s' "$PLAN" | jq -r '.needs_web // false')
+    p_wq=$(printf '%s' "$PLAN" | jq -r '.web_query // ""')
+    p_file=$(printf '%s' "$PLAN" | jq -r '.file_path // ""')
+    p_img=$(printf '%s' "$PLAN" | jq -r '.image_path // ""')
+    p_tier=$(printf '%s' "$PLAN" | jq -r '.tier // "small"')
+    p_why=$(printf '%s' "$PLAN" | jq -r '.reason // ""')
+    trace="· diy: ${p_why:-routed} → intent=$p_intent · tier=$p_tier"
+    # An image prompt is a job for `see`, not q — hand the whole call over.
+    if [ -n "$p_img" ]; then
+      p_img_x="${p_img/#\~/$HOME}"
+      if [ -f "$p_img_x" ]; then
+        [ "$MODE" = text ] && printf '%s%s · image → see%s\n' "$_dim" "$trace" "$_rs" >&2
+        exec "$DIR/bin/see" "$p_img_x" "$QUERY"
+      fi
+    fi
+    $USER_INTENT || { intent_exists "$p_intent" && INTENT="$p_intent"; }
+    $USER_MODEL  || MODEL="$(resolve_tier "$p_tier")"
+    if [ "$p_web" = true ]; then
+      WEB=true; WEB_QUERY="$p_wq"
+      wq_disp="${p_wq:-(the prompt)}"; trace="$trace · web=\"${wq_disp:0:48}\""
+    fi
+    if [ -n "$p_file" ] && [ -z "$CTX_FILE" ]; then
+      p_file_x="${p_file/#\~/$HOME}"
+      if [ -f "$p_file_x" ]; then CTX_FILE="$p_file_x"; trace="$trace · file=$(basename "$p_file_x")"
+      else trace="$trace · file=$p_file (not found, skipped)"; fi
+    fi
+    # Deterministic assist: the planner sometimes misses a path the prompt
+    # plainly names — the conductor greps the prompt words for a real file.
+    # Images hand the whole call to `see`; readable text loads as context.
+    # Models suggest, the script verifies (and beats them at exact).
+    if [ -z "$CTX_FILE" ]; then
+      set -f
+      for w in $QUERY; do
+        w_x="${w/#\~/$HOME}"
+        [ -f "$w_x" ] || continue
+        case "$(file -b --mime-type "$w_x" 2>/dev/null)" in
+          image/*)
+            if [ "$MODE" = text ]; then printf '%s%s · image=%s (prompt-scan) → see%s\n' "$_dim" "$trace" "$(basename "$w_x")" "$_rs" >&2; fi
+            set +f
+            exec "$DIR/bin/see" "$w_x" "$QUERY" ;;
+        esac
+        if [ "$(file -b --mime-encoding "$w_x" 2>/dev/null)" != binary ]; then
+          CTX_FILE="$w_x"; trace="$trace · file=$(basename "$w_x") (prompt-scan)"; break
+        fi
+      done
+      set +f
+    fi
+    if [ "$MODE" = text ]; then printf '%s%s%s\n' "$_dim" "$trace" "$_rs" >&2; fi
+  else
+    if [ "$MODE" = text ]; then printf '%s· diy: planner unavailable — running plain%s\n' "$_dim" "$_rs" >&2; fi
+  fi
+fi
 
 # Constrained decoding: --format FILE passes a JSON schema to Ollama's `format`
 # field, so the model's output IS schema-valid JSON. In --json mode the envelope
@@ -255,13 +329,21 @@ fi
 # getting a confident "I can't access your filesystem" instead of an answer.
 # Require real context, and if they named an existing file, point at the fix.
 if intent_needs_ctx "$INTENT" && [ -z "$CTX" ]; then
-  hint="'$INTENT' needs a document — pass the file with --ctx <path> (or pipe it in)."
-  set -f
-  for w in $QUERY; do
-    [ -f "$w" ] && { hint="$hint You named '$w' in the prompt (that's just text) — try: q $INTENT --ctx '$w'"; break; }
-  done
-  set +f
-  emit_error ctx_required "$hint" 2
+  if $DIY; then
+    # --diy never hard-fails on its own routing: a doc intent that ended up
+    # docless (planner optimism) degrades to ask; web results, if any, still ride.
+    INTENT=ask
+    if [ "$MODE" = text ] && [ -t 2 ]; then printf '\033[2m· diy: doc-intent without a doc → ask\033[0m\n' >&2
+    elif [ "$MODE" = text ]; then echo "· diy: doc-intent without a doc → ask" >&2; fi
+  else
+    hint="'$INTENT' needs a document — pass the file with --ctx <path> (or pipe it in)."
+    set -f
+    for w in $QUERY; do
+      [ -f "$w" ] && { hint="$hint You named '$w' in the prompt (that's just text) — try: q $INTENT --ctx '$w'"; break; }
+    done
+    set +f
+    emit_error ctx_required "$hint" 2
+  fi
 fi
 
 if [ -z "$QUERY" ]; then
@@ -269,6 +351,30 @@ if [ -z "$QUERY" ]; then
   # caller bug and must be a structured error, never help text on stdout.
   [ "$MODE" = text ] && { show_help; exit 0; }
   emit_error invalid_args "no prompt or context provided" 2
+fi
+
+# ── --web: search first, answer from the results ──
+# The script fetches (lib/websearch: DDG lite, no key, top page extracted); the
+# model only reads. A dead network degrades to answering offline, narrated on
+# the gray channel — never a hard failure, never silent.
+if $WEB; then
+  [ -n "$WEB_QUERY" ] || WEB_QUERY="${positionals[*]}"
+  _dim=""; _rs=""; [ -t 2 ] && { _dim=$'\033[2m'; _rs=$'\033[0m'; }
+  WEB_OUT="$("$DIR/lib/websearch" "$WEB_QUERY" -n 5 --fetch 2>/dev/null)" || WEB_OUT=""
+  if [ -n "$WEB_OUT" ]; then
+    if [ "$MODE" = text ]; then
+      printf '%s· web: "%s" → %s results (top page fetched)%s\n' \
+        "$_dim" "${WEB_QUERY:0:60}" "$(printf '%s\n' "$WEB_OUT" | grep -c '^\[')" "$_rs" >&2
+    fi
+    QUERY="$QUERY
+
+<input name=\"web-results\" query=\"$WEB_QUERY\">
+$WEB_OUT
+</input>
+(Answer from the web results above; cite result numbers like [2]. If they do not contain the answer, say so.)"
+  else
+    if [ "$MODE" = text ]; then printf '%s· web: search unreachable — answering offline%s\n' "$_dim" "$_rs" >&2; fi
+  fi
 fi
 
 # -c: replay the target entry's whole conversation chain (entries sharing a cid)

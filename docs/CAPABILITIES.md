@@ -33,6 +33,9 @@ q --big "reason through this tradeoff"         # gemma4:26b — heavier reasonin
 q -m code "refactor this loop" --ctx f.py      # qwen3.6:35b-a3b — the coding tier
 q -m llama3.2 "..."                            # any literal ollama model passes through
 q -c "and shorter?"                            # continue the last exchange (or: q -c 214)
+q --web "latest ollama release?"               # search first (DDG, no key), answer cites [n]
+q --diy "summarize README.md"                  # q routes itself: intent/web/file/image/tier,
+                                               #   every step narrated on the gray channel
 q --think "hard puzzle"                        # reasoning trace on (streams dim to stderr)
 q --raw "no system prompt at all"              # blank-slate call
 q --max-ctx 60000 --file big.md summarize      # widen the context truncation cap

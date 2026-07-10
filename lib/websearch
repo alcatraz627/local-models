@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# websearch — web search results as clean text, for feeding local models.
+#
+# The conductor-side half of `q --web`: DuckDuckGo's lite endpoint (no API key,
+# no tracking params), parsed with python stdlib, optionally fetching the top
+# result's readable text. The MODEL never touches the network — this script
+# fetches, the model reads (docs/03).
+#
+#   lib/websearch "ollama 0.44 release notes"          top-5 results as text
+#   lib/websearch "..." -n 8 --fetch                   + top page's extracted text
+#   lib/websearch "..." --json                         {ok, query, results, page}
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+N=5; FETCH=false; MODE=text
+positionals=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -n)      N="$2"; shift 2 ;;
+    --fetch) FETCH=true; shift ;;
+    --json)  MODE=json; shift ;;
+    -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) positionals+=("$1"); shift ;;
+  esac
+done
+Q="${positionals[*]}"
+[ -n "$Q" ] || { echo "websearch: no query" >&2; exit 2; }
+
+exec python3 - "$Q" "$N" "$FETCH" "$MODE" <<'PY'
+import html
+import json
+import re
+import sys
+import time
+import urllib.parse
+import urllib.request
+
+query, n, fetch, mode = sys.argv[1], int(sys.argv[2]), sys.argv[3] == "true", sys.argv[4]
+UA = {"User-Agent": "Mozilla/5.0 (Macintosh) local-models-websearch/1.0"}
+
+def fail(code, msg):
+    if mode == "json":
+        print(json.dumps({"ok": False, "code": code, "message": msg}))
+    else:
+        sys.stderr.write("websearch: %s\n" % msg)
+    sys.exit(10)
+
+t0 = time.time()
+url = "https://lite.duckduckgo.com/lite/?q=" + urllib.parse.quote(query)
+try:
+    with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=15) as r:
+        page = r.read().decode("utf-8", "replace")
+except Exception as e:
+    fail("web_unreachable", "search failed (%s)" % e)
+
+# lite.duckduckgo results: <a rel="nofollow" href="URL" class='result-link'>title</a>
+# ... <td class='result-snippet'>snippet</td>. Regex is adequate for this fixed,
+# minimal page; a layout change breaks loudly (0 results), never silently.
+links = re.findall(r"<a rel=\"nofollow\" href=\"([^\"]+)\"[^>]*>(.*?)</a>", page, re.S)
+snips = re.findall(r"<td class=['\"]result-snippet['\"]>(.*?)</td>", page, re.S)
+
+def clean(s):
+    return html.unescape(re.sub(r"<[^>]+>", "", s)).strip()
+
+results = []
+for i, (href, title) in enumerate(links[:n]):
+    # DDG wraps some hrefs as //duckduckgo.com/l/?uddg=<real>&rut=...
+    m = re.search(r"[?&]uddg=([^&]+)", href)
+    real = urllib.parse.unquote(m.group(1)) if m else href
+    results.append({"n": i + 1, "title": clean(title), "url": real,
+                    "snippet": clean(snips[i]) if i < len(snips) else ""})
+
+if not results:
+    fail("no_results", "0 results for %r (endpoint layout change?)" % query)
+
+page_text = None
+if fetch:
+    try:
+        with urllib.request.urlopen(urllib.request.Request(results[0]["url"], headers=UA), timeout=15) as r:
+            raw = r.read(800_000).decode("utf-8", "replace")
+        raw = re.sub(r"(?is)<(script|style|nav|header|footer|svg)[^>]*>.*?</\1>", " ", raw)
+        raw = re.sub(r"<[^>]+>", " ", raw)
+        text = re.sub(r"\s+", " ", html.unescape(raw)).strip()
+        page_text = text[:6000]
+    except Exception:
+        page_text = None  # a dead top link must not kill the results
+
+ms = int((time.time() - t0) * 1000)
+if mode == "json":
+    print(json.dumps({"ok": True, "query": query, "ms": ms,
+                      "results": results, "page": page_text}))
+else:
+    for res in results:
+        print("[%d] %s\n    %s\n    %s" % (res["n"], res["title"], res["url"], res["snippet"]))
+    if page_text:
+        print("\n--- top result page text (%s) ---\n%s" % (results[0]["url"], page_text))
+PY

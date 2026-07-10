@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "intent": { "type": "string" },
+    "needs_web": { "type": "boolean" },
+    "web_query": { "type": "string" },
+    "file_path": { "type": "string" },
+    "image_path": { "type": "string" },
+    "tier": { "type": "string", "enum": ["small", "big", "code"] },
+    "reason": { "type": "string" }
+  },
+  "required": ["intent", "needs_web", "tier", "reason"]
+}
