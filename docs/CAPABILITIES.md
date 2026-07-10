@@ -81,8 +81,9 @@ see shot.png --ocr --json | jq .data.words      # positioned text: {text, x,y,w,
 see shot.png --ocr --region top                 # crop-then-OCR: exact text from one region
 see shot.png --region left --ui                 # crop first, then read — small crops read near-perfectly
 see shot.png --crop 800x600+0+120 "count?"      # exact pixel window (WxH+X+Y from top-left)
-see diff ref.png candidate.png                  # compare two similar UIs: machine text/position
-                                                #   diff + judged report (what changed vs what matters)
+see diff ref.png candidate.png                  # compare two images: $0 evidence pack + judged read
+see diff a.png b.png --json | jq .evidence      # full pack: scores/text/color/grid/shape + nudges
+see diff a.png b.png --only E5 --grid 32        # slice rerun of one extractor — delta, no model call
 see more "what does the badge say?"             # drill into the LAST image (from its artifact copy)
 see photo.png --glow                            # rendered read
 see ui.png -m gemma4:26b                        # the stronger general-scene reasoner
@@ -96,6 +97,19 @@ temp dir), `read.md`, `meta.json`, and `notes.md` via `see note`. `see open N` j
 it, `see more` re-targets it for follow-ups, and the newest 150 are kept. History lines
 carry `artifact` + `crop` fields; the `--json` envelope exposes `artifact` for agents
 building evidence trails.
+
+**`see diff` evidence layer (L1).** A diff runs deterministic `$0` extractors
+(`lib/vis-compare.py`, pure PIL — no numpy/opencv) and returns the full pack under
+`.evidence`: E1 text/position diff, E3 palette/ΔE (CIE76), E4 dHash+aHash, E5 grid-ΔE
+heatmap, E6 edge/shape grid — plus `cost`, `failures`, and paste-ready `next:` nudges.
+Modality-adaptive (the icon case skips the text lanes, runs shape/color), with a
+comparability gate for mismatched pairs. The doctrine holds: **scripts measure, the
+model judges** — the VLM read is barred from disputing an extractor's number. The
+artifact folder gains `evidence.json` + a `contact.png` (A│B│ΔE-heat), the two inputs a
+downstream judge reads. `--only`/`--grid` re-run one extractor against a content-addressed
+cache and return just the delta. Every run journals to `logs/compare-history.jsonl`.
+The judgment layer (L2, a gcc `/vis-compare` skill) is not built yet — this is the
+evidence half. Battery: `probe/fixtures/vis-battery.py` (F1-F8, model-free, in verify.sh).
 
 `--menubar` screencaptures the main display's top strip and reads it (cropping first
 is the biggest quality lever for widgets — a full-screen frame buries the strip);

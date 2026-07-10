@@ -1,6 +1,6 @@
 # Visual Compare — a full-stack capability for "does B faithfully imitate A?"
 
-<!-- sessions: local-next-a4@2026-07-10 · STATUS: PLAN, awaiting user approval -->
+<!-- sessions: local-next-a4@2026-07-10 · vis-compare-A@2026-07-10 · STATUS: Phase A (L1 evidence) BUILT — lib/vis-compare.py + see diff + F1-F8 battery; Phase B/C/D (judge/loop/calibration) pending -->
 
 The independent vision capability the recreate-with-a-freer-hand workflow needs:
 compare two images (or an image against a live surface), produce machine-measured

@@ -80,6 +80,16 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-07-10 · visual-compare L1 (evidence half):** **`see diff` evidence pack** —
+  deterministic `$0` extractors (`lib/vis-compare.py`, pure PIL, no numpy/opencv): E1 text/pos ·
+  E3 palette/ΔE (CIE76) · E4 dHash+aHash · E5 grid-ΔE heatmap · E6 edge/shape grid;
+  modality-adaptive (icons skip the text lanes) + comparability gate. `--json` returns the full
+  pack in `.evidence`; the artifact gains `evidence.json` + `contact.png` (A│B│ΔE-heat);
+  `--only`/`--grid` slice reruns diff a content-addressed cache and return just the delta
+  (~0.06s, no model); every run journals to `logs/compare-history.jsonl`. Fixtures-first:
+  `probe/fixtures/make-fixtures.py` (F2-F6) + `vis-battery.py` F1-F8 in verify.sh — the
+  fabrication guard (identical pair → all zero) runs on every change. The L2 judge
+  (`/vis-compare` gcc skill) is the next phase, not built. Design: `docs/10-visual-compare-design.md`.
 - **2026-07-10 · compare + placement:** **`see diff A B`** — two-layer image compare for
   recreate-with-a-freer-hand workflows (deterministic OCR text/position diff both sides +
   one big-tier two-image judged report: TEXT CHANGES/LAYOUT SHIFTS/ADDED-REMOVED/STYLE/
@@ -116,6 +126,12 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## PENDING — what can be done next (with the first command to run)
 
+- **Visual-compare L2/L3 (judge + loop)** — Phase A (the evidence pack, above) is done and
+  battery-green; next is the gcc `/vis-compare` skill: a native-vision judge over the evidence
+  pack + contact sheet, a user-editable `policy.md` (divergence-class ladder), `suppressions.jsonl`
+  feedback memory, and `--revisit`. Then the `--loop`/ledger convergence mode (Phase C) after one
+  manual round-trip. First: draft `policy.md` v1 from `docs/10 §4`, then the user edits it.
+  Calibration gate (Phase D): the user's real login pair + a real icon pair, user-graded.
 - **Fleet over a real code task** — the one fleet leg still unexercised: a genuine Claude-called
   sweep over real files. First command: `lm fleet review src/*.ts --judge 'npx tsc --noEmit'`
   (or any intent × file-set with a mechanical judge). Measures the cloud-dispatch offset.
