@@ -94,6 +94,23 @@ if "text_diff" in p:
     check("F6 chart: E1 catches Q3→Q5 relabel",
           "Q3" in td["removed"] and "Q5" in td["added"], "td=%s" % td)
 
+# F7 · slice rerun — a full run seeds the cache, --only re-runs one extractor at
+# a new grid and returns a delta (not the whole pack); the cached pack is patched
+cache = tempfile.mkdtemp()
+run("f2-a.png", "f2-b.png", "--cache-dir", cache)  # seed at default grid 8
+d = run("f2-a.png", "f2-b.png", "--only", "E5", "--grid", "32", "--cache-dir", cache)
+check("F7 slice rerun: delta-only output, grid 8→32",
+      "delta" in d and d["delta"]["E5"]["before"]["grid_n"] == 8
+      and d["delta"]["E5"]["after"]["grid_n"] == 32, "delta=%s" % d.get("delta"))
+shutil.rmtree(cache, ignore_errors=True)
+
+# F8 · failure salvage — without OCR the pack still ships E3-E6 (salvage-first);
+# E1 is recorded as skipped, not fatal; exit 0
+p = run("diff-a.png", "diff-b.png")
+check("F8 salvage: E3-E6 ship without OCR, E1 skipped, exit 0",
+      "grid_heat" in p and "edge_shape" in p and "color" in p
+      and "E1" in p["meta"]["skipped_extractors"])
+
 fails = [c for c in CHECKS if not c[1]]
 for name, ok, detail in CHECKS:
     tail = ("  [%s]" % detail) if (detail and not ok) else ""

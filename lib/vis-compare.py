@@ -23,6 +23,7 @@ Output: evidence-pack JSON on stdout (schema: docs/10 §5).
 import argparse
 import hashlib
 import json
+import os
 import sys
 import time
 import warnings
@@ -325,7 +326,7 @@ def _nudges(pack):
 
 
 def build_pack(a_path, b_path, grid=None, only=None,
-               ocr_a=None, ocr_b=None, contact_path=None):
+               ocr_a=None, ocr_b=None, contact_path=None, force_modality=None):
     t0 = time.time()
     failures = []
     a = Image.open(a_path).convert("RGB")
@@ -336,7 +337,7 @@ def build_pack(a_path, b_path, grid=None, only=None,
     if ocr_a and ocr_b:
         text_diff, text_summary, words_a, words_b = e1_text_diff(ocr_a, ocr_b)
 
-    mod = modality(a, b, words_a, words_b)
+    mod = force_modality or modality(a, b, words_a, words_b)
     # grid resolution adapts to modality (icons want a finer relative grid);
     # --grid overrides. Clamp to the documented 4–64 window.
     n = grid if grid else (8 if mod == "iconlike" else 16)
@@ -454,6 +455,51 @@ def _params_hash(a_path, b_path, n, run):
     return h.hexdigest()[:16]
 
 
+def _ab_hash(a_path, b_path):
+    """Cache key for a pair — the two files' content, independent of params, so a
+    slice rerun can find the prior full pack to diff against."""
+    h = hashlib.sha256()
+    for p in (a_path, b_path):
+        try:
+            with open(p, "rb") as f:
+                h.update(hashlib.sha256(f.read()).digest())
+        except OSError:
+            h.update(b"missing")
+    return h.hexdigest()[:16]
+
+
+def _slice_summary(pack, key):
+    """The delta-relevant fields for one extractor — what a rerun compares."""
+    s = pack.get("scores", {})
+    if key == "E4":
+        return {"dhash": s.get("dhash"), "ahash": s.get("ahash"), "similarity": s.get("similarity")}
+    if key == "E5":
+        g = pack.get("grid_heat", {})
+        return {"grid_delta_pct": s.get("grid_delta_pct"), "mean_dE": g.get("mean_dE"),
+                "grid_n": g.get("n"), "top_cells": [c["cell"] for c in g.get("top_cells", [])[:3]]}
+    if key == "E3":
+        return {"palette_delta_avg": s.get("palette_delta_avg")}
+    if key == "E6":
+        e = pack.get("edge_shape", {})
+        return {"hot_cell_pct": e.get("hot_cell_pct"), "grid_n": e.get("n"),
+                "top_cells": [c["cell"] for c in e.get("top_cells", [])[:3]]}
+    return {}
+
+
+def _merge_rerun(old, new, only):
+    """Patch the cached full pack with a rerun's fresh values for the rerun
+    extractors only, so the cache stays current without a full recompute."""
+    merged = json.loads(json.dumps(old))
+    for k in ("dhash", "ahash", "similarity", "grid_delta_pct", "palette_delta_avg"):
+        if k in new.get("scores", {}):
+            merged.setdefault("scores", {})[k] = new["scores"][k]
+    for field in ("grid_heat", "edge_shape", "color"):
+        if field in new:
+            merged[field] = new[field]
+    merged["params_hash"] = new["params_hash"]
+    return merged
+
+
 def main():
     ap = argparse.ArgumentParser(description="visual-compare evidence extractors")
     ap.add_argument("a")
@@ -464,9 +510,18 @@ def main():
     ap.add_argument("--ocr-a", default=None, help="mac-ocr jsonl for A (enables E1 + modality)")
     ap.add_argument("--ocr-b", default=None, help="mac-ocr jsonl for B")
     ap.add_argument("--contact", default=None, help="write contact sheet here")
+    ap.add_argument("--cache-dir", default=None,
+                    help="content-addressed pack cache — enables --only delta reruns")
+    ap.add_argument("--force-modality", default=None, choices=["iconlike", "texty", "mixed"],
+                    help="override the modality probe (e.g. --only an extractor it skipped)")
     ap.add_argument("--json", action="store_true", help="(default) emit JSON")
     args = ap.parse_args()
 
+    # hard block: --grid must be in the documented window (reject early, explain)
+    if args.grid is not None and not (4 <= args.grid <= 64):
+        print(json.dumps({"error": "grid %d out of range — must be 4–64" % args.grid}),
+              file=sys.stderr)
+        return 2
     only = [x.strip().upper() for x in args.only.split(",")] if args.only else None
     if only:
         bad = [e for e in only if e not in ALL_EXTRACTORS]
@@ -474,8 +529,35 @@ def main():
             print(json.dumps({"error": "unknown extractor(s): %s" % bad,
                               "known": ALL_EXTRACTORS}), file=sys.stderr)
             return 2
+
     pack = build_pack(args.a, args.b, grid=args.grid, only=only,
-                      ocr_a=args.ocr_a, ocr_b=args.ocr_b, contact_path=args.contact)
+                      ocr_a=args.ocr_a, ocr_b=args.ocr_b, contact_path=args.contact,
+                      force_modality=args.force_modality)
+
+    # cache + slice-rerun delta: a full run seeds the cache; a --only rerun diffs
+    # against it and returns just what changed — observation never costs a re-read.
+    if args.cache_dir:
+        os.makedirs(args.cache_dir, exist_ok=True)
+        cache_file = os.path.join(args.cache_dir, _ab_hash(args.a, args.b) + ".json")
+        if only and os.path.exists(cache_file):
+            try:
+                old = json.load(open(cache_file))
+            except Exception:
+                old = None
+            if old:
+                delta = {k: {"before": _slice_summary(old, k), "after": _slice_summary(pack, k)}
+                         for k in only}
+                json.dump(_merge_rerun(old, pack, only), open(cache_file, "w"))
+                print(json.dumps({"delta": delta, "rerun": only,
+                                  "grid_n": pack["meta"]["grid_n"],
+                                  "params_hash": pack["params_hash"],
+                                  "meta": {"a": args.a, "b": args.b}}))
+                return 0
+        if not only:  # only full runs seed the cache
+            try:
+                json.dump(pack, open(cache_file, "w"))
+            except OSError:
+                pass
     print(json.dumps(pack))
     return 0
 

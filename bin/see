@@ -33,6 +33,8 @@ GLOW=false
 CROP=""
 REGION=""
 EVIDENCE=""        # diff mode: the vis-compare evidence pack JSON (empty otherwise)
+ONLY=""            # diff --only E5,E6 → slice rerun (no model), returns the delta
+GRID=""            # diff --grid N → override the grid resolution (4–64)
 positionals=()
 LOG="$DIR/logs/see-history.jsonl"
 ART_ROOT="$DIR/outputs/see"
@@ -132,6 +134,8 @@ while [ $# -gt 0 ]; do
     --menubar)  MENUBAR=true; UI=true; shift ;;
     --crop)     CROP="$2"; shift 2 ;;
     --region)   REGION="$2"; shift 2 ;;
+    --only)     ONLY="$2"; shift 2 ;;
+    --grid)     GRID="$2"; shift 2 ;;
     --glow)     GLOW=true; shift ;;
     -m|--model) MODEL="$2"; MODEL_SET=true; shift 2 ;;
     -h|--help)  show_help; exit 0 ;;
@@ -183,6 +187,27 @@ if [ "${positionals[0]}" = "diff" ]; then
     [ -f "$f" ] || emit_error img_unreadable "no such file: $f" 12
     case "$(file -b --mime-type "$f" 2>/dev/null)" in image/*) : ;; *) emit_error not_an_image "'$f' is not an image" 12 ;; esac
   done
+  # slice rerun: `see diff A B --only E5[,E6] [--grid N]` re-runs just those
+  # extractors against the cached full pack and returns the delta — no model
+  # call, no new artifact. The prior full `see diff` seeded the cache.
+  if [ -n "$ONLY" ]; then
+    CACHE_DIR="$DIR/outputs/see/.compare-cache"; RERR="$SEE_TMP/rerun.err"
+    [ -n "$SEE_TMP" ] || { SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"; RERR="$SEE_TMP/rerun.err"; }
+    set +e
+    if [ -n "$GRID" ]; then
+      DELTA="$("$DIR/.venv/bin/python" "$DIR/lib/vis-compare.py" "$IMG" "$IMG_B" --only "$ONLY" --grid "$GRID" --cache-dir "$CACHE_DIR" 2>"$RERR")"
+    else
+      DELTA="$("$DIR/.venv/bin/python" "$DIR/lib/vis-compare.py" "$IMG" "$IMG_B" --only "$ONLY" --cache-dir "$CACHE_DIR" 2>"$RERR")"
+    fi
+    rrc=$?; set -e
+    [ "$rrc" -ne 0 ] && emit_error rerun_failed "$(head -c 200 "$RERR" 2>/dev/null)" 2
+    if [ "$MODE" = json ]; then
+      printf '%s\n' "$DELTA"
+    else
+      printf '%s' "$DELTA" | jq -r 'if .delta then (.delta | to_entries[] | "\(.key) (grid \(.value.after.grid_n // "-")): before=\(.value.before) → after=\(.value.after)") else "no cached pack yet — run a full `see diff` first; current: \(.scores // .)" end' 2>/dev/null || printf '%s\n' "$DELTA"
+    fi
+    exit 0
+  fi
 else
   IMG="${positionals[0]}"; QUERY="${positionals[*]:1}"
 fi
@@ -304,12 +329,16 @@ if $DIFF; then
     mac-ocr --format jsonl "$IMG_B" > "$SEE_TMP/b.jsonl" 2>/dev/null || true
   fi
   set +e
+  # a full run seeds the content-addressed cache so later --only reruns can diff
+  CACHE_DIR="$DIR/outputs/see/.compare-cache"
   if [ -s "$SEE_TMP/a.jsonl" ] && [ -s "$SEE_TMP/b.jsonl" ]; then
     EVIDENCE="$("$VENV_PY" "$DIR/lib/vis-compare.py" "$IMG" "$IMG_B" \
       --ocr-a "$SEE_TMP/a.jsonl" --ocr-b "$SEE_TMP/b.jsonl" \
+      --cache-dir "$CACHE_DIR" ${GRID:+--grid "$GRID"} \
       --contact "$SEE_TMP/contact.png" 2>"$SEE_TMP/vis.err")"
   else
     EVIDENCE="$("$VENV_PY" "$DIR/lib/vis-compare.py" "$IMG" "$IMG_B" \
+      --cache-dir "$CACHE_DIR" ${GRID:+--grid "$GRID"} \
       --contact "$SEE_TMP/contact.png" 2>"$SEE_TMP/vis.err")"
   fi
   visrc=$?
