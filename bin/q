@@ -48,6 +48,7 @@ show_help() {
   _cmd 'q history [N|--json]'   'recent queries, numbered (default 15)'
   _cmd 'q show N'               'full prompt + response of entry N'
   _cmd 'q intents'              'list available intents (the registry)'
+  _cmd 'q models'               'usable models + tiers (= lm models; ★ default · ● resident)'
   _sec EXAMPLES
   _ex 'q "how do I check disk usage"'        '# terse answer'
   _ex 'q -c "and sorted by size?"'           '# follow-up with context'
@@ -111,6 +112,7 @@ case "${1:-}" in
                          show_history "${1:-15}"; exit 0 ;;
   show)                  shift; show_entry "${1:-}"; exit 0 ;;
   intents)               list_intents; exit 0 ;;
+  models)                exec "$DIR/bin/lm" models "${@:2}" ;;
   on|off|status|restart) exec "$DIR/bin/warm" "$@" ;;
 esac
 
@@ -208,6 +210,7 @@ if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
     p_wq=$(printf '%s' "$PLAN" | jq -r '.web_query // ""')
     p_file=$(printf '%s' "$PLAN" | jq -r '.file_path // ""')
     p_img=$(printf '%s' "$PLAN" | jq -r '.image_path // ""')
+    p_probe=$(printf '%s' "$PLAN" | jq -r '.local_probe // ""')
     p_tier=$(printf '%s' "$PLAN" | jq -r '.tier // "small"')
     p_why=$(printf '%s' "$PLAN" | jq -r '.reason // ""')
     trace="· diy: ${p_why:-routed} → intent=$p_intent · tier=$p_tier"
@@ -222,23 +225,79 @@ if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
     $USER_INTENT || { intent_exists "$p_intent" && INTENT="$p_intent"; }
     $USER_MODEL  || MODEL="$(resolve_tier "$p_tier")"
     if [ "$p_web" = true ]; then
-      WEB=true; WEB_QUERY="$p_wq"
-      wq_disp="${p_wq:-(the prompt)}"; trace="$trace · web=\"${wq_disp:0:48}\""
+      # A shell-command answer is composed offline; search results only
+      # contaminate it (observed: a stray repo from the results got cloned
+      # into the command). Honor web for cmd only with a focused query.
+      if [ "$p_intent" = cmd ] && [ -z "$p_wq" ]; then
+        trace="$trace · web dropped (cmd composes offline)"
+      else
+        WEB=true; WEB_QUERY="$p_wq"
+        wq_disp="${p_wq:-(the prompt)}"; trace="$trace · web=\"${wq_disp:0:48}\""
+      fi
     fi
     if [ -n "$p_file" ] && [ -z "$CTX_FILE" ]; then
       p_file_x="${p_file/#\~/$HOME}"
       if [ -f "$p_file_x" ]; then CTX_FILE="$p_file_x"; trace="$trace · file=$(basename "$p_file_x")"
       else trace="$trace · file=$p_file (not found, skipped)"; fi
     fi
+    # Probe scan: like the file scan, extraction beats model recall — when the
+    # prompt asks about a version and names a word that IS an installed command,
+    # that's the probe, whether or not the planner said so.
+    RAW_PROMPT="${positionals[*]}"   # scans read the user's words, never the assembled query
+    if [ -z "$p_probe" ] && [[ "$RAW_PROMPT" == *ersion* ]]; then
+      set -f
+      for w in $RAW_PROMPT; do
+        w_c="${w%%[,.;:!?\"\')]}"
+        case "$w_c" in
+          ''|?|??|the|and|check|latest|local|online|tell|have|one|version|not|now|are|was|what|which|with|from|test|time|man|cat|find|open) continue ;;
+        esac
+        if command -v "$w_c" >/dev/null 2>&1; then p_probe="$w_c --version"; break; fi
+      done
+      set +f
+    fi
+    # Local probe: version/status of an installed tool, model-suggested but
+    # conductor-VALIDATED — strict shape (one bare command + one version verb),
+    # command must exist, 5s cap. Output rides into the prompt as ground truth.
+    # Anything outside the shape is refused with a trace, never run.
+    if [ -n "$p_probe" ]; then
+      if [[ "$p_probe" =~ ^([A-Za-z0-9_.-]+)\ (--version|-V|version)$ ]] \
+         && command -v "${BASH_REMATCH[1]}" >/dev/null 2>&1; then
+        PROBE_OUT="$(perl -e 'my $p=fork; if($p==0){setpgrp(0,0); exec(@ARGV) or exit 127} local $SIG{ALRM}=sub{kill "KILL",-$p}; alarm 5; waitpid($p,0)' \
+                     ${BASH_REMATCH[1]} ${BASH_REMATCH[2]} 2>&1 | head -3)" || PROBE_OUT=""
+        if [ -n "$PROBE_OUT" ]; then
+          QUERY="$QUERY
+
+<input name=\"local-probe\" cmd=\"$p_probe\">
+$PROBE_OUT
+</input>"
+          trace="$trace · probe=\`$p_probe\`"
+        else
+          trace="$trace · probe=\`$p_probe\` (no output, skipped)"
+        fi
+      else
+        trace="$trace · probe rejected (\"${p_probe:0:32}\" outside <tool> --version shape)"
+      fi
+    fi
     # Deterministic assist: the planner sometimes misses a path the prompt
-    # plainly names — the conductor greps the prompt words for a real file.
-    # Images hand the whole call to `see`; readable text loads as context.
+    # plainly names — the conductor greps the prompt words for a real file
+    # (tolerating trailing punctuation). Images hand the whole call to `see`;
+    # readable text loads as context; a named path that does NOT exist gets an
+    # honest note so the answer says "no such file", not "I cannot access files".
     # Models suggest, the script verifies (and beats them at exact).
     if [ -z "$CTX_FILE" ]; then
+      missing_note=""
       set -f
-      for w in $QUERY; do
-        w_x="${w/#\~/$HOME}"
-        [ -f "$w_x" ] || continue
+      for w in $RAW_PROMPT; do
+        w_clean="${w%%[,.;:!?\"\')]}"
+        w_x="${w_clean/#\~/$HOME}"
+        if [ ! -f "$w_x" ]; then
+          # Path-shaped but absent → remember the first one for the honesty note.
+          case "$w_clean" in
+            */*|*.png|*.jpg|*.jpeg|*.webp|*.pdf|*.md|*.txt|*.csv|*.json)
+              [ -n "$missing_note" ] || { [ -e "$w_x" ] || missing_note="$w_clean"; } ;;
+          esac
+          continue
+        fi
         case "$(file -b --mime-type "$w_x" 2>/dev/null)" in
           image/*)
             if [ "$MODE" = text ]; then printf '%s%s · image=%s (prompt-scan) → see%s\n' "$_dim" "$trace" "$(basename "$w_x")" "$_rs" >&2; fi
@@ -246,10 +305,16 @@ if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
             exec "$DIR/bin/see" "$w_x" "$QUERY" ;;
         esac
         if [ "$(file -b --mime-encoding "$w_x" 2>/dev/null)" != binary ]; then
-          CTX_FILE="$w_x"; trace="$trace · file=$(basename "$w_x") (prompt-scan)"; break
+          CTX_FILE="$w_x"; missing_note=""; trace="$trace · file=$(basename "$w_x") (prompt-scan)"; break
         fi
       done
       set +f
+      if [ -n "$missing_note" ]; then
+        QUERY="$QUERY
+
+(Note from the runtime: no file exists at \"$missing_note\" — say so plainly.)"
+        trace="$trace · file=$missing_note NOT FOUND"
+      fi
     fi
     if [ "$MODE" = text ]; then printf '%s%s%s\n' "$_dim" "$trace" "$_rs" >&2; fi
   else

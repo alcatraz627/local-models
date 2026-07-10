@@ -195,6 +195,17 @@ Both keep the docs/03 invariant: the model never touches a tool — the q script
   (real files beat model recall). Explicit user flags always win over the plan; doc
   intents that end up docless degrade to `ask` instead of erroring. Every decision is
   one gray stderr line: `· diy: <reason> → intent=cmd · tier=small · web="…" · file=…`
+- **`local_probe`**: when the answer needs a local tool's version ("do I have the
+  latest claude?"), the plan may carry a probe — conductor-VALIDATED against the strict
+  shape `<tool> (--version|-V|version)`, command must exist, 5s process-group cap;
+  anything else is refused with a trace, never run. Output rides into the prompt as an
+  `<input name="local-probe">` block.
+- **Deterministic scans beat model recall** (shakedown finding, 2026-07-10): the small
+  planner routes well (intent/tier/web-judgment) but misses extraction — so the
+  conductor scans the RAW prompt words for real files (punctuation-tolerant; images →
+  `see`, text → ctx, named-but-absent paths → an honest "no such file" note) and for
+  installed commands when the prompt mentions a version. Search results are dropped for
+  `cmd` intents with no focused query (they contaminate composed commands — observed).
 - Planner cost: one warm-tier call (~1-3s). Plain `q` pays nothing — both are opt-in
   flags; baking `--diy` into default `q` is a one-line default flip if it earns it.
 

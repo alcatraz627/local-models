@@ -6,6 +6,7 @@
     "web_query": { "type": "string" },
     "file_path": { "type": "string" },
     "image_path": { "type": "string" },
+    "local_probe": { "type": "string" },
     "tier": { "type": "string", "enum": ["small", "big", "code"] },
     "reason": { "type": "string" }
   },
