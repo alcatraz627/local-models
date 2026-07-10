@@ -206,6 +206,87 @@ diverges, judged against policy, never against a numeric threshold alone.
 // ledger.json (L3, per loop directory) — verdicts over iterations + trend of scores
 ```
 
+## 5.5 · Cost & failure telemetry (histories are the API, here too)
+
+Every run — L1, L2, loop round — carries and journals its own accounting:
+
+```json
+// rides inside evidence-pack.json AND verdict.json
+"cost": { "wall_ms": 41200, "extractors_ms": 900,
+  "model_calls": [ {"seat": "local-read", "model": "gemma4:26b",
+                    "tokens_in": 2100, "tokens_out": 480, "ms": 38000, "retries": 0} ] },
+"failures": [ {"stage": "E1", "code": "ocr_missing", "retriable": true,
+               "fix": "npm install -g mac-ocr"} ]
+```
+
+- **Journal**: one line per run to `logs/compare-history.jsonl` (successes AND
+  failures — the weekly self-audit gains a compare stream; failure classes
+  trend like gemini's do now).
+- **Failure taxonomy** (each carries `retriable` + a `fix` the agent can act on):
+  `img_unreadable · ocr_missing · vlm_timeout · vlm_truncated · comparable_poor ·
+  judge_schema_broken · judge_low_confidence`. Extractor failures are SOFT —
+  the pack ships with what succeeded (fleet's salvage-first pattern), the
+  failure block says what's missing and how to get it.
+- **Retry semantics, fixed**: extractors auto-retry once (cheap, silent);
+  the local VLM read retries once on timeout with the residency-aware clock;
+  **the judge is never auto-retried** — it is the expensive seat, so failure
+  emits a nudge (§5.6) and the controlling agent decides.
+
+## 5.6 · Slice reruns, feedback, and nudges (the controlling-agent surface)
+
+This tool's user is an agent, so it follows `~/.claude/conventions/
+agent-first-tools.md` (the five obligations) — governing convention for every
+surface below.
+
+- **Content-addressed pack cache**: evidence packs key on hash(A, B, params);
+  reruns are incremental. `see diff A B --only E5 --grid 32` re-runs ONE
+  extractor and returns the **delta** (what changed in the pack), not the
+  whole pack again — observation never costs a re-read.
+- **Judge revisit with feedback**: `/vis-compare --revisit <divergence-id|all>
+  --feedback "the radius call is wrong — compare the input corners
+  specifically"`. Re-judges only the named slice(s) with the feedback in
+  context; verdict is patched; the ledger records the re-ruling (`revisited`).
+- **Nudges — the tool tells the agent when a rerun would help** (`next:` block,
+  present in both text and JSON output; every nudge is an exact paste-ready
+  command, per errors-propose-fixes):
+  - `comparable: poor` → the crop/normalize retry command that would fix it
+  - texty probe but E1 came back empty → image-quality flag + `--only E1` retry
+  - grid heatmap saturated (>60% cells hot) → `--grid 32` refinement command
+  - dHash says close but grid says hot (contradictory signals) → `--only E6` shape pass
+  - judge tagged any divergence `confidence: low` → the `--revisit` command with focus
+  - loop trend stalled 2 rounds → "escalate to native judge" (see §5.7)
+- **Hard blocks at submit time** (reject early, explain, propose): `--only` of
+  an extractor the modality probe skipped (error says WHY it was skipped and
+  the `--force-modality` override); `--grid` outside 4–64; `--loop` against a
+  `comparable: poor` pair; judge invoked without an evidence pack (points at
+  the exact `see diff --json` command to produce one).
+
+## 5.7 · Model-use map (every seat, explicit — nothing implicit anywhere)
+
+| Seat | Model | Fires when | Cost class | Who decides |
+|---|---|---|---|---|
+| E0–E8 extractors | **none** | every run | $0, ~1s | always on |
+| Local prose read (optional in `see diff`) | gemma4:26b (local) | on demand — **off by default in loop rounds** (`--no-read` is the loop default) | $0, 30–60s (lease for batches) | controlling agent |
+| **L2 judge** | **Claude, native vision** — the only Claude seat | when `/vis-compare` is invoked | expensive-but-valuable (context/attention) | controlling agent, explicitly |
+| Second opinion | gemini (vision) | **never by default**; `--second-opinion gemini` documented lane | abundant/cheap, untrusted-verify posture | user/agent opt-in per call |
+| Sub-agents | none in the core path | — | — | — |
+
+The cheap-and-frequent ↔ expensive-but-valuable balance, as process rules the
+tool enforces rather than vibes:
+
+1. **Extractors always, judge sparse.** Loop rounds iterate on machine evidence
+   (free); the native judge fires at moments the controlling agent picks —
+   and the tool NUDGES those moments rather than deciding: ledger stall
+   (2 rounds without a `fixed`), all machine scores under policy floor
+   (candidate ready for final judgment), or explicit user ask.
+2. **Every judge invocation announces itself** before running: seat, expected
+   cost class, and what cheaper alternative exists ("machine trend still
+   improving — native judgment can wait"). The agent proceeds knowingly; the
+   spend is in the cost block afterward. Explicit, never ambient.
+3. **gemini stays out of the core** — it adds an abundance lane, not a
+   capability the design depends on; if invoked, its output is untrusted-
+   verify like everywhere else in the stack.
+
 ## 6 · Validation matrix (built BEFORE the capability is called done)
 
 Fixture pairs, each with planted ground truth, run in the battery where model-free:
@@ -216,8 +297,10 @@ Fixture pairs, each with planted ground truth, run in the battery where model-fr
 | F2 **icon pair**: generated glyph + perturbed copy (hue +15°, radius 4→10px, stroke −1px) | E4 distance >0, E5/E6 locate the corner cells, E3 catches hue | the user's 2-day test |
 | F3 identical pair (same file twice) | ALL extractors ~zero; judge says clean | fabrication |
 | F4 theme pair (same layout, inverted palette) | systematic ΔE everywhere + E1 empty diff | global-shift readability |
-| F5 incomparable pair (icon vs dashboard) | `comparable: poor`, graceful | garbage-in handling |
+| F5 incomparable pair (icon vs dashboard) | `comparable: poor`, graceful, `next:` nudge with the crop command | garbage-in handling + nudge emission |
 | F6 chart pair (axis relabel + one bar taller) | E1 catches label, E5 locates bar cell | mixed modality |
+| F7 rerun patch (F2 then `--only E5 --grid 32`) | delta-only output, pack patched in place, cost block shows the increment | slice-rerun contract |
+| F8 failure salvage (F1 with mac-ocr PATH-hidden) | pack ships E3–E6, failures block names E1 + fix, exit 0 | soft-failure + fix-proposing |
 
 Battery: F1–F6 extractor assertions are model-free → verify.sh checks. L2 judged
 outputs: manual fixture review once per policy change (documented, not automated —
@@ -228,10 +311,14 @@ run end-to-end, user grades the verdict — THAT gate, not the battery, closes P
 
 ## 7 · Phases & effort
 
-- **A · evidence pack** (lm): E0 normalize/probe/gate, E2–E6, pack schema, contact
-  sheet, fixtures F1–F6 + battery wiring. (~half day)
+- **A · evidence pack** (lm): E0 normalize/probe/gate, E2–E6, pack schema WITH the
+  cost/failures blocks + compare-history journal, pack cache + `--only` slice
+  reruns, nudge emission, contact sheet, fixtures F1–F8 + battery wiring.
+  Governing convention: agent-first-tools obligations. (~a day now — telemetry
+  and rerun surfaces are load-bearing, not bolt-ons)
 - **B · judge** (gcc): /vis-compare skill + policy.md v1 (drafted from the user's
-  stated doctrine, then user-edited) + suppressions plumbing. (~2h)
+  stated doctrine, then user-edited) + suppressions plumbing + `--revisit`
+  feedback reruns + the announce-before-spend contract (§5.7.2). (~3h)
 - **C · loop**: `--loop` mode, ledger, convergence stop-rules, E7/E8 lane docs.
   (~2h)
 - **D · calibration**: real-pair runs, user feedback → policy v2, acceptance sign-off.
