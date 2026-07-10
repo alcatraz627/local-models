@@ -17,19 +17,25 @@ import subprocess
 import sys
 import tempfile
 
+from PIL import Image
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 VP = [os.path.join(ROOT, ".venv/bin/python"), os.path.join(ROOT, "lib/vis-compare.py")]
 HAVE_OCR = shutil.which("mac-ocr") is not None
 
 
+def _p(x):
+    return x if os.path.isabs(x) else os.path.join(HERE, x)
+
+
 def run(a, b, *args, ocr=False):
-    cmd = VP + [os.path.join(HERE, a), os.path.join(HERE, b)] + list(args)
+    cmd = VP + [_p(a), _p(b)] + list(args)
     if ocr and HAVE_OCR:
         td = tempfile.mkdtemp()
         for side, path in (("a", a), ("b", b)):
             with open(os.path.join(td, side + ".jsonl"), "w") as f:
-                subprocess.run(["mac-ocr", "--format", "jsonl", os.path.join(HERE, path)],
+                subprocess.run(["mac-ocr", "--format", "jsonl", _p(path)],
                                stdout=f, stderr=subprocess.DEVNULL)
         cmd += ["--ocr-a", os.path.join(td, "a.jsonl"), "--ocr-b", os.path.join(td, "b.jsonl")]
     out = subprocess.run(cmd, capture_output=True, text=True)
@@ -68,6 +74,19 @@ check("F3 fabrication guard: ALL extractors zero on identical input",
       s["dhash"] == 0 and s["ahash"] == 0 and s["grid_delta_pct"] == 0.0
       and s["palette_delta_avg"] == 0.0 and p["edge_shape"]["hot_cell_pct"] == 0.0,
       "scores=%s edge_hot=%s" % (s, p["edge_shape"]["hot_cell_pct"]))
+
+# F3b · perceptual-identity guard — a JPEG re-encode is perceptually identical but
+# perturbs the low-population palette tail; the fabrication guard must hold HERE too
+# (byte-identity F3 never exercises re-encode/anti-alias jitter — the real-world case)
+_td = tempfile.mkdtemp()
+_jpg = os.path.join(_td, "f4-reencode.jpg")
+Image.open(os.path.join(HERE, "f4-a.png")).convert("RGB").save(_jpg, quality=85)
+p = run("f4-a.png", _jpg)
+s = p["scores"]
+check("F3b perceptual-identity: JPEG re-encode stays clean (no fabricated palette diff)",
+      s["dhash"] <= 3 and s["grid_delta_pct"] < 5.0 and s["palette_delta_avg"] < 5.0,
+      "dhash=%s grid%%=%s palette_avg=%s" % (s["dhash"], s["grid_delta_pct"], s["palette_delta_avg"]))
+shutil.rmtree(_td, ignore_errors=True)
 
 # F4 · theme pair — systematic ΔE (E5 hot everywhere); with OCR, E1 empty + texty
 p = run("f4-a.png", "f4-b.png", ocr=True)

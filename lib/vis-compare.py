@@ -193,6 +193,17 @@ def _palette(img, k=6):
 
 
 def e3_palette(a, b, k=6):
+    """Dominant-palette match with a population-weighted average ΔE.
+
+    avg_dE weights each matched pair by the A-side color's area share, so a
+    re-encode / anti-aliasing jitter that only perturbs low-population tail colors
+    cannot fabricate a 'different' headline — the fabrication trap a byte-identical
+    fixture (F3) never exercises but a JPEG re-encode does. A real shift of a
+    DOMINANT color (a hue change, an accent recolor) still drives the average up.
+    A systematic theme flip reads LOW here on purpose: the palette SET is the same,
+    only its spatial arrangement changed — that divergence is E5's to report, not
+    E3's. Per-pair `weight` is exposed so a consumer sees a 'different' pair that
+    covers 2% of the frame for what it is."""
     pa, pb = _palette(a, k), _palette(b, k)
     used = set()
     pairs, unmatched_a = [], []
@@ -206,12 +217,14 @@ def e3_palette(a, b, k=6):
                 best, bidx = de, j
         if bidx >= 0:
             used.add(bidx)
-            pairs.append({"a": ca["hex"], "b": pb[bidx]["hex"],
-                          "dE": round(best, 1), "word": de_word(best)})
+            pairs.append({"a": ca["hex"], "b": pb[bidx]["hex"], "dE": round(best, 1),
+                          "word": de_word(best), "weight": round(ca["frac"], 3)})
         else:
             unmatched_a.append(ca["hex"])
     unmatched_b = [pb[j]["hex"] for j in range(len(pb)) if j not in used]
-    avg = round(sum(p["dE"] for p in pairs) / len(pairs), 1) if pairs else 0.0
+    tw = sum(p["weight"] for p in pairs)
+    avg = round(sum(p["dE"] * p["weight"] for p in pairs) / tw, 1) if tw > 0 else 0.0
+    pairs.sort(key=lambda p: p["weight"], reverse=True)
     return {"palette_pairs": pairs, "unmatched_a": unmatched_a,
             "unmatched_b": unmatched_b, "avg_dE": avg}
 
@@ -368,10 +381,12 @@ def build_pack(a_path, b_path, grid=None, only=None,
     if "E6" in run:
         edge_shape = e6_edges(a, b, n)
 
-    # modality-driven silent skips (recorded, not run). E1 runs only when texty
-    # AND OCR was fed; E2 (spacing deltas) is a texty-only lane, not yet built.
+    # Recorded skips (not run) must not contradict the pack's contents: E1 is
+    # "skipped" iff no text diff was produced (OCR absent) — never when text_diff
+    # is present, whatever the modality. E2 (spacing deltas) is a texty-only lane,
+    # not yet built.
     skipped = []
-    if not (mod == "texty" and text_diff is not None):
+    if text_diff is None:
         skipped.append("E1")
     skipped.append("E2")
     skipped += [e for e in ALL_EXTRACTORS if e not in run]
@@ -384,8 +399,14 @@ def build_pack(a_path, b_path, grid=None, only=None,
             failures.append({"stage": "contact", "code": "contact_failed",
                              "retriable": False, "fix": str(e)[:120]})
 
+    # Honest about normalization: the extractors do NOT letterbox to a shared
+    # canvas — each independently resizes A and B to its own grid (a stretch, so
+    # coordinates are grid-relative, not original-space). Fine for same-aspect
+    # pairs; for differently-aspected pairs the comparability gate flags >2× and
+    # the judge is told. So report the two source sizes, not a fictional common one.
     pack = {
-        "meta": {"a": a_path, "b": b_path, "normalized": [a.width, a.height],
+        "meta": {"a": a_path, "b": b_path, "dims_a": [a.width, a.height],
+                 "dims_b": [b.width, b.height], "letterboxed": False,
                  "modality": mod, "comparable": comp,
                  "comparable_why": comp_why, "grid_n": n,
                  "skipped_extractors": sorted(set(skipped))},
@@ -530,9 +551,16 @@ def main():
                               "known": ALL_EXTRACTORS}), file=sys.stderr)
             return 2
 
-    pack = build_pack(args.a, args.b, grid=args.grid, only=only,
-                      ocr_a=args.ocr_a, ocr_b=args.ocr_b, contact_path=args.contact,
-                      force_modality=args.force_modality)
+    try:
+        pack = build_pack(args.a, args.b, grid=args.grid, only=only,
+                          ocr_a=args.ocr_a, ocr_b=args.ocr_b, contact_path=args.contact,
+                          force_modality=args.force_modality)
+    except (OSError, ValueError, TypeError) as e:
+        # a corrupt/unreadable image (or malformed input) → a clean JSON error a
+        # caller can act on, never a raw traceback on stdout
+        print(json.dumps({"error": "could not process images: %s" % str(e)[:160]}),
+              file=sys.stderr)
+        return 12
 
     # cache + slice-rerun delta: a full run seeds the cache; a --only rerun diffs
     # against it and returns just what changed — observation never costs a re-read.

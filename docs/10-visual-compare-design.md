@@ -178,18 +178,24 @@ diverges, judged against policy, never against a numeric threshold alone.
 ## 5 · Output schema (the contract both repos build against)
 
 ```json
-// evidence-pack.json  (L1, lm)
-{ "meta": {"a": "...", "b": "...", "normalized": [800,600], "modality": "iconlike",
-           "comparable": "good|poor", "skipped_extractors": ["E1","E2"]},
+// evidence-pack.json  (L1, lm) — as shipped
+{ "meta": {"a": "...", "b": "...", "dims_a": [256,256], "dims_b": [256,256],
+           "letterboxed": false, "modality": "iconlike", "comparable": "good|poor",
+           "comparable_why": null, "grid_n": 8, "skipped_extractors": ["E1","E2"]},
   "scores": {"dhash": 12, "ahash": 9, "similarity": "close",
              "grid_delta_pct": 14.2, "palette_delta_avg": 6.1},
-  "text_diff":   {"removed": [...], "added": [...], "moved": [...]},        // texty
-  "spacing":     {"pairs": [{"text": "...", "dx_pct": 1.2, "dy_pct": -3.0}],
-                  "rhythm": {"a": [24,24,32], "b": [24,31,31], "drift": "..."}},
+  "text_diff":   {"removed": [...], "added": [...], "moved": [...]},        // when OCR fed
+  "text_summary": "REMOVED ...",                                           // human string for the VLM
   "color":       {"palette_pairs": [{"a": "#2563eb", "b": "#1d4ed8", "dE": 9.1,
-                  "word": "noticeable"}], "element_samples": [...]},
-  "grid_heat":   {"n": 16, "top_cells": [{"cell": [12,3], "dE": 31.5}]},
-  "edge_shape":  {"top_cells": [{"cell": [3,3], "density_a": 0.42, "density_b": 0.18}]},
+                  "word": "noticeable", "weight": 0.31}],                  // weight = A-side area share
+                  "unmatched_a": [...], "unmatched_b": [...], "avg_dE": 6.1},
+  "grid_heat":   {"n": 16, "top_cells": [{"cell": [12,3], "dE": 31.5}], "hot_cell_pct": 14.2, "mean_dE": 8.0},
+  "heatmap_ascii": "...",
+  "edge_shape":  {"n": 16, "top_cells": [{"cell": [3,3], "density_a": 0.42, "density_b": 0.18, "delta": 0.24}], "hot_cell_pct": 6.0},
+  "cost":        {"wall_ms": 8280, "extractors_ms": 9, "model_calls": [{"seat":"local-read","model":"...","ms":8271}]},
+  "failures":    [{"stage":"vlm","code":"vlm_unavailable","retriable":true,"fix":"..."}],
+  "next":        [{"reason":"...","cmd":"see diff a b --grid 32"}],         // paste-ready nudges
+  "params_hash": "2fa50a1b980f5c89",
   "artifact": ".../outputs/see/<ts>-diff-.../" }
 
 // verdict.json  (L2, gcc)
@@ -338,3 +344,36 @@ shaped by one manual round-trip, not guessed).
 - The judge is as good as native vision + policy: it will catch what's worth
   fixing, not everything a trained human eye feels. That gap is accepted by the
   imitation doctrine, and F-pair calibration keeps it visible.
+
+## 9 · L1 as shipped — built vs deferred (honest inventory)
+
+Surfaced by an adversarial validation pass; recorded so nobody mistakes the
+design's ambition for the current code. Built and battery-green: E0 (modality
+probe + comparability gate), E1 (text/pos diff from OCR), E3 (palette/ΔE,
+**population-weighted** so a re-encode can't fabricate a divergence — the F3b
+guard), E4, E5, E6, contact sheet, slice-rerun cache, `next:` nudges, the
+compare-history journal, and soft-failure handling (a down/failed VLM or absent
+mac-ocr still ships the pack with an honest `failures` entry).
+
+Deliberately **deferred** (the design describes them; the code does not yet do
+them — do not assume they exist):
+
+- **E0 letterboxing.** No shared normalized canvas; each extractor stretch-resizes
+  A and B to its own grid, so cell coords are grid-relative, not original-space.
+  Fine for same-aspect pairs; the comparability gate catches >2× aspect mismatch.
+  `meta.letterboxed:false` and `dims_a`/`dims_b` say so. Reflow (U7) fidelity waits
+  on real letterboxing.
+- **E2 spacing/alignment deltas** — unbuilt (texty-only lane).
+- **E3 texty per-element fg/bg sampling** (`element_samples`) — only the iconlike
+  grid-cell-mean path exists; the per-text-fragment color sampling that U1 wants is
+  not built. E3 currently reports the global palette match, not per-element color.
+- **E1 numeric position deltas** — `moved` carries 3×3 grid labels, not raw
+  normalized coordinates yet.
+- **Telemetry (§5.5) — partial.** `failures` emits `vlm_unavailable` + `ocr_missing`
+  and `cost.model_calls` records the VLM seat, but token counts are not captured and
+  there is no auto-retry (extractor or VLM). The taxonomy's other codes are defined,
+  not yet wired.
+
+These are Phase-B-onward or calibration-time items; the fabrication guard, the
+modality adaptivity, and the $0/model-independent contract — the load-bearing
+claims — are the ones that hold today.

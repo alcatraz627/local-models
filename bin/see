@@ -33,6 +33,8 @@ GLOW=false
 CROP=""
 REGION=""
 EVIDENCE=""        # diff mode: the vis-compare evidence pack JSON (empty otherwise)
+VLM_FAILED=false   # diff mode: the VLM prose read was skipped/failed — pack still ships
+OCR_MISSING=false  # diff mode: mac-ocr absent — E1 text lane skipped, recorded as a failure
 ONLY=""            # diff --only E5,E6 → slice rerun (no model), returns the delta
 GRID=""            # diff --grid N → override the grid resolution (4–64)
 positionals=()
@@ -49,7 +51,7 @@ show_help() {
   _cmd 'see --menubar ["q"]'      'capture the live macOS menu-bar strip, then read it (implies --ui)'
   _cmd 'see <image> --ui --json'  'UI mode as a schema-constrained object in .data (regions/elements/…)'
   _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
-  _cmd 'see diff <A> <B> ["focus"]' 'compare two images: $0 evidence pack (text/color/hash/shape) + judged read'
+  _cmd 'see diff <A> <B> ["focus"]' 'compare two images: deterministic evidence pack (text/color/hash/shape) + judged read'
   _cmd 'see diff <A> <B> --only E5' 'slice rerun of one extractor — returns the delta, no model call'
   _cmd 'see more ["q"] [flags]'   'follow-up read of the LAST image (from its artifact copy)'
   _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
@@ -305,7 +307,13 @@ if $OCR; then
   MODEL="apple-vision"
 else
 # ── model path (everything below to the matching fi is skipped under --ocr) ──
-ollama_up || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
+# For a diff the L1 evidence pack is $0 and model-independent, so a down server
+# must NOT abort it — it only skips the optional VLM prose. Every other mode still
+# hard-fails, since without the model they have no output at all.
+if ! ollama_up; then
+  $DIFF || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
+  VLM_FAILED=true
+fi
 
 # Don't disturb the warm pin / an active lease: keep_alive is last-writer-wins
 # per request (the _lib.sh contract every API caller must honor) — resident
@@ -332,6 +340,8 @@ if $DIFF; then
   if command -v mac-ocr >/dev/null 2>&1; then
     mac-ocr --format jsonl "$IMG"   > "$SEE_TMP/a.jsonl" 2>/dev/null || true
     mac-ocr --format jsonl "$IMG_B" > "$SEE_TMP/b.jsonl" 2>/dev/null || true
+  else
+    OCR_MISSING=true
   fi
   set +e
   # a full run seeds the content-addressed cache so later --only reruns can diff
@@ -446,6 +456,11 @@ fi
 # (Keep apostrophes out of the PY block below — bash 3.2 misparses quotes in
 # heredocs inside $(...).)
 t0=$(python3 -c 'import time; print(int(time.time()*1000))')
+if $VLM_FAILED; then
+  # ollama was unreachable at the gate — skip the read, keep the pack (diff only)
+  TEXT="(visual read skipped: ollama unreachable — the deterministic evidence pack below is complete)"
+  rc=0
+else
 set +e
 TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" "$FMT" "${IMG_B:-}" 2>&1 <<'PY'
 import sys, json, base64, urllib.request, urllib.error
@@ -481,9 +496,17 @@ except OSError as e:
 PY
 )"; rc=$?
 set -e
+fi
 if [ "$rc" -ne 0 ]; then
-  [ "$rc" -eq 11 ] && emit_error model_missing "vision model '$MODEL' not installed — pull it: ollama pull $MODEL" 11
-  emit_error model_error "${TEXT:-vision request failed}" 10
+  if $DIFF; then
+    # soft for diff: a slow/cold model must not discard the $0 pack already computed
+    VLM_FAILED=true
+    TEXT="(visual read failed — the deterministic evidence pack below is complete)"
+    rc=0
+  else
+    [ "$rc" -eq 11 ] && emit_error model_missing "vision model '$MODEL' not installed — pull it: ollama pull $MODEL" 11
+    emit_error model_error "${TEXT:-vision request failed}" 10
+  fi
 fi
 [ -n "$TEXT" ] || emit_error model_error "no content from the model" 10
 fi
@@ -495,10 +518,17 @@ end=$(python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo
 ms=$(( end - t0 ))
 
 # Fold the VLM read into the pack's cost block so the pack is self-complete for
-# the self-audit stream (extractors + the one model seat this run spent).
+# the self-audit stream. On a soft VLM failure, record a failure entry instead of
+# a model call — the pack ships either way, honest about what it cost and lacks.
 if $DIFF && [ -n "$EVIDENCE" ]; then
-  EVIDENCE="$(printf '%s' "$EVIDENCE" | jq -c --arg m "$MODEL" --argjson vms "$ms" \
-    '.cost.model_calls = [{seat:"local-read", model:$m, ms:$vms}]
+  _vf=false; $VLM_FAILED && _vf=true
+  _om=false; $OCR_MISSING && _om=true
+  EVIDENCE="$(printf '%s' "$EVIDENCE" | jq -c --arg m "$MODEL" --argjson vms "$ms" --argjson vf "$_vf" --argjson om "$_om" \
+    'if $vf then (.failures += [{stage:"vlm", code:"vlm_unavailable", retriable:true,
+                                 fix:"start ollama, or ignore — the evidence layer is model-independent"}])
+     else (.cost.model_calls = [{seat:"local-read", model:$m, ms:$vms}]) end
+     | (if $om then (.failures += [{stage:"E1", code:"ocr_missing", retriable:true,
+                                    fix:"npm install -g mac-ocr"}]) else . end)
      | .cost.wall_ms = ((.cost.extractors_ms // 0) + $vms)' 2>/dev/null || printf '%s' "$EVIDENCE")"
 fi
 
