@@ -5,3 +5,4 @@ logs/
 _*.claude.md
 .claude/*
 !.claude/output/
+probe/runs/

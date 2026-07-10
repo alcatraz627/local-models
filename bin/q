@@ -23,6 +23,21 @@ source "$DIR/config.sh"
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"
 
+# `q intents` — list the registry (the live source of truth for intents). Defined
+# early because the subcommand dispatch runs before the per-call intent helpers.
+list_intents() {
+  local d="$DIR/intents" f n s
+  _sec INTENTS
+  for f in "$d"/*.toml; do
+    [ -f "$f" ] || continue
+    n=$(yq -p toml -r '.name // ""' "$f" 2>/dev/null)
+    s=$(yq -p toml -r '.summary // ""' "$f" 2>/dev/null)
+    [ "$(yq -p toml -r '.needs_ctx // false' "$f" 2>/dev/null)" = true ] && n="$n *"
+    _opt "$n" "$s"
+  done
+  printf '  %s* needs a document (--ctx/--file/stdin); add one by dropping a .toml in intents/%s\n' "$Dm" "$Rs"
+}
+
 show_help() {
   printf '%s%sq%s %s— quick local LLM companion (macOS / Apple Silicon)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
@@ -32,6 +47,7 @@ show_help() {
   _cmd 'q on | off | status'    'Tier W warm toggle (= warm)'
   _cmd 'q history [N|--json]'   'recent queries, numbered (default 15)'
   _cmd 'q show N'               'full prompt + response of entry N'
+  _cmd 'q intents'              'list available intents (the registry)'
   _sec EXAMPLES
   _ex 'q "how do I check disk usage"'        '# terse answer'
   _ex 'q -c "and sorted by size?"'           '# follow-up with context'
@@ -53,23 +69,15 @@ show_help() {
   _opt '--raw'          'no system prompt (bare model)'
   _opt '--json'         'machine mode: one JSON object on stdout, no ANSI'
   _opt '--stream-json'  'machine mode: NDJSON chunk/done/error lines'
+  _opt '--format FILE'  'constrain output to a JSON schema (with --json: adds parsed .data)'
+  _opt '--glow'         'render the reply through glow (buffers output; TTY-only, no-op without glow)'
   _opt '--ctx, --file FILE | -' 'context document from a file or stdin (- = stdin)'
   _opt '--ctx-name S'   "the document's display name (framing hint)"
   _opt '--max-ctx N'    'truncate context to N chars (default 16000)'
   _opt '--timeout S'    'wall-clock cap; structured timeout error after'
   _opt '--intent X'     'intent as a flag (same set as the positional token)'
   _opt '-h, --help'     'show this help'
-  _sec INTENTS
-  _opt 'ask  (default)' 'direct answer, <=2 sentences'
-  _opt 'cmd'            'a single macOS shell command, nothing else'
-  _opt 'title'          'a 2-5 word title (tab titles, fire-and-forget)'
-  _opt 'commit'         'a git commit message (pipe the diff in)'
-  _opt 'summarize'      'TL;DR of the context document, length-adaptive'
-  _opt 'explain-code'   'what the code does + flags dangerous bits'
-  _opt 'describe-data'  'schema + notable observations of tabular data'
-  _opt 'qa'             'answer grounded ONLY in the context document'
-  printf '  %sthese four REQUIRE a document via --ctx/--file or stdin — a path%s\n' "$Dm" "$Rs"
-  printf '  %snamed in the prompt is just text and will be refused (ctx_required).%s\n' "$Dm" "$Rs"
+  list_intents   # the live registry — same source as `q intents`, never drifts
   _sec DEFAULTS
   printf '  %smacOS/Apple-Silicon assumed; Linux only if you say "linux server/container".%s\n' "$Dm" "$Rs"
   printf '  %sthinking off · deterministic (temp 0) · never asks · logged to logs/q-history.jsonl%s\n' "$Dm" "$Rs"
@@ -100,28 +108,25 @@ case "${1:-}" in
                          fi
                          show_history "${1:-15}"; exit 0 ;;
   show)                  shift; show_entry "${1:-}"; exit 0 ;;
+  intents)               list_intents; exit 0 ;;
   on|off|status|restart) exec "$DIR/bin/warm" "$@" ;;
 esac
 
-# Size-tier aliases → real model names. Any other -m value passes through
-# literally, so `q -m llama3.2` still works. Big/code load on demand (latency OK).
-# Note: the words small/big/code are reserved — a model literally named one of
-# them can't be reached by -m (use the full name:tag, which won't collide).
-resolve_tier() {
-  case "$1" in
-    small) echo "$WARM_MODEL" ;;
-    big)   echo "${BIG_MODEL:-gemma4:26b}" ;;
-    code)  echo "${CODE_MODEL:-qwen3.6:35b-a3b}" ;;
-    *)     echo "$1" ;;
-  esac
-}
+# resolve_tier (small/big/code → real names) lives in _lib.sh — shared with lib/fleet.
+
+# Intents are data: intents/<name>.toml = {name, summary, needs_ctx, system_prompt}.
+# Adding an intent is dropping a file — bin/q reads the registry, nothing is hardcoded.
+INTENT_DIR="$DIR/intents"
+intent_exists()    { [ -f "$INTENT_DIR/$1.toml" ]; }
+intent_sys()       { yq -p toml -r '.system_prompt // ""' "$INTENT_DIR/$1.toml" 2>/dev/null; }
+intent_needs_ctx() { [ "$(yq -p toml -r '.needs_ctx // false' "$INTENT_DIR/$1.toml" 2>/dev/null)" = true ]; }
 
 MODEL="$WARM_MODEL"
 THINK=false
 INTENT=ask
 RAW=false
 MODE=text          # text (human) | json (one object) | stream (NDJSON)
-CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0
+CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0; FORMAT_FILE=""; GLOW=false
 CONT=false; CONT_N=""; USER_MODEL=false; USER_INTENT=false
 STATS=true         # gray token line at the end (text mode); --no-stats mutes
 
@@ -136,6 +141,8 @@ while [ $# -gt 0 ]; do
     --stream-json) MODE=stream; shift ;;
     --big)   MODEL="$(resolve_tier big)";  USER_MODEL=true; shift ;;
     --code)  MODEL="$(resolve_tier code)"; USER_MODEL=true; shift ;;
+    --format)   FORMAT_FILE="$2"; shift 2 ;;
+    --glow)     GLOW=true; shift ;;
     --ctx|--file) CTX_FILE="$2"; shift 2 ;;
     --ctx-name) CTX_NAME="$2"; shift 2 ;;
     --max-ctx)  MAX_CTX="$2"; shift 2 ;;
@@ -150,12 +157,9 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# A leading intent token selects the intent; the rest is the query.
-if [ "${#positionals[@]}" -gt 0 ]; then
-  case "${positionals[0]}" in
-    cmd|ask|title|commit|summarize|explain-code|describe-data|qa)
-      INTENT="${positionals[0]}"; USER_INTENT=true; positionals=("${positionals[@]:1}") ;;
-  esac
+# A leading intent token selects the intent (if it's a registered intent); rest is the query.
+if [ "${#positionals[@]}" -gt 0 ] && intent_exists "${positionals[0]}"; then
+  INTENT="${positionals[0]}"; USER_INTENT=true; positionals=("${positionals[@]:1}")
 fi
 QUERY="${positionals[*]}"
 
@@ -178,6 +182,16 @@ trap 'emit_error cancelled "cancelled by client" 130' TERM INT
 # error, not a bash arithmetic stderr leak or an uncaught python ValueError.
 [[ "$MAX_CTX" =~ ^[0-9]+$ ]] || emit_error invalid_args "--max-ctx must be a non-negative integer, got '$MAX_CTX'" 2
 [[ "$TIMEOUT" =~ ^[0-9]+([.][0-9]+)?$ ]] || emit_error invalid_args "--timeout must be seconds (number), got '$TIMEOUT'" 2
+
+# Constrained decoding: --format FILE passes a JSON schema to Ollama's `format`
+# field, so the model's output IS schema-valid JSON. In --json mode the envelope
+# gains a `data` field with that output pre-parsed.
+FORMAT=""
+if [ -n "$FORMAT_FILE" ]; then
+  [ -f "$FORMAT_FILE" ] || emit_error format_unreadable "no such schema file: $FORMAT_FILE" 12
+  FORMAT="$(jq -c . "$FORMAT_FILE" 2>/dev/null)" \
+    || emit_error format_invalid "schema is not valid JSON: $FORMAT_FILE" 12
+fi
 
 # Context document: --ctx - (stdin) · --ctx/--file FILE · or bare non-TTY stdin.
 # Rich formats (PDF, Word, RTF) are extracted to text LOCALLY — no cloud, ever —
@@ -240,18 +254,15 @@ fi
 # naming a file IN THE PROMPT — which is just text the model can't open — and
 # getting a confident "I can't access your filesystem" instead of an answer.
 # Require real context, and if they named an existing file, point at the fix.
-case "$INTENT" in
-  summarize|describe-data|explain-code|qa)
-    if [ -z "$CTX" ]; then
-      hint="'$INTENT' needs a document — pass the file with --ctx <path> (or pipe it in)."
-      set -f
-      for w in $QUERY; do
-        [ -f "$w" ] && { hint="$hint You named '$w' in the prompt (that's just text) — try: q $INTENT --ctx '$w'"; break; }
-      done
-      set +f
-      emit_error ctx_required "$hint" 2
-    fi ;;
-esac
+if intent_needs_ctx "$INTENT" && [ -z "$CTX" ]; then
+  hint="'$INTENT' needs a document — pass the file with --ctx <path> (or pipe it in)."
+  set -f
+  for w in $QUERY; do
+    [ -f "$w" ] && { hint="$hint You named '$w' in the prompt (that's just text) — try: q $INTENT --ctx '$w'"; break; }
+  done
+  set +f
+  emit_error ctx_required "$hint" 2
+fi
 
 if [ -z "$QUERY" ]; then
   # Bare `q` is a human asking for help; in machine mode an empty query is a
@@ -280,16 +291,9 @@ if $CONT && [ -f "$LOG" ]; then
   fi
 fi
 
-case "$INTENT" in
-  cmd) SYS="You are a macOS command assistant (Apple Silicon, BSD userland, zsh) — the permanent default. Reply with ONE shell command only: no explanation, no markdown fences, no clarifying questions. Never ask for clarification; assume the most likely intent and answer. Use macOS/BSD tools and flags ONLY (never GNU-only options like --sort or /proc) UNLESS I explicitly mention a Linux server or container, then use Linux idioms. macOS idioms: ports -> lsof -i :PORT ; memory-sorted procs -> ps -axo pid,rss,comm -m | head ; CPU add -r." ;;
-  ask) SYS="Answer in at most 2 short sentences. Be direct, no preamble, never ask clarifying questions — assume the most likely intent and answer. Default environment is macOS on Apple Silicon (zsh); only assume Linux if I explicitly mention a Linux server or container. Don't mention other operating systems unless asked." ;;
-  title) SYS="Output a single 2-5 word title in Title Case summarizing the input. No quotes, no trailing punctuation, no preamble — just the title." ;;
-  commit) SYS="You write git commit messages from diffs. Output ONLY the commit message — no markdown fences, no preamble, no commentary. Format: an imperative present-tense subject line under 72 characters describing the why/intent of the change (not a file list); if the change is multi-faceted, add a blank line then 2-4 terse body bullets starting with '- '. Never invent changes not visible in the diff." ;;
-  summarize) SYS="Summarize the provided document. Lead with one sentence saying what the document IS, then the key points. Adapt length to the input: 2-3 sentences for short documents, a short bullet list for long ones. No preamble, no meta-commentary about summarizing." ;;
-  explain-code) SYS="Explain what the provided code or script does. Start with a one-sentence purpose a non-programmer could follow, then the key behaviors in order. EXPLICITLY call out anything dangerous or surprising: deletions (rm/trash), curl-pipe-to-shell, sudo, credential or env access, network calls, writes outside its own directory. Be direct, no preamble." ;;
-  describe-data) SYS="Describe the provided tabular or structured data: (1) the schema — columns/fields and apparent types, (2) approximate size, (3) 2-4 notable observations (ranges, outliers, missing values, oddities). Be concrete and terse, no preamble." ;;
-  qa) SYS="Answer the user's question using ONLY the provided document as ground truth. If the document does not contain the answer, say exactly that — never fill gaps from general knowledge. Be direct, at most 4 sentences unless the question demands structure." ;;
-esac
+# System prompt comes from the registry (intents/<name>.toml). Unknown intent → no
+# system prompt (same as the old case fall-through). --raw blanks it regardless.
+if intent_exists "$INTENT"; then SYS="$(intent_sys "$INTENT")"; else SYS=""; fi
 $RAW && SYS=""
 
 if ! ollama_up; then
@@ -302,15 +306,33 @@ fi
 # just for this call and let it unload (0).
 if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
 
+# Lease hint: repeated cold loads of a big model deserve a nudge toward
+# `warm on` — suggestion only, residency stays the human's call. Bash decides
+# eligibility (cold + not the companion) so the warm hot path never pays for
+# it; python counts recent same-model calls and prints the one-liner.
+LEASE_HINT=""
+if [ "$MODE" = text ] && [ "$KEEP" = 0 ] && [ "$MODEL" != "$WARM_MODEL" ]; then
+  case "$MODEL" in
+    "${CODE_MODEL:-qwen3.6:35b-a3b}") LEASE_HINT="warm on code" ;;
+    "${BIG_MODEL:-gemma4:26b}")       LEASE_HINT="warm on big" ;;
+    *)                                LEASE_HINT="warm on $MODEL" ;;
+  esac
+fi
+
+# --glow renders the finished reply as markdown instead of streaming it. Decided
+# here (not in python) so PATH and TTY are probed once; machine modes ignore it.
+GLOW_OK=false
+if $GLOW && [ "$MODE" = text ] && [ -t 1 ] && command -v glow >/dev/null 2>&1; then GLOW_OK=true; fi
+
 # Deterministic (temperature 0) + history logging. Stream token-by-token for low
 # perceived latency (text mode) or as NDJSON frames (stream mode).
 # exec so python IS this process: a GUI host's SIGTERM must reach the signal
 # handlers (cancelled/130), not kill a bash wrapper around them (143).
 mkdir -p "$DIR/logs"
-exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" <<'PY'
+exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" "$GLOW_OK" "$LEASE_HINT" <<'PY'
 import sys, json, time, signal, urllib.request, urllib.error
 (model, sysp, query, think, keep, intent, logf,
- histjson, cid, mode, timeout, trunc, host, stats) = sys.argv[1:15]
+ histjson, cid, mode, timeout, trunc, host, stats, fmt, glow, lease_hint) = sys.argv[1:18]
 truncated = trunc == "true"
 
 def emit_err(code, msg, rc):
@@ -321,6 +343,14 @@ def emit_err(code, msg, rc):
     else:
         sys.stderr.write("q: %s\n" % msg)
     sys.stdout.flush()
+    try:  # failures are history too — the feedback sink mines these; never block the exit
+        ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        with open(logf, "a") as f:
+            f.write(json.dumps({"ts": ts, "cid": cid or ts, "intent": intent, "model": model,
+                                "think": think == "true", "prompt": query,
+                                "response": "[error: %s]" % code, "error": code, "ms": 0}) + "\n")
+    except Exception:
+        pass
     sys.exit(rc)
 
 # Cancellation contract: the GUI host SIGTERMs us when the user closes the
@@ -344,12 +374,15 @@ picked.reverse()
 prior = [m for ex in picked for m in
          ({"role": "user", "content": ex["p"]}, {"role": "assistant", "content": ex["r"]})]
 msgs = ([{"role": "system", "content": sysp}] if sysp else []) + prior + [{"role": "user", "content": query}]
-body = json.dumps({
+payload = {
     "model": model, "messages": msgs,
     "think": think == "true", "stream": True,
     "keep_alive": int(keep),
     "options": {"temperature": 0},
-}).encode()
+}
+if fmt:
+    payload["format"] = json.loads(fmt)
+body = json.dumps(payload).encode()
 req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
                             headers={"Content-Type": "application/json"})
 t0 = time.time(); parts = []
@@ -379,7 +412,7 @@ try:
                 if in_thinking:
                     sys.stderr.write(rs + "\n"); sys.stderr.flush(); in_thinking = False
                 parts.append(chunk)
-                if mode == "text":
+                if mode == "text" and glow != "true":  # glow buffers; render after the loop
                     sys.stdout.write(chunk); sys.stdout.flush()
                 elif mode == "stream":
                     sys.stdout.write(json.dumps({"t": "chunk", "text": chunk}) + "\n")
@@ -396,19 +429,36 @@ if in_thinking:
     sys.stderr.write(rs + "\n"); sys.stderr.flush()
 ms = int((time.time() - t0) * 1000)
 text = "".join(parts).strip()
+try:  # the JSONL line this call will occupy → `q show N` re-pulls it later, no lookup
+    n_entry = sum(1 for _ in open(logf)) + 1
+except Exception:
+    n_entry = 1
 if mode == "text":
-    sys.stdout.write("\n")
+    if glow == "true":
+        import subprocess
+        try:  # glow died mid-render → the reply must still reach the user plain
+            subprocess.run(["glow", "-"], input=(text + "\n").encode(), check=False)
+        except Exception:
+            sys.stdout.write(text + "\n")
+    else:
+        sys.stdout.write("\n")
     # Gray token-spend line on stderr — like the --think trace, TTY-only, muteable.
     if stats == "true" and sys.stderr.isatty():
         tps = (tok_out / (ms / 1000)) if ms else 0
-        sys.stderr.write("%s· %s in / %s out · %d tok/s · %.1fs%s\n"
-                         % (dim, format(tok_in, ","), format(tok_out, ","), tps, ms / 1000, rs))
+        sys.stderr.write("%s· %s in / %s out · %d tok/s · %.1fs · q show %d%s\n"
+                         % (dim, format(tok_in, ","), format(tok_out, ","), tps, ms / 1000, n_entry, rs))
 elif mode == "stream":
     sys.stdout.write(json.dumps({"t": "done", "model": model, "ms": ms,
                                  "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}) + "\n")
 elif mode == "json":
-    sys.stdout.write(json.dumps({"ok": True, "text": text, "model": model, "ms": ms,
-                                 "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}) + "\n")
+    envelope = {"ok": True, "text": text, "model": model, "ms": ms,
+                "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}
+    if fmt:  # constrained output: hand consumers the parsed object, not a string to re-parse
+        try:
+            envelope["data"] = json.loads(text)
+        except ValueError:
+            envelope["data"] = None
+    sys.stdout.write(json.dumps(envelope) + "\n")
 sys.stdout.flush()
 try:  # history is best-effort — never break the answer on a log failure
     ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -421,4 +471,26 @@ try:  # history is best-effort — never break the answer on a log failure
         }) + "\n")
 except Exception:
     pass
+# The lease nudge: 3+ cold loads of this model inside 5 minutes says the user
+# is in a session with it — suggest the bounded lease. Counts the log just
+# written (so this call is included); never breaks the answer.
+if lease_hint and mode == "text" and stats == "true" and sys.stderr.isatty():
+    try:
+        import calendar
+        cutoff, n = time.time() - 300, 0
+        with open(logf) as f:
+            for ln in f.readlines()[-50:]:
+                try:
+                    e = json.loads(ln)
+                except ValueError:
+                    continue
+                if e.get("model") != model:
+                    continue
+                if calendar.timegm(time.strptime(e["ts"], "%Y-%m-%dT%H:%M:%SZ")) >= cutoff:
+                    n += 1
+        if n >= 3:
+            sys.stderr.write("%s· %d cold loads of %s in 5 min — lease it: %s%s\n"
+                             % (dim, n, model, lease_hint, rs))
+    except Exception:
+        pass
 PY

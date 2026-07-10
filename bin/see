@@ -1,0 +1,412 @@
+#!/usr/bin/env bash
+# see — local vision: read an image/screenshot into text with a local VLM.
+#
+# "The VLM parses, the agent reasons": pipe a picture in, get structured text out
+# that Claude (or you) can reason over. All local — the image never leaves the box.
+#
+#   see screenshot.png                  structured read (text verbatim, UI, layout, anomalies)
+#   see chart.png "what's the trend?"   answer a question grounded in the image
+#   see dash.png --ui                   UI mode: enumerated elements, layout, hierarchy, icons
+#   see ui.png --json                   machine mode: {ok,text,model,ms} for agents/GUIs
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/config.sh"
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"
+
+# A cold model-load via the ollama API can leave the terminal cursor hidden;
+# `see` doesn't emit cursor codes itself, but it guarantees the cursor is shown
+# again on exit (any path) so it never leaves the terminal in a bad state.
+# The same trap sweeps the run's temp dir (menubar captures, crop scratch) —
+# by then the artifact store has already copied what must survive.
+SEE_TMP=""
+trap '{ [ -t 1 ] && printf "\033[?25h"; [ -t 2 ] && printf "\033[?25h" >&2; } 2>/dev/null; [ -n "$SEE_TMP" ] && rm -rf "$SEE_TMP" 2>/dev/null; true' EXIT INT TERM
+
+MODEL="${VISION_MODEL:-gemma4:26b}"
+MODEL_SET=false
+MODE=text
+UI=false
+OCR=false
+MENUBAR=false
+GLOW=false
+CROP=""
+REGION=""
+positionals=()
+LOG="$DIR/logs/see-history.jsonl"
+ART_ROOT="$DIR/outputs/see"
+ART_KEEP=150   # newest artifact folders kept; older ones pruned each run
+UI_SCHEMA="$DIR/intents/ui-inventory.schema.json"
+
+show_help() {
+  printf '%s%ssee%s %s— read an image into text with a local vision model%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  _sec USAGE
+  _cmd 'see <image> ["question"]' 'describe an image, or answer a question about it'
+  _cmd 'see <image> --ui'         'UI mode: enumerated elements, layout, hierarchy, icons, patterns'
+  _cmd 'see --menubar ["q"]'      'capture the live macOS menu-bar strip, then read it (implies --ui)'
+  _cmd 'see <image> --ui --json'  'UI mode as a schema-constrained object in .data (regions/elements/…)'
+  _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
+  _cmd 'see more ["q"] [flags]'   'follow-up read of the LAST image (from its artifact copy)'
+  _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
+  _cmd 'see open [N]'             'print (and reveal, if TTY) the artifact folder of read N (default -1)'
+  _cmd 'see note [N] "text"'      'append a note to read N'\''s artifact folder (default -1 = latest)'
+  _sec EXAMPLES
+  _ex 'see ~/Desktop/shot.png'                 '# verbatim text + UI + layout'
+  _ex 'see chart.png "is it trending up?"'     '# grounded answer'
+  _ex 'see dashboard.png --ui'                 '# sectioned inventory of a website/app/widget UI'
+  _ex 'see shot.png --region left --ui'        '# crop first, then read — small crops read near-perfectly'
+  _ex 'see shot.png --crop 800x600+0+120 "?"'  '# exact pixel window (WxH+X+Y from top-left)'
+  _ex 'see more "what does the badge say?"'    '# drill into the image you just read'
+  _ex 'see --menubar "which app is focused?"'  '# grab + read the top strip (crop-first beats full-screen)'
+  _ex 'see panel.png --ui --json | jq .data'   '# structured elements array for an agent'
+  _sec OPTIONS
+  _opt '--ui'          'UI-inventory read for screenshots/mocks (KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE)'
+  _opt '--ocr'         'EXACT text via Apple Vision (no model, ~instant) — verbatim but unstructured; composes with --crop'
+  _opt '--menubar'     'screencapture the main-display top strip and --ui it (needs Screen Recording perm)'
+  _opt '--crop WxH+X+Y' 'read only this pixel window of the image (crop-then-read lifts recall)'
+  _opt '--region NAME' 'named crop: top|bottom (third) · left|right (half) · center (middle quarter)'
+  _opt '--json'        'one JSON object on stdout, no ANSI; with --ui adds parsed .data (schema-constrained)'
+  _opt '--glow'        'render the read through glow (TTY-only, no-op without glow)'
+  _opt '-m, --model M' "vision model (default: \$VISION_MODEL = $MODEL)"
+  _opt '-h, --help'    'this help'
+  _sec NOTES
+  printf '  %slocal-only · the image is never uploaded · model loads on demand, unloads after%s\n' "$Dm" "$Rs"
+  printf '  %severy read lands outputs/see/<ts>-<mode>-<img>/ (source copy + read.md + meta.json) — see open -1%s\n' "$Dm" "$Rs"
+  printf '  %s--menubar reads black while a fullscreen app is frontmost (macOS hides the menu bar then)%s\n' "$Dm" "$Rs"
+}
+
+emit_error() { # CODE MESSAGE EXIT
+  case "$MODE" in
+    json) jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}' ;;
+    *)    echo "see: $2" >&2 ;;
+  esac
+  exit "$3"
+}
+
+# History subcommands (same numbering contract as q: stable JSONL line numbers).
+case "${1:-}" in
+  history) jsonl_history "$LOG" "${2:-15}" \
+             '"\(.ts[11:19])  \(.model)  \(.ms)ms  \(.img)  \((.prompt // "describe") | gsub("\\s+"; " ") | .[0:40])"'
+           exit 0 ;;
+  show)    jsonl_entry "$LOG" "${2:-}" \
+             '"# see \(.img)  ·  \(.ts)  ·  \(.model)  ·  \(.ms)ms\n\n\(.response)"'
+           exit $? ;;
+  # `more` = re-target the LAST image without retyping its path. Prefers the
+  # artifact copy (survives temp cleanup — the original --menubar strip is long
+  # gone) over the original path. Remaining args pass through, so
+  # `see more --ui "q"` works exactly like a fresh invocation.
+  more)    shift
+           LAST="$(jsonl_entry "$LOG" -1 '(.artifact // "") + "\t" + .img' 2>/dev/null)" \
+             || { echo "see: no history yet" >&2; exit 12; }
+           ART_PREV="${LAST%%	*}"; ORIG_PREV="${LAST#*	}"
+           IMG_R=""
+           if [ -n "$ART_PREV" ]; then IMG_R="$(ls "$ART_PREV"/source.* 2>/dev/null | head -1)"; fi
+           [ -n "$IMG_R" ] || { [ -f "$ORIG_PREV" ] && IMG_R="$ORIG_PREV"; }
+           [ -n "$IMG_R" ] || { echo "see: last image is gone ($ORIG_PREV) and no artifact copy exists" >&2; exit 12; }
+           exec "$0" "$IMG_R" "$@" ;;
+  open)    ART="$(jsonl_entry "$LOG" "${2:--1}" '.artifact // empty')" || exit 1
+           { [ -n "$ART" ] && [ -d "$ART" ]; } \
+             || { echo "see: that read has no artifact folder (pre-artifact-store entry?)" >&2; exit 12; }
+           printf '%s\n' "$ART"
+           if [ -t 1 ] && command -v open >/dev/null 2>&1; then open "$ART"; fi
+           exit 0 ;;
+  note)    shift
+           N=-1; case "${1:-}" in -[0-9]*|[0-9]*) N="$1"; shift ;; esac
+           [ $# -gt 0 ] || { echo 'usage: see note [N] "text"' >&2; exit 2; }
+           ART="$(jsonl_entry "$LOG" "$N" '.artifact // empty')" || exit 1
+           { [ -n "$ART" ] && [ -d "$ART" ]; } \
+             || { echo "see: that read has no artifact folder to note into" >&2; exit 12; }
+           [ -f "$ART/notes.md" ] || printf '# notes\n\n' > "$ART/notes.md"
+           printf -- '- %s — %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$ART/notes.md"
+           echo "noted → $ART/notes.md"
+           exit 0 ;;
+esac
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --json)     MODE=json; shift ;;
+    --ui)       UI=true; shift ;;
+    --ocr)      OCR=true; shift ;;
+    --menubar)  MENUBAR=true; UI=true; shift ;;
+    --crop)     CROP="$2"; shift 2 ;;
+    --region)   REGION="$2"; shift 2 ;;
+    --glow)     GLOW=true; shift ;;
+    -m|--model) MODEL="$2"; MODEL_SET=true; shift 2 ;;
+    -h|--help)  show_help; exit 0 ;;
+    *)          positionals+=("$1"); shift ;;
+  esac
+done
+
+# --menubar: the "image" is a fresh capture of the main display's top strip, so
+# every positional is the (optional) question. Grab the whole display then crop
+# the strip with sips (always present, pixel-space — no retina point/pixel math,
+# no PIL dependency). A too-wide screencapture -R errors instead of clamping, so
+# capture-then-crop is the portable path. The temp file is cleaned on exit.
+if $MENUBAR; then
+  command -v screencapture >/dev/null 2>&1 || emit_error no_screencapture "screencapture not found (macOS only)" 12
+  [ -n "$CROP$REGION" ] && emit_error invalid_args "--menubar already crops the strip; drop --crop/--region" 2
+  SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
+  MB_DIR="$SEE_TMP"
+  MB_IMG="$MB_DIR/strip.png"
+  screencapture -x "$MB_DIR/full.png" 2>/dev/null
+  [ -s "$MB_DIR/full.png" ] || emit_error capture_failed "screencapture produced nothing — grant Screen Recording permission to your terminal" 12
+  read -r MB_W MB_H < <(sips -g pixelWidth -g pixelHeight "$MB_DIR/full.png" 2>/dev/null | awk '/pixel/{print $2}' | paste -sd' ' -)
+  # menu-bar height as ~4% of the display, floored/capped so it covers 1x, retina,
+  # and notch configs without dragging in much window content below.
+  MB_STRIP=$(( MB_H * 4 / 100 )); [ "$MB_STRIP" -lt 44 ] && MB_STRIP=44; [ "$MB_STRIP" -gt 100 ] && MB_STRIP=100
+  cp "$MB_DIR/full.png" "$MB_IMG"
+  sips -c "$MB_STRIP" "$MB_W" --cropOffset 0 0 "$MB_IMG" >/dev/null 2>&1 \
+    || emit_error crop_failed "sips could not crop the menu-bar strip" 12
+  positionals=("$MB_IMG" "${positionals[@]}")
+fi
+
+if [ "${#positionals[@]}" -eq 0 ]; then
+  [ "$MODE" = text ] && { show_help; exit 0; }
+  emit_error invalid_args "no image given" 2
+fi
+IMG="${positionals[0]}"; QUERY="${positionals[*]:1}"
+ORIG_IMG="$IMG"   # what the caller named — meta/history cite this, not the crop temp
+
+[ -f "$IMG" ] || emit_error img_unreadable "no such file: $IMG" 12
+case "$(file -b --mime-type "$IMG" 2>/dev/null)" in
+  image/*) : ;;
+  *) emit_error not_an_image "'$IMG' is not an image ($(file -b "$IMG" 2>/dev/null))" 12 ;;
+esac
+
+# ── Crop-then-read ──
+# The July-08 benchmark's strongest lesson: small crops read near-perfectly, so
+# cropping before reading lifts recall at $0. sips argument order (pinned
+# empirically 2026-07-09): -c takes HEIGHT WIDTH; --cropOffset takes offsetY
+# offsetX. The model reads the crop; the artifact store keeps it as source.
+CROP_DESC=""
+if [ -n "$CROP$REGION" ]; then
+  { [ -n "$CROP" ] && [ -n "$REGION" ]; } && emit_error invalid_args "pick one of --crop / --region" 2
+  read -r IW IH < <(sips -g pixelWidth -g pixelHeight "$IMG" 2>/dev/null | awk '/pixel/{print $2}' | paste -sd' ' -)
+  [ -n "$IW" ] && [ -n "$IH" ] || emit_error crop_failed "could not read image dimensions" 12
+  if [ -n "$REGION" ]; then
+    case "$REGION" in
+      top)    CW=$IW; CH=$((IH / 3)); CX=0; CY=0 ;;
+      bottom) CW=$IW; CH=$((IH / 3)); CX=0; CY=$((IH - IH / 3)) ;;
+      left)   CW=$((IW / 2)); CH=$IH; CX=0; CY=0 ;;
+      right)  CW=$((IW / 2)); CH=$IH; CX=$((IW - IW / 2)); CY=0 ;;
+      center) CW=$((IW / 2)); CH=$((IH / 2)); CX=$((IW / 4)); CY=$((IH / 4)) ;;
+      *) emit_error invalid_args "--region must be top|bottom|left|right|center, got '$REGION'" 2 ;;
+    esac
+  else
+    CW="${CROP%%x*}"; _rest="${CROP#*x}"
+    CH="${_rest%%+*}"; _rest="${_rest#*+}"
+    CX="${_rest%%+*}"; CY="${_rest#*+}"
+    for _v in "$CW" "$CH" "$CX" "$CY"; do
+      [[ "$_v" =~ ^[0-9]+$ ]] || emit_error invalid_args "--crop expects WxH+X+Y (pixels from top-left), got '$CROP'" 2
+    done
+    { [ "$CX" -lt "$IW" ] && [ "$CY" -lt "$IH" ]; } \
+      || emit_error invalid_args "--crop offset ($CX,$CY) is outside the ${IW}x${IH} image" 2
+    [ $((CX + CW)) -le "$IW" ] || CW=$((IW - CX))   # clamp to the image, don't error
+    [ $((CY + CH)) -le "$IH" ] || CH=$((IH - CY))
+  fi
+  { [ "$CW" -ge 1 ] && [ "$CH" -ge 1 ]; } || emit_error invalid_args "crop window is empty" 2
+  [ -n "$SEE_TMP" ] || SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
+  case "$IMG" in *.*) _ext="${IMG##*.}" ;; *) _ext=png ;; esac
+  CROP_IMG="$SEE_TMP/crop.$_ext"
+  cp -f "$IMG" "$CROP_IMG"
+  sips -c "$CH" "$CW" --cropOffset "$CY" "$CX" "$CROP_IMG" >/dev/null 2>&1 \
+    || emit_error crop_failed "sips could not crop ${CW}x${CH}+${CX}+${CY}" 12
+  CROP_DESC="${CW}x${CH}+${CX}+${CY}${REGION:+ ($REGION)}"
+  IMG="$CROP_IMG"
+fi
+
+# ── OCR fast path (--ocr): Apple Vision exact text, no model, no server ──
+# The complement to the VLM read: verbatim-but-unstructured vs structured-but-
+# good-verify. Composes with --crop/--region (crop-then-OCR reads tiny regions
+# exactly). Query text is ignored — OCR extracts, it doesn't answer.
+if $OCR; then
+  $UI && ! $MENUBAR && emit_error invalid_args "--ocr is exact extraction, --ui is a structured model read — pick one (or run both as two calls)" 2
+  command -v mac-ocr >/dev/null 2>&1 || emit_error ocr_missing "mac-ocr not installed — npm install -g mac-ocr" 12
+  [ -n "$QUERY" ] && [ "$MODE" = text ] && echo "see: note — --ocr ignores the question; extracting text only" >&2
+  t0=$(python3 -c 'import time; print(int(time.time()*1000))')
+  set +e
+  TEXT="$(mac-ocr "$IMG" 2>&1)"
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] && emit_error ocr_failed "${TEXT:-Apple Vision OCR failed}" 10
+  [ -n "$TEXT" ] || TEXT="(no text recognized)"
+  MODEL="apple-vision"
+else
+# ── model path (everything below to the matching fi is skipped under --ocr) ──
+ollama_up || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
+
+# Don't disturb the warm pin / an active lease: keep_alive is last-writer-wins
+# per request (the _lib.sh contract every API caller must honor) — resident
+# stays resident (-1), cold loads just for this call (0). Matters for --ui
+# batches: a `warm on big 30m` lease survives each read instead of being
+# evicted by a hardcoded keep_alive:0.
+if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
+
+# Constrained-decoding schema, set only for --ui --json (mirrors q's --format):
+# passed to Ollama's `format` field so the model's output IS schema-valid JSON,
+# handed back pre-parsed in the envelope's .data.
+FMT=""
+
+if $UI; then
+  # The UI-inventory lens — the one specialized mode the vision-lenses review
+  # (docs/08, Outcome) sanctioned once a real caller existed. Sections are fixed
+  # so downstream agents can parse by heading. Deliberately NO pixel/spacing
+  # estimates: the June audit showed even theme reads are unreliable, and
+  # requesting measurements invites confident fabrication.
+  #
+  # The rubric is the USER message, not the system prompt: gemma has no true
+  # system role (ollama folds system into the first user turn), and under that
+  # fold gemma4:26b deterministically emitted an early stop ~200 tokens in
+  # (reproduced twice, 2026-07-08). As a plain user message the same rubric
+  # runs to natural completion. Routed to the big tier by default (see
+  # config.sh UI_VISION_MODEL) — measured better at structure/state.
+  $MODEL_SET || MODEL="${UI_VISION_MODEL:-$MODEL}"
+  SYS="You are a precise UI analyst reading a computer-interface screenshot for a downstream agent. Report only what is visibly present."
+  if [ "$MODE" = json ]; then
+    # Structured variant: same discipline, JSON shape. Ollama enforces the schema.
+    [ -f "$UI_SCHEMA" ] || emit_error format_unreadable "UI schema missing: $UI_SCHEMA" 12
+    FMT="$(jq -c . "$UI_SCHEMA" 2>/dev/null)" || emit_error format_invalid "UI schema is not valid JSON: $UI_SCHEMA" 12
+    USER="Analyze this interface screenshot (website, app window, dashboard, menu-bar widget, dropdown, or mock) and return a JSON object describing it. Scan every edge — title bars, filter rows, status footers all count. Fields: kind (one line), theme (light/dark/unsure), regions (each with name, position, and an elements array of {type, text VERBATIM including counts, state}), icons (each {where, shape, likely_meaning}), palette (3-5 dominant colors in plain words), accent (the accent color and what carries it). Enumerate ONLY what is visibly present — never invent an element, value, or state; use \"[unsure]\" for anything not clearly legible; check which element actually carries the highlight before marking it selected. For long repeated lists, include the first few rows then one element whose text is the on-screen total (e.g. \"… showing 457\")."
+  else
+    USER="Analyze this interface screenshot (website, app window, dashboard, menu-bar widget, dropdown, or mock). Scan systematically before writing: top edge, left edge, main area, right edge, bottom edge — window title bars, filter rows, and status footers all count. Output EXACTLY these seven markdown sections, in order, each heading bare (never copy instruction text into the output):
+## KIND
+One line: what this interface is and its apparent purpose.
+## LAYOUT
+Each major region (title bar, header, nav, sidebar, main, panel, footer, overlay…) with its position and rough share of the frame, then the natural reading order.
+## HIERARCHY
+The visual hierarchy as an indented tree: what dominates, what nests under what, and what creates each level of emphasis (size, weight, color, position).
+## ELEMENTS
+A numbered enumeration grouped by region, ONE element per line: element type (button, tab, link, input, toggle, chip, card, stat tile, list row, avatar, chart, badge…), its visible text VERBATIM in quotes including any counts or numbers, and visible state (selected, disabled, active, checked…). For long repeated lists, enumerate the first few rows verbatim then summarize the rest with the total count shown on screen.
+## ICONS
+Each distinct icon or glyph: where it sits, its shape in plain words, and its likely meaning qualified as (likely). Minimal/SVG icons: best-effort shape description; pixel accuracy is not expected.
+## PATTERNS
+Repeated formatting conventions: e.g. cards: icon + title + big value + delta, or rows: icon / text / badge / percent / age — alignment and grouping rules the design reuses.
+## PALETTE
+Coarse only: light or dark theme (as a guess), the 3-5 dominant colors in plain words, and the accent color plus what carries it. The caller must verify before citing.
+Anti-fabrication (critical): enumerate ONLY what is visibly present. Never pad a section to look complete — a short honest section beats a full invented one. Write [unsure] for anything not clearly legible; never invent an element, value, or state. Before claiming an element is selected or active, check which item actually carries the highlight."
+  fi
+  [ -n "$QUERY" ] && USER="$USER
+Additional focus: $QUERY"
+elif [ -n "$QUERY" ]; then
+  SYS="You are a precise visual assistant. Report only what is actually visible — never fabricate factual specifics (on-screen text, identity, counts, colors); if those aren't legible, say so. But when the user asks for an interpretation, a mood, or a description in a particular style, you MAY go beyond the literal — ground it in what's visible, and do not refuse."
+  USER="$QUERY"
+else
+  SYS="You are a precise visual parser for a downstream agent. First note what the image IS (UI/dashboard/document/chart/photo/artwork/AI-generated). Then: (1) transcribe ALL legible text VERBATIM and exactly — labels, values, code, messages — as a list, BEFORE any description; (2) report layout/structure and the detail that matters for the kind (dense UI → values + control states; charts → data/trends; photo/art → subject, composition, palette, mood). Anti-fabrication (critical): report ONLY what is visibly present — write [unsure] for anything not clearly legible; never invent an element, value, or control; and do NOT assign meanings to colors unless a visible legend defines them (describe a color as a color). This is a structural read; exact strings should be verified, not trusted blindly."
+  USER="Describe this image."
+fi
+
+# Build + send the request in Python: a real image's base64 is megabytes, which
+# exceeds ARG_MAX if passed via `jq --arg`. The image stays local — it's sent only
+# to 127.0.0.1 ollama, never uploaded.
+# num_ctx 8192: image tiles + the sectioned UI prompt overflow the 4096 default
+# of some models and the read silently truncates mid-generation (observed on
+# gemma4:26b 2026-07-08); num_predict -1 lifts any Modelfile output cap.
+# (Keep apostrophes out of the PY block below — bash 3.2 misparses quotes in
+# heredocs inside $(...).)
+t0=$(python3 -c 'import time; print(int(time.time()*1000))')
+set +e
+TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" "$FMT" 2>&1 <<'PY'
+import sys, json, base64, urllib.request, urllib.error
+model, sysp, user, img, host, keep, fmt = sys.argv[1:8]
+try:
+    with open(img, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    payload = {"model": model, "stream": False, "keep_alive": int(keep), "think": False,
+               "options": {"temperature": 0, "num_ctx": 8192, "num_predict": -1},
+               "messages": [{"role": "system", "content": sysp},
+                            {"role": "user", "content": user, "images": [b64]}]}
+    if fmt:  # constrained decoding: Ollama forces schema-valid JSON output
+        payload["format"] = json.loads(fmt)
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=180) as r:
+        sys.stdout.write(json.load(r).get("message", {}).get("content", "").strip())
+except urllib.error.HTTPError as e:
+    try: m = json.load(e).get("error", "HTTP %s" % e.code)
+    except Exception: m = "HTTP %s" % e.code
+    sys.stderr.write(m)
+    sys.exit(11 if ("not found" in m.lower() or "no such model" in m.lower()) else 10)
+except OSError as e:
+    sys.stderr.write("server unreachable / lost mid-request (%s)" % e); sys.exit(10)
+PY
+)"; rc=$?
+set -e
+if [ "$rc" -ne 0 ]; then
+  [ "$rc" -eq 11 ] && emit_error model_missing "vision model '$MODEL' not installed — pull it: ollama pull $MODEL" 11
+  emit_error model_error "${TEXT:-vision request failed}" 10
+fi
+[ -n "$TEXT" ] || emit_error model_error "no content from the model" 10
+fi
+# ── shared tail: timing, artifact store, history, output ──
+# Guard the end-timestamp: an interrupted run must not feed a blank/garbage value
+# into the arithmetic (which then poisoned the old awk stats line).
+end=$(python3 -c 'import time; print(int(time.time()*1000))' 2>/dev/null || echo "$t0")
+[[ "$end" =~ ^[0-9]+$ ]] || end="$t0"
+ms=$(( end - t0 ))
+
+# ── Artifact store + history (both best-effort — never break the answer) ──
+# Every read lands one discoverable folder: outputs/see/<ts>-<mode>-<img>/ with
+# the image AS READ (the crop / menubar strip — those temp files die on exit),
+# the read itself, and machine metadata. `see open N` finds it; `see note` and
+# `see more` build on it. Pruned to the newest $ART_KEEP folders.
+READ_MODE=general; if $MENUBAR; then READ_MODE=menubar; elif $UI; then READ_MODE=ui; fi
+if $OCR; then READ_MODE=ocr; $MENUBAR && READ_MODE=ocr-menubar; fi
+ART=""
+NOW_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+if mkdir -p "$ART_ROOT" 2>/dev/null; then
+  slug="$(printf '%s' "$(basename "${ORIG_IMG%.*}")" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//; s/-$//' | cut -c1-40)"
+  [ -n "$slug" ] || slug=img
+  ART="$ART_ROOT/$(date -u +%Y%m%dT%H%M%SZ)-$READ_MODE-$slug"
+  [ -e "$ART" ] && ART="$ART-$$"
+  if mkdir "$ART" 2>/dev/null; then
+    case "$IMG" in *.*) _sext="${IMG##*.}" ;; *) _sext=png ;; esac
+    cp -f "$IMG" "$ART/source.$_sext" 2>/dev/null || true
+    { printf '# see %s read — %s\n\n- image: %s\n' "$READ_MODE" "$NOW_TS" "$ORIG_IMG"
+      [ -n "$CROP_DESC" ] && printf -- '- crop: %s\n' "$CROP_DESC"
+      [ -n "$QUERY" ] && printf -- '- question: %s\n' "$QUERY"
+      printf -- '- model: %s · %dms\n\n---\n\n%s\n' "$MODEL" "$ms" "$TEXT"
+    } > "$ART/read.md" 2>/dev/null || true
+    jq -cn --arg ts "$NOW_TS" --arg src "$ORIG_IMG" --arg crop "$CROP_DESC" \
+       --arg mode "$READ_MODE" --arg model "$MODEL" --argjson ms "$ms" --arg p "$QUERY" \
+       '{ts:$ts, source:$src, crop:(if $crop == "" then null else $crop end), mode:$mode,
+         model:$model, ms:$ms, prompt:(if $p == "" then null else $p end)}' \
+       > "$ART/meta.json" 2>/dev/null || true
+    ls -1t "$ART_ROOT" 2>/dev/null | tail -n +$((ART_KEEP + 1)) \
+      | while IFS= read -r _old; do rm -rf "${ART_ROOT:?}/$_old"; done 2>/dev/null || true
+  else
+    ART=""
+  fi
+fi
+mkdir -p "$DIR/logs"
+jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg p "$QUERY" \
+   --arg m "$MODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
+   --arg crop "$CROP_DESC" --arg art "$ART" \
+   '{ts:$ts, img:$img, prompt:(if $p == "" then null else $p end), mode:$rm,
+     crop:(if $crop == "" then null else $crop end), model:$m, ms:$ms,
+     artifact:(if $art == "" then null else $art end), response:$r}' \
+   >> "$LOG" 2>/dev/null || true
+
+if [ "$MODE" = json ]; then
+  # --ui --json: hand consumers the parsed object in .data (null if the model
+  # somehow broke schema), not a JSON string to re-parse. Mirrors q --format.
+  # artifact = the read's folder (source copy + read.md), for evidence trails.
+  if [ -n "$FMT" ]; then
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
+       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end),
+         data:($t | try fromjson catch null)}'
+  else
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
+       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end)}'
+  fi
+else
+  if $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then
+    printf '%s\n' "$TEXT" | glow -
+  else
+    printf '%s\n' "$TEXT"
+  fi
+  # Integer ms, no awk — robust even on an interrupted run. The TTY guard must
+  # not become the exit code (non-TTY text-mode success would exit 1).
+  [ -t 2 ] && printf '%s· %s · %dms%s%s\n' "$Dm" "$MODEL" "$ms" "${ART:+ · see open -1}" "$Rs" >&2
+fi
+exit 0

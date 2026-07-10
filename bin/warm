@@ -1,30 +1,64 @@
 #!/usr/bin/env bash
 # Tier W on/off control — decide when to pay the warm-start cost vs shut it down.
 #
-#   warm on       load the warm companion model and pin it resident (snappy)
-#   warm off      fully unload it — zero warm footprint
-#   warm status   show what's resident + its context window
-#   warm restart  off -> on
+#   warm on                 load the warm companion model and pin it resident (snappy)
+#   warm on code [2h]       lease any tier/model — BOUNDED pin (default 60m, self-heals)
+#   warm off [code|all]     unload the companion / a leased model / everything
+#   warm status             show what's resident + how long it stays
+#   warm restart            off -> on (companion)
 #
+# Two kinds of residency, deliberately different:
+#   the COMPANION (bare `warm on`) pins forever — it's small and the point is snappy.
+#   a LEASE (`warm on code|big|<model>`) is bounded — big models must self-heal if
+#   you forget them, so keep_alive is a TTL, never -1 (say 'forever' to override).
 # Residency is tracked by Ollama itself (ollama ps), not a state file here.
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null
 source "$DIR/config.sh"
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"   # resolve_tier, OLLAMA_HOST
+
+DEFAULT_LEASE="60m"
+
+# Load (or re-pin) MODEL with KEEP_ALIVE via an empty-prompt generate — a pure
+# load, no tokens produced. keep_alive is last-writer-wins per request.
+pin() { # MODEL KEEP_ALIVE(number or "duration")
+  local ka="$2"
+  [[ "$ka" =~ ^-?[0-9]+$ ]] || ka="\"$ka\""
+  curl -s "$OLLAMA_HOST/api/generate" -d "{\"model\":\"$1\",\"keep_alive\":$ka}" \
+    >/dev/null || { echo "failed to load '$1' — is it pulled? (ollama list)"; exit 1; }
+}
 
 cmd="${1:-status}"
 case "$cmd" in
   on)
-    echo "warming $WARM_MODEL (keep_alive=$WARM_KEEP_ALIVE) ..."
-    # A 1-token generate loads the model and pins it with the chosen keep_alive.
-    curl -s "$OLLAMA_HOST/api/generate" \
-      -d "{\"model\":\"$WARM_MODEL\",\"prompt\":\"ok\",\"stream\":false,\"keep_alive\":$WARM_KEEP_ALIVE}" \
-      >/dev/null || { echo "failed — is the model built? (ollama list)"; exit 1; }
+    target="${2:-}"
+    if [ -z "$target" ]; then
+      echo "warming $WARM_MODEL (keep_alive=$WARM_KEEP_ALIVE) ..."
+      pin "$WARM_MODEL" "$WARM_KEEP_ALIVE"
+    else
+      model="$(resolve_tier "$target")"
+      ttl="${3:-$DEFAULT_LEASE}"
+      [ "$ttl" = forever ] && ttl=-1
+      echo "leasing $model (keep_alive=$ttl) ..."
+      pin "$model" "$ttl"
+    fi
     ollama ps
     ;;
   off)
-    echo "shutting down $WARM_MODEL ..."
-    ollama stop "$WARM_MODEL" 2>/dev/null || true
+    target="${2:-}"
+    if [ "$target" = all ]; then
+      # Stop everything resident — one sweep back to zero-idle.
+      ollama ps 2>/dev/null | awk 'NR>1 {print $1}' | while read -r m; do
+        echo "shutting down $m ..."
+        ollama stop "$m" 2>/dev/null || true
+      done
+    else
+      model="$(resolve_tier "${target:-$WARM_MODEL}")"
+      echo "shutting down $model ..."
+      ollama stop "$model" 2>/dev/null || true
+    fi
     ollama ps
     ;;
   status)
@@ -35,21 +69,23 @@ case "$cmd" in
     "$0" on
     ;;
   -h|--help|help)
-    echo "warm — Tier W warm-model toggle (decide when to pay the warm-start cost)"
+    echo "warm — Tier W warm-model toggle + bounded leases for the big tiers"
     echo
-    echo "usage: warm {on|off|status|restart}"
-    echo "  on       load \$WARM_MODEL ($WARM_MODEL) and pin it resident — snappy q/imagine-enhance"
-    echo "  off      fully unload it — zero warm footprint (~0 idle RAM)"
-    echo "  status   show what's resident + context window (default; bare 'warm')"
-    echo "  restart  off -> on"
+    echo "usage: warm {on [tier|model] [ttl] | off [tier|model|all] | status | restart}"
+    echo "  on               load \$WARM_MODEL ($WARM_MODEL) and pin it resident — snappy q"
+    echo "  on code [2h]     lease a tier (small/big/code) or any model, BOUNDED (default $DEFAULT_LEASE;"
+    echo "                   'forever' to pin like the companion) — an opencode/agent session helper"
+    echo "  off [code|all]   unload the companion, one leased model, or everything resident"
+    echo "  status           show what's resident + how long it stays (default; bare 'warm')"
+    echo "  restart          off -> on (companion)"
     echo
     echo "Residency is a HUMAN choice — GUI hosts get read-only visibility via"
     echo "'lm status --json' (warm/latency_class) and must not toggle this."
     echo
-    echo "examples:  warm on      warm status      warm off"
+    echo "examples:  warm on   ·   warm on code   ·   warm on code 4h   ·   warm off all"
     ;;
   *)
-    echo "usage: warm {on|off|status|restart}   (try: warm -h)"
+    echo "usage: warm {on [tier|model] [ttl] | off [tier|model|all] | status | restart}   (try: warm -h)"
     exit 1
     ;;
 esac

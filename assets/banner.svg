@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="582" height="523" viewBox="0 0 582 523" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#61e2ff"/><stop offset="0.35" stop-color="#a78bfa"/>
+      <stop offset="0.7" stop-color="#f472b6"/><stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="tg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#67e8f9"/><stop offset="0.5" stop-color="#c4b5fd"/>
+      <stop offset="1" stop-color="#fcd34d"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="582" height="523" rx="16" fill="url(#bg)"/>
+  <rect x="3" y="3" width="576" height="517" rx="13" fill="#14161b"/>
+  <rect x="3" y="3" width="576" height="34" rx="13" fill="#1d2026"/>
+  <rect x="3" y="24" width="576" height="13" fill="#1d2026"/>
+  <circle cx="26" cy="20" r="6" fill="#ff5f57"/><circle cx="46" cy="20" r="6" fill="#febc2e"/><circle cx="66" cy="20" r="6" fill="#28c840"/>
+  <text x="291.0" y="24" text-anchor="middle" fill="#8b949e" font-size="12">~/Code/local-models — lm</text>
+  <text x="26" y="78" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">╔==================================================================╗</tspan></text>
+<text x="26" y="97" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  +============● </tspan><tspan fill="url(#tg)" font-weight="700">LOCAL-MODELS</tspan><tspan fill="#7d8590"> ●============+                      </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="116" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  |  LLM · vision · imagegen · zero idle   |                      </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="135" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  +========================================+                      </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="154" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">╠==============■■====================================■■============╣</tspan></text>
+<text x="26" y="173" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#dbe2ea">                                                                  </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="192" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  </tspan><tspan fill="#67e8f9" font-weight="700">◆ ASK </tspan><tspan fill="#4b5563">========================================================  </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="211" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  ├- </tspan><tspan fill="#dbe2ea">q "..."  ·  q cmd "kill port 3001"  ·  git diff | q commit</tspan><tspan fill="#dbe2ea">   </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="230" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  └- </tspan><tspan fill="#dbe2ea">q --format schema.json  -&gt;  parsed .data (constrained)</tspan><tspan fill="#dbe2ea">       </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="249" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#dbe2ea">                                                                  </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="268" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  </tspan><tspan fill="#c4b5fd" font-weight="700">◎ SEE + VERIFY </tspan><tspan fill="#4b5563">===============================================  </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="287" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  ├- </tspan><tspan fill="#dbe2ea">see shot.png --ui   -&gt;  element inventory  (structured)</tspan><tspan fill="#dbe2ea">      </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="306" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  ├- </tspan><tspan fill="#dbe2ea">see shot.png --ocr  -&gt;  exact text, ~300ms (Apple Vision)</tspan><tspan fill="#dbe2ea">    </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="325" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  └- </tspan><tspan fill="#dbe2ea">lm ui-verify --app Finder "claim"  -&gt;  pass/fail vs AX tree</tspan><tspan fill="#dbe2ea">  </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="344" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#dbe2ea">                                                                  </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="363" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  </tspan><tspan fill="#fcd34d" font-weight="700">▶ MAKE + ORCHESTRATE </tspan><tspan fill="#4b5563">=========================================  </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="382" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  ├- </tspan><tspan fill="#dbe2ea">imagine --enhance "a cozy reading nook"    (GPU, mflux)</tspan><tspan fill="#dbe2ea">      </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="401" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  ├- </tspan><tspan fill="#dbe2ea">lm fleet &lt;intent&gt; &lt;files...&gt;   (judged batch fan-out)</tspan><tspan fill="#dbe2ea">        </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="420" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  └- </tspan><tspan fill="#dbe2ea">lm gemini ingest-repo .  -&gt;  ask the whole repo anything</tspan><tspan fill="#dbe2ea">     </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="439" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#dbe2ea">                                                                  </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="458" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">╠==============■■====================================■■============╣</tspan></text>
+<text x="26" y="477" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">║</tspan><tspan fill="#7d8590">  </tspan><tspan fill="#86efac">●</tspan><tspan fill="#7d8590"> setup: README / health: lm doctor / verify.sh = 29 ok         </tspan><tspan fill="#4b5563">║</tspan></text>
+<text x="26" y="496" xml:space="preserve" textLength="530" lengthAdjust="spacingAndGlyphs"><tspan fill="#4b5563">╚==================================================================╝</tspan></text>
+</svg>

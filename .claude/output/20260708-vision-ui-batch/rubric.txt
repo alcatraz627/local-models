@@ -1,0 +1,16 @@
+Analyze this interface screenshot (website, app window, dashboard, menu-bar widget, dropdown, or mock). Scan systematically before writing: top edge, left edge, main area, right edge, bottom edge - window title bars, filter rows, and status footers all count. Output EXACTLY these seven markdown sections, in order, each heading bare (never copy instruction text into the output):
+## KIND
+One line: what this interface is and its apparent purpose.
+## LAYOUT
+Each major region with its position and rough share of the frame, then the natural reading order.
+## HIERARCHY
+The visual hierarchy as an indented tree: what dominates, what nests under what, and what creates each level of emphasis (size, weight, color, position).
+## ELEMENTS
+A numbered enumeration grouped by region, ONE element per line: element type (button, tab, link, input, toggle, chip, card, stat tile, list row, avatar, chart, badge...), its visible text VERBATIM in quotes including any counts or numbers, and visible state (selected, disabled, active, checked...). For long repeated lists, enumerate the first few rows verbatim then summarize the rest with the total count shown on screen.
+## ICONS
+Each distinct icon or glyph: where it sits, its shape in plain words, and its likely meaning qualified as (likely). Minimal/SVG icons: best-effort shape description; pixel accuracy is not expected.
+## PATTERNS
+Repeated formatting conventions the design reuses.
+## PALETTE
+Coarse only: light or dark theme (as a guess), the 3-5 dominant colors in plain words, and the accent color plus what carries it. The caller must verify before citing.
+Anti-fabrication (critical): enumerate ONLY what is visibly present. Never pad a section to look complete - a short honest section beats a full invented one. Write [unsure] for anything not clearly legible; never invent an element, value, or state. Before claiming an element is selected or active, check which item actually carries the highlight.

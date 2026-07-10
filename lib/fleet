@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+# fleet — batch fan-out runner: one intent × N items on the local models.
+#
+# Hand it a rubric (a registered q intent) and a list of files; it fans them
+# across the local server with a small concurrency cap, gates every output
+# through a Judge, and leaves a self-contained run record you can inspect
+# later. A result is trusted because it passed the gate, not because a model
+# sounded confident. This is the docs/09 harness-ladder step 1; Claude is the
+# expected main caller (~70%), direct use for quick batches.
+#
+# Not on PATH — the front door is `lm fleet ...`.
+#
+# Salvage-first: every worker writes its result file before returning, so a
+# killed run keeps its finished work. Warmth is leased: a non-resident model
+# is pinned once for the run with a BOUNDED keep_alive (auto-expires if we
+# crash hard), released at exit, and the user's warm pin is restored if the
+# run evicted it. Only SIGKILL can leak the lease, and `lm status` shows it.
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"
+
+LEASE_TTL="30m"   # lease bound: long enough for any sane batch, short enough to self-heal
+
+show_help() {
+  printf '%s%sfleet%s %s— fan one intent across N files, judged, on the local models%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  _sec USAGE
+  _cmd 'lm fleet <intent> <file ...>'      'fan the intent across the files'
+  _cmd 'lm fleet <intent> --items-from F'  'read item paths from F (one per line; - = stdin)'
+  _sec OPTIONS
+  _opt '-m, --model TIER'  'small|big|code|<name> (default: small — pick the tier per docs/07 §2.2)'
+  _opt '-j N'              'concurrency (default 2, max 4 — RAM caps the fleet, not you)'
+  _opt '--prompt "..."'    'extra per-item query text (intents like qa need one)'
+  _opt '--judge CMD'       'per-item gate: CMD <result.json>; exit 0 = pass ($FLEET_ITEM = source file)'
+  _opt '--timeout N'       'per-worker seconds (default 300)'
+  _opt '--out DIR'         'run record dir (default outputs/fleet/<ts>-<intent>/)'
+  _opt '--json'            'machine mode: emit index.jsonl on stdout, no ANSI'
+  _sec EXAMPLES
+  _ex 'lm fleet review src/*.sh'                       '# audit every script'
+  _ex 'lm fleet qa --prompt "who owns this?" docs/*.md' '# same question, N docs'
+  _ex 'git diff --name-only | lm fleet review --items-from - -m code' '# review changed files'
+  printf '\n  %severy output crosses the gate: envelope check + your --judge · results land in the run dir%s\n' "$Dm" "$Rs"
+}
+
+emit_error() { # CODE MESSAGE EXIT
+  if [ "$MODE" = json ]; then jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}'
+  else echo "fleet: $2" >&2; fi
+  exit "$3"
+}
+
+# ── Parse ──
+MODE=text; INTENT=""; TIER=small; JOBS=2; PROMPT=""; JUDGE=""; TIMEOUT=300; OUT=""
+ITEMS_FROM=""; items=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help|help) show_help; exit 0 ;;
+    -m|--model)   TIER="$2"; shift 2 ;;
+    -j)           JOBS="$2"; shift 2 ;;
+    --prompt)     PROMPT="$2"; shift 2 ;;
+    --judge)      JUDGE="$2"; shift 2 ;;
+    --timeout)    TIMEOUT="$2"; shift 2 ;;
+    --out)        OUT="$2"; shift 2 ;;
+    --items-from) ITEMS_FROM="$2"; shift 2 ;;
+    --json)       MODE=json; shift ;;
+    -*)           MODE=${MODE}; emit_error invalid_args "unknown flag: $1" 2 ;;
+    *)            if [ -z "$INTENT" ]; then INTENT="$1"; else items+=("$1"); fi; shift ;;
+  esac
+done
+
+[ -n "$INTENT" ] || { show_help; exit 2; }
+[ -f "$DIR/intents/$INTENT.toml" ] || emit_error unknown_intent "no such intent: $INTENT (see: q intents)" 2
+[[ "$JOBS" =~ ^[1-9]$ ]] || emit_error invalid_args "-j must be 1-9, got '$JOBS'" 2
+(( JOBS > 4 )) && JOBS=4
+[[ "$TIMEOUT" =~ ^[0-9]+$ ]] || emit_error invalid_args "--timeout must be seconds, got '$TIMEOUT'" 2
+
+if [ -n "$ITEMS_FROM" ]; then
+  if [ "$ITEMS_FROM" = - ]; then while IFS= read -r l; do [ -n "$l" ] && items+=("$l"); done
+  else
+    [ -f "$ITEMS_FROM" ] || emit_error items_unreadable "no such file: $ITEMS_FROM" 12
+    while IFS= read -r l; do [ -n "$l" ] && items+=("$l"); done < "$ITEMS_FROM"
+  fi
+fi
+[ "${#items[@]}" -gt 0 ] || emit_error no_items "no items — pass files or --items-from" 2
+for f in "${items[@]}"; do
+  [ -f "$f" ] || emit_error item_missing "not a file: $f" 12
+done
+
+ollama_up || { server_down_msg; emit_error server_down "ollama server is down" 11; }
+
+MODEL="$(resolve_tier "$TIER")"
+
+# ── Warmth lease (docs/07 Phase 1: borrow, never seize) ──
+# Pin the fleet model once so N workers don't pay N loads: q's warm-aware
+# keep_alive would otherwise load-and-unload a 23GB model per item. All lease
+# mechanics live in bin/warm (the one lease implementation): bounded TTL so a
+# hard crash self-heals; the EXIT trap is the normal path.
+WARM_WAS_RESIDENT=false; LEASED=false
+ollama_resident "${WARM_MODEL:-gemma4-e4b-warm}" && WARM_WAS_RESIDENT=true
+if ! ollama_resident "$MODEL"; then
+  "$DIR/bin/warm" on "$MODEL" "$LEASE_TTL" >/dev/null 2>&1 \
+    || emit_error load_failed "could not load $MODEL" 11
+  LEASED=true
+fi
+
+release_lease() {
+  # Release our lease, then restore the user's warm pin if this run evicted it.
+  if [ "$LEASED" = true ]; then
+    "$DIR/bin/warm" off "$MODEL" >/dev/null 2>&1 || true
+  fi
+  if [ "$WARM_WAS_RESIDENT" = true ] && ! ollama_resident "${WARM_MODEL:-gemma4-e4b-warm}"; then
+    "$DIR/bin/warm" on >/dev/null 2>&1 || true
+  fi
+}
+trap release_lease EXIT
+
+# ── Run record ──
+[ -n "$OUT" ] || OUT="$DIR/outputs/fleet/$(date +%Y%m%d-%H%M%S)-$INTENT"
+mkdir -p "$OUT/results"
+: > "$OUT/items.txt"; for f in "${items[@]}"; do echo "$f" >> "$OUT/items.txt"; done
+jq -cn --arg intent "$INTENT" --arg model "$MODEL" --arg judge "$JUDGE" \
+   --arg prompt "$PROMPT" --argjson jobs "$JOBS" --argjson n "${#items[@]}" \
+   --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+   '{ts:$ts, intent:$intent, model:$model, jobs:$jobs, judge:$judge, prompt:$prompt, items:$n}' > "$OUT/meta.json"
+
+# ── Fan out ──
+# xargs -0 -P is the pool (macOS bash 3.2 has no wait -n). Each worker writes
+# tmp-then-rename so a kill mid-write can't leave a half-JSON masquerading as
+# a result. q's structured {ok:false} error envelopes are results too — the
+# Judge fails them; only a hard death synthesizes worker_died.
+fleet_worker() {
+  local i="${1%%|*}" item="${1#*|}"
+  local slug out tmp
+  slug="$(basename "$item" | tr -c 'A-Za-z0-9._-' '_')"
+  out="$FLEET_OUT/results/$(printf '%03d' "$i")-${slug%_}.json"
+  tmp="$out.tmp"
+  local args=(--json --intent "$FLEET_INTENT" --ctx "$item" -m "$FLEET_MODEL" --timeout "$FLEET_TIMEOUT")
+  [ -n "$FLEET_PROMPT" ] && args+=("$FLEET_PROMPT")
+  "$FLEET_Q" "${args[@]}" > "$tmp" 2>/dev/null || true
+  [ -s "$tmp" ] || jq -cn '{ok:false, code:"worker_died", message:"worker produced no output"}' > "$tmp"
+  mv -f "$tmp" "$out"
+  [ "$FLEET_QUIET" = true ] || echo "  · $(basename "$item")" >&2
+}
+export -f fleet_worker
+export FLEET_Q="$DIR/bin/q" FLEET_INTENT="$INTENT" FLEET_MODEL="$MODEL" \
+       FLEET_PROMPT="$PROMPT" FLEET_TIMEOUT="$TIMEOUT" FLEET_OUT="$OUT"
+FLEET_QUIET=$([ "$MODE" = json ] && echo true || echo false); export FLEET_QUIET
+
+[ "$MODE" = json ] || printf '%sfleet%s %s × %d items · %s · -j %d\n' "$Bd" "$Rs" "$INTENT" "${#items[@]}" "$MODEL" "$JOBS" >&2
+i=0
+for f in "${items[@]}"; do i=$((i+1)); printf '%d|%s\0' "$i" "$f"; done \
+  | xargs -0 -P "$JOBS" -n 1 bash -c 'fleet_worker "$1"' _
+
+# ── Judge + index ──
+# Base gate is deterministic: a well-formed envelope with ok:true and a
+# non-empty answer. --judge layers a caller-owned check on top (schema,
+# grep, tests): CMD <result.json>, exit 0 = pass. The source item is in
+# $FLEET_ITEM — an env var, not a second argument, so single-file judges
+# like `jq -e '...'` work unmodified.
+PASS=0; FAIL=0; : > "$OUT/index.jsonl"
+i=0
+for f in "${items[@]}"; do
+  i=$((i+1))
+  slug="$(basename "$f" | tr -c 'A-Za-z0-9._-' '_')"
+  res="$OUT/results/$(printf '%03d' "$i")-${slug%_}.json"
+  verdict=pass
+  jq -e '.ok == true and ((.text // "") | length) > 0' "$res" >/dev/null 2>&1 || verdict="fail:envelope"
+  if [ "$verdict" = pass ] && [ -n "$JUDGE" ]; then
+    FLEET_ITEM="$f" bash -c "$JUDGE \"\$1\"" _ "$res" >/dev/null 2>&1 || verdict="fail:judge"
+  fi
+  case "$verdict" in pass) PASS=$((PASS+1));; *) FAIL=$((FAIL+1));; esac
+  jq -c --arg item "$f" --arg v "$verdict" --arg res "${res#"$OUT"/}" --argjson i "$i" \
+    '{i:$i, item:$item, judge:$v, ok:(.ok // false), model:(.model // null), ms:(.ms // null),
+      tokens_out:(.tokens_out // null), result:$res}' "$res" >> "$OUT/index.jsonl"
+done
+
+# Run-level history line (the feedback sink + lm timeline read this; the
+# per-item detail stays in the run dir). Best-effort — never break the result.
+mkdir -p "$DIR/logs"
+jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg intent "$INTENT" --arg model "$MODEL" \
+   --argjson items "${#items[@]}" --argjson pass "$PASS" --argjson fail "$FAIL" \
+   --argjson wall "$SECONDS" --arg run "$OUT" \
+   '{ts:$ts, intent:$intent, model:$model, items:$items, pass:$pass, fail:$fail, wall_s:$wall, run:$run}' \
+   >> "$DIR/logs/fleet-history.jsonl" 2>/dev/null || true
+
+if [ "$MODE" = json ]; then
+  cat "$OUT/index.jsonl"
+else
+  printf '%s%d pass · %d fail%s of %d · %ds wall · %s\n' \
+    "$([ "$FAIL" -eq 0 ] && printf '%s' "$G" || printf '%s' "$Y")" \
+    "$PASS" "$FAIL" "$Rs" "${#items[@]}" "$SECONDS" "$OUT" >&2
+  [ "$FAIL" -gt 0 ] && jq -r 'select(.judge != "pass") | "  ✗ \(.item)  (\(.judge))"' "$OUT/index.jsonl" >&2
+fi
+[ "$FAIL" -eq 0 ]

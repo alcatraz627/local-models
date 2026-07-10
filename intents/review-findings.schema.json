@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "line": { "type": ["integer", "null"] },
+          "severity": { "type": "string", "enum": ["bug", "risk", "edge-case", "security", "style"] },
+          "finding": { "type": "string" },
+          "suggestion": { "type": "string" }
+        },
+        "required": ["file", "severity", "finding"]
+      }
+    },
+    "summary": { "type": "string" }
+  },
+  "required": ["findings", "summary"]
+}

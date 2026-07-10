@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "properties": {
+    "kind": { "type": "string" },
+    "theme": { "type": "string", "enum": ["light", "dark", "unsure"] },
+    "regions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "position": { "type": "string" },
+          "elements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": { "type": "string" },
+                "text": { "type": "string" },
+                "state": { "type": "string" }
+              },
+              "required": ["type", "text"]
+            }
+          }
+        },
+        "required": ["name", "elements"]
+      }
+    },
+    "icons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "where": { "type": "string" },
+          "shape": { "type": "string" },
+          "likely_meaning": { "type": "string" }
+        },
+        "required": ["shape"]
+      }
+    },
+    "palette": { "type": "array", "items": { "type": "string" } },
+    "accent": { "type": "string" }
+  },
+  "required": ["kind", "theme", "regions"]
+}

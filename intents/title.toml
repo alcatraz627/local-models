@@ -1,0 +1,4 @@
+name = "title"
+summary = "a 2-5 word title (tab titles, fire-and-forget)"
+needs_ctx = false
+system_prompt = "Output a single 2-5 word title in Title Case summarizing the input. No quotes, no trailing punctuation, no preamble — just the title."

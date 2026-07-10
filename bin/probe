@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""probe — judgment probe harness for local coding models.
+
+Runs the fixed suite in probe/items.toml against a model and writes a scored
+markdown report to probe/runs/. Tests the axes that decide whether a local model
+is trustworthy to DELEGATE to — ask-vs-assume, abstention, pass^k reliability,
+tool-decision, multi-turn instruction-following, real multi-file editing — NOT
+speed or benchmark scores.
+
+It talks to the ollama API directly (an eval needs a real system role + a held
+keep_alive across items — the user-facing `q` path deliberately doesn't expose
+those). Auto-flags are heuristics ONLY; the human verdict is the call, because
+trust comes from observation, not the model's own confidence.
+
+Usage:  probe <model> [--out PATH]
+        probe qwen3.6:35b-a3b
+"""
+import sys, os, re, json, time, subprocess, urllib.request, pathlib
+
+DIR = pathlib.Path(__file__).resolve().parent.parent
+HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+
+
+def load_items():
+    out = subprocess.run(["yq", "-p", "toml", "-o", "json", str(DIR / "probe/items.toml")],
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        sys.exit("probe: could not parse probe/items.toml\n" + out.stderr)
+    return json.loads(out.stdout)["item"]
+
+
+def chat(model, messages, keep="5m"):
+    """One /api/chat round. keep_alive holds the model resident across items."""
+    body = json.dumps({"model": model, "messages": messages, "stream": False,
+                       "keep_alive": keep, "think": False,
+                       "options": {"temperature": 0}}).encode()
+    req = urllib.request.Request(HOST + "/api/chat", data=body,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=240) as r:
+        return json.loads(r.read())["message"]["content"].strip()
+
+
+def hits(text, markers):
+    t = text.lower()
+    return [m for m in (markers or []) if re.search(m, t)]
+
+
+def read_ctx(spec):
+    out = ""
+    for f in spec.split("+"):
+        p = (DIR / "probe" / f.strip())
+        out += f"\n--- {p.name} ---\n{p.read_text()}"
+    return out
+
+
+def run_item(model, it):
+    sysmsg = [{"role": "system", "content": it["system"]}] if it.get("system") else []
+
+    if it.get("turns"):                         # multi-turn instruction-following
+        msgs, replies = list(sysmsg), []
+        for t in it["turns"]:
+            msgs.append({"role": "user", "content": t})
+            r = chat(model, msgs); replies.append(r)
+            msgs.append({"role": "assistant", "content": r})
+        held = [rep.strip().endswith("@@@") for rep in replies[1:]]   # after the confirm turn
+        auto = "PASS" if all(held) else "FAIL"
+        return replies, auto, f"post-confirm replies ending with @@@: {sum(held)}/{len(held)}"
+
+    if it.get("runs"):                          # pass^k reliability (consistency)
+        reps = [chat(model, sysmsg + [{"role": "user", "content": it["prompt"]}])
+                for _ in range(int(it["runs"]))]
+        distinct = len(set(r.strip() for r in reps))
+        auto = f"{len(reps) - distinct + 1}/{len(reps)} consistent"
+        return reps, auto, f"{distinct} distinct answer(s) across {len(reps)} cold runs"
+
+    user = it["prompt"] + (read_ctx(it["ctx"]) if it.get("ctx") else "")
+    r = chat(model, sysmsg + [{"role": "user", "content": user}])
+    ph, fh = hits(r, it.get("pass_markers")), hits(r, it.get("fail_markers"))
+    auto = "PASS?" if ph and not fh else "FAIL?" if fh and not ph else "REVIEW"
+    return [r], auto, f"pass-markers={bool(ph)} fail-markers={bool(fh)}"
+
+
+def main():
+    if len(sys.argv) < 2:
+        sys.exit("usage: probe <model> [--out PATH]")
+    model = sys.argv[1]
+    items = load_items()
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    out = (pathlib.Path(sys.argv[sys.argv.index("--out") + 1]) if "--out" in sys.argv
+           else DIR / f"probe/runs/{model.replace(':', '_').replace('/', '_')}-{ts}.md")
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    L = [f"# Judgment probe — `{model}` — {ts}", "",
+         "Auto-flags are heuristics; the **human verdict** is the decision "
+         "(trust = observation, not the model's confidence). Fill the verdicts, "
+         "then this run is a real go/no-go data point.", ""]
+    t0 = time.time()
+    for it in items:
+        print(f"  … {it['id']}", file=sys.stderr, flush=True)
+        try:
+            reps, auto, note = run_item(model, it)
+        except Exception as e:
+            reps, auto, note = [f"(probe error: {e})"], "ERROR", str(e)
+        L += [f"## {it['id']} — {it['axis']}", "",
+              f"**Pass criteria.** {it['pass']}", "",
+              f"**Auto:** `{auto}` — {note}", ""]
+        for i, r in enumerate(reps):
+            tag = f" — run {i + 1}" if len(reps) > 1 else ""
+            L += [f"<details><summary>response{tag}</summary>", "", "```", r, "```", "", "</details>", ""]
+        L += ["**Human verdict:** ☐ pass  ☐ fail — _notes:_", "", "---", ""]
+    L += [f"_ran {len(items)} items in {int(time.time() - t0)}s_"]
+    out.write_text("\n".join(L))
+    subprocess.run(["ollama", "stop", model], capture_output=True)  # eval done — unload, don't leave it resident
+    print(str(out))
+
+
+if __name__ == "__main__":
+    main()

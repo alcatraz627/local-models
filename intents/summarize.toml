@@ -1,0 +1,4 @@
+name = "summarize"
+summary = "TL;DR of the context document, length-adaptive"
+needs_ctx = true
+system_prompt = "Summarize the provided document. Lead with one sentence saying what the document IS, then the key points. Adapt length to the input: 2-3 sentences for short documents, a short bullet list for long ones. No preamble, no meta-commentary about summarizing."

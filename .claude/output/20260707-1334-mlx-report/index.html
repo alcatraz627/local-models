@@ -1,0 +1,3575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLX on Ollama — measured verdict</title>
+<meta property="og:title" content="MLX on Ollama — measured verdict">
+<meta property="og:description" content="Ollama 0.30.10 · M5 Pro 64 GB · qwen3.6:35b-a3b — Q4_K_M (llama.cpp/Metal) vs NVFP4 (MLX)">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="MLX on Ollama — measured verdict">
+<meta name="twitter:description" content="Ollama 0.30.10 · M5 Pro 64 GB · qwen3.6:35b-a3b — Q4_K_M (llama.cpp/Metal) vs NVFP4 (MLX)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23000'/%3E%3Ctext x='3' y='24' font-family='monospace' font-size='22' font-weight='bold' fill='%2333ff33'%3E%3E_%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+<style>
+/* shared-base.css — Common styles for all create-report templates.
+ *
+ * Prepended to each template's style.css by generate-html.ts.
+ * Templates can override any variable or class.
+ */
+
+/* ── Syntax Highlighting Tokens ─────────────────────────────────────────── */
+/* Override these custom properties in your template's CSS to change colors */
+:root {
+  --hl-keyword: #c084fc;
+  --hl-string: #86efac;
+  --hl-comment: #64748b;
+  --hl-number: #fbbf24;
+  --hl-type: #67e8f9;
+  --hl-attr: #fb923c;
+  --hl-operator: #94a3b8;
+  --hl-function: #60a5fa;
+}
+.kw {
+  color: var(--hl-keyword);
+}
+.st {
+  color: var(--hl-string);
+}
+.cm {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+.nm {
+  color: var(--hl-number);
+}
+.tp {
+  color: var(--hl-type);
+}
+.at {
+  color: var(--hl-attr);
+}
+.op {
+  color: var(--hl-operator);
+}
+.fn {
+  color: var(--hl-function);
+}
+
+/* ── Code Dialog ────────────────────────────────────────────────────────── */
+dialog#code-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(90vw, 900px);
+  max-height: 85vh;
+  border: 1px solid var(--border, #333);
+  border-radius: 12px;
+  background: var(--code-dialog-bg, #1a1a2e);
+  color: var(--code-dialog-text, #e2e8f0);
+  padding: 0;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+}
+dialog#code-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+dialog#code-dialog[open] {
+  animation: dlg-in 0.2s ease-out;
+}
+dialog#code-dialog[data-closing] {
+  animation: dlg-out 0.15s ease-in forwards;
+}
+@keyframes dlg-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes dlg-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+dialog#code-dialog .dlg-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border, #333);
+  font-size: 0.85rem;
+}
+dialog#code-dialog .dlg-lang {
+  background: var(--hl-keyword, #c084fc);
+  color: #000;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+dialog#code-dialog .dlg-title {
+  flex: 1;
+  opacity: 0.7;
+}
+dialog#code-dialog .dlg-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+dialog#code-dialog .dlg-lines {
+  font-size: 0.75rem;
+  opacity: 0.5;
+}
+dialog#code-dialog .dlg-copy,
+dialog#code-dialog .dlg-close {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+dialog#code-dialog .dlg-copy:hover,
+dialog#code-dialog .dlg-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+dialog#code-dialog .dlg-copy.copied {
+  color: var(--hl-string, #86efac);
+}
+dialog#code-dialog .dlg-body {
+  overflow: auto;
+  max-height: calc(85vh - 52px);
+  padding: 0;
+}
+dialog#code-dialog .dlg-body pre {
+  margin: 0;
+  padding: 16px 20px;
+  max-height: none;
+  overflow: visible;
+}
+
+/* ── Search Highlight ───────────────────────────────────────────────────── */
+mark {
+  background: rgba(250, 204, 21, 0.3);
+  color: inherit;
+  border-radius: 2px;
+  padding: 1px 0;
+}
+mark.search-active {
+  background: rgba(250, 204, 21, 0.7);
+  outline: 2px solid rgba(250, 204, 21, 0.9);
+  outline-offset: 1px;
+}
+.hidden-search {
+  display: none !important;
+}
+.search-reveal {
+  animation: search-fade 0.3s ease-out;
+}
+@keyframes search-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Search Nav Buttons (Chrome-like prev/next) ─────────────────────────── */
+.search-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 4px;
+}
+.search-prev,
+.search-next {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border, #333);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  font-size: 0.6rem;
+  line-height: 1;
+  transition: all 0.1s;
+  padding: 0;
+}
+.search-prev {
+  border-radius: 4px 0 0 4px;
+}
+.search-next {
+  border-radius: 0 4px 4px 0;
+  border-left: none;
+}
+.search-prev:hover,
+.search-next:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text, #eee);
+}
+
+/* ── Width Picker ───────────────────────────────────────────────────────── */
+.width-picker {
+  display: inline-flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 2px;
+}
+.width-btn {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: inherit;
+  opacity: 0.5;
+  transition: all 0.15s;
+}
+.width-btn:hover {
+  opacity: 0.8;
+}
+.width-btn.active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ── Width Classes (shared defaults — styles can override these) ────────── */
+/* Applied by the shared toolbar JS via class toggling on the content container.
+   Individual style CSS files can define their own values for these classes. */
+.width-sm {
+  max-width: 640px !important;
+}
+.width-md {
+  max-width: 960px !important;
+}
+.width-lg {
+  max-width: 1200px !important;
+}
+.width-xl {
+  max-width: 100% !important;
+}
+
+/* ── Theme Toggle Button ────────────────────────────────────────────────── */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #333);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.78rem;
+  transition: all 0.15s;
+}
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ── Print Media ────────────────────────────────────────────────────────── */
+@media print {
+  /* ── Page setup ────────────────────────────────────────────────────── */
+  @page {
+    margin: 1.5cm 1.3cm;
+    size: A4;
+  }
+
+  /* ── Hide interactive UI ───────────────────────────────────────────── */
+  .theme-toggle,
+  .width-picker,
+  .search-wrap,
+  #search,
+  #search-count,
+  dialog#code-dialog,
+  .tool-btn,
+  .font-picker,
+  .color-picker,
+  .style-picker,
+  .search-nav,
+  .copy-btn,
+  .code-expand,
+  .code-line-count,
+  .floating-toolbar,
+  .scroll-top-btn,
+  .reading-progress,
+  button:not(.tab-btn) {
+    display: none !important;
+  }
+
+  /* ── Color fidelity ────────────────────────────────────────────────── */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ── Typography & readability ──────────────────────────────────────── */
+  body {
+    font-size: 11pt;
+    line-height: 1.6;
+  }
+  p,
+  li,
+  td,
+  th,
+  blockquote {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* ── Code blocks: prevent horizontal overflow ──────────────────────── */
+  pre {
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    overflow-x: visible !important;
+    font-size: 9pt !important;
+    line-height: 1.45 !important;
+  }
+  pre code {
+    white-space: pre-wrap !important;
+    word-wrap: break-word !important;
+    font-size: 9pt !important;
+  }
+  .code-wrap {
+    break-inside: avoid;
+    cursor: default !important;
+  }
+  .code-header {
+    break-after: avoid;
+  }
+
+  /* ── Tables: prevent split rows ────────────────────────────────────── */
+  .table-wrap {
+    break-inside: auto;
+    overflow: visible !important;
+  }
+  table {
+    font-size: 9pt;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tr {
+    break-inside: avoid;
+  }
+
+  /* ── Section headings: keep with following content, reduce print sizes */
+  h2,
+  h3,
+  h4 {
+    break-after: avoid;
+  }
+  h2 {
+    font-size: 14pt !important;
+    margin-top: 1.2rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+  h3 {
+    font-size: 12pt !important;
+    margin-top: 0.8rem !important;
+    margin-bottom: 0.4rem !important;
+  }
+  h4 {
+    font-size: 11pt !important;
+    margin-top: 0.6rem !important;
+    margin-bottom: 0.3rem !important;
+  }
+  /* Don't prevent page breaks inside sections/cards — long sections
+     would leave previous pages half-empty. Let content flow naturally. */
+
+  /* ── Blockquotes ───────────────────────────────────────────────────── */
+  blockquote {
+    break-inside: avoid;
+  }
+
+  /* ── Tree blocks: force all details open for print ─────────────────── */
+  details.tree-node {
+    open: true;
+  }
+  details.tree-node > summary {
+    list-style: none;
+  }
+  details.tree-node > summary::before {
+    content: "▾" !important;
+    transform: none !important;
+  }
+  .tree-wrap {
+    break-inside: avoid;
+  }
+
+  /* ── Links: show URL after link text ───────────────────────────────── */
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #666;
+    font-weight: normal;
+  }
+  /* Don't show URL for anchor links (internal nav) */
+  a[href^="#"]::after {
+    content: none;
+  }
+
+  /* ── Search highlights: clean up ───────────────────────────────────── */
+  mark {
+    background: transparent !important;
+    outline: none !important;
+    color: inherit !important;
+  }
+}
+
+/* ── Code Line Numbers ──────────────────────────────────────────────────── */
+pre.has-line-nums {
+  padding: 0 !important;
+}
+pre.has-line-nums code {
+  display: block;
+  padding: 12px 0;
+}
+.line-row {
+  display: block;
+  /* NOTE(by human): Line height of 1.35 makes the lines very scattered, updated to 0.25 */
+  line-height: 0.25;
+  padding: 0 16px 0 0;
+}
+.line-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.line-num {
+  display: inline-block;
+  width: 3.5em;
+  padding: 0 12px 0 12px;
+  text-align: right;
+  color: var(--hl-comment, #64748b);
+  opacity: 0.5;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  pointer-events: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  margin-right: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.line-content {
+  display: inline;
+}
+.code-line-count {
+  font-size: 0.72rem;
+  opacity: 0.45;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Inline Code Path Coloring ──────────────────────────────────────────── */
+code.code-path .code-path-file {
+  color: var(--hl-function, #60a5fa);
+}
+code.code-path .code-path-line {
+  color: var(--hl-number, #fbbf24);
+  opacity: 0.7;
+}
+
+/* ── Floating Toolbar ──────────────────────────────────────────────────── */
+/* Unified container — both rows share one pill background so they look like
+   a single widget rather than two independent floating bars.
+   Row 2 (template-specific controls) sits above row 1 (universal actions);
+   a thin divider appears between them only when row 2 is visible. */
+.floating-toolbar {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  background: rgba(20, 20, 30, 0.92);
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  color: #e2e8f0;
+  /* @user made change here to have overflow: visible otherwise the dropdowns are clipped */
+  /* overflow: hidden; */
+  overflow: visible;
+}
+html.light .floating-toolbar {
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f2328;
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+.ftb-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+}
+/* When row-2 is visible, a bottom border separates it from row-1.
+   display:none hides the border too, so it only shows when row-2 has content. */
+.ftb-row-2 {
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+}
+html.light .ftb-row-2 {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+.ftb-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.12s;
+}
+.ftb-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+html.light .ftb-btn:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+.ftb-dropdown-btn svg:last-child {
+  opacity: 0.5;
+}
+.ftb-label {
+  font-size: 0.72rem;
+  opacity: 0.7;
+}
+.ftb-icon {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.ftb-sep {
+  width: 1px;
+  height: 20px;
+  background: rgba(128, 128, 128, 0.3);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+.ftb-group {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+/* Toolbar dropdowns open UPWARD (bottom-anchored toolbar) */
+.ftb-group .style-menu,
+.ftb-group .copy-for-menu,
+.ftb-group .font-menu,
+.ftb-group .color-menu {
+  bottom: calc(100% + 8px);
+  top: auto;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
+/* Floating toolbar width-picker override */
+.ftb-group.width-picker {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+html.light .ftb-group.width-picker {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* Floating toolbar text-size override */
+.ftb-group.text-size-picker {
+  gap: 2px;
+}
+.ftb-group.text-size-picker .text-size-btn {
+  width: 26px;
+  height: 26px;
+  font-size: 0.7rem;
+  border-color: rgba(128, 128, 128, 0.25);
+}
+.ftb-group.text-size-picker .text-size-label {
+  font-size: 0.65rem;
+  min-width: 28px;
+}
+
+/* ── Style Picker ───────────────────────────────────────────────────────── */
+.style-picker {
+  position: relative;
+}
+.style-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 260px;
+  max-width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--surface, #1a1a2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+}
+.style-menu.open {
+  display: block;
+}
+.style-group-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.35);
+  padding: 8px 10px 3px;
+  pointer-events: none;
+  user-select: none;
+}
+.style-group-label:first-child {
+  padding-top: 4px;
+}
+html.light .style-group-label {
+  color: rgba(0, 0, 0, 0.35);
+}
+.style-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+.style-opt:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+html.light .style-opt:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+.style-opt.active {
+  background: rgba(255, 255, 255, 0.06);
+}
+html.light .style-opt.active {
+  background: rgba(0, 0, 0, 0.04);
+}
+.style-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.style-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.style-name {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text, #e2e8f0);
+}
+.style-opt.active .style-name {
+  font-weight: 600;
+  color: var(--accent, #818cf8);
+}
+.style-desc {
+  font-size: 0.68rem;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.style-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted, #888);
+  margin-left: auto;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.style-badge-ready {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+/* ── Style Preview Float ───────────────────────────────────────────────── */
+.style-preview-float {
+  display: none;
+  position: fixed;
+  width: 180px;
+  height: 120px;
+  background: var(--surface, #1a1a2e);
+  border: 1px solid var(--border, #444);
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 300;
+}
+.style-preview-float.visible {
+  display: block;
+  animation: tip-fade-in 0.15s ease-out;
+}
+.style-preview-float svg {
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+@keyframes tip-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+/* On narrow screens, hide preview float to avoid overflow */
+@media (max-width: 700px) {
+  .style-preview-float {
+    display: none !important;
+  }
+}
+
+/* ── Restyle Toast ─────────────────────────────────────────────────────── */
+.restyle-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  background: var(--surface, rgba(15, 15, 25, 0.95));
+  border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  z-index: 10000;
+  animation: restyle-toast-in 0.2s ease-out;
+}
+.restyle-toast-label {
+  font-size: 0.7rem;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.restyle-toast-cmd {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.78rem;
+  color: var(--accent, #a5b4fc);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 420px;
+}
+@keyframes restyle-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Reading Progress Bar ──────────────────────────────────────────────── */
+.reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0%;
+  height: 3px;
+  background: var(--accent, #818cf8);
+  z-index: 99999;
+  transition: width 0.1s linear;
+  pointer-events: none;
+}
+
+/* ── Text Size Controls ────────────────────────────────────────────────── */
+.text-size-picker {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.text-size-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.text-size-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text, #e2e8f0);
+}
+.text-size-label {
+  font-size: 0.7rem;
+  color: var(--text-muted, #888);
+  min-width: 32px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Scroll to Top ─────────────────────────────────────────────────────── */
+.scroll-top-btn {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--border, rgba(128, 128, 128, 0.3));
+  background: var(--surface, rgba(15, 15, 25, 0.9));
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  z-index: 9000;
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 0.25s,
+    transform 0.25s,
+    background 0.15s;
+  pointer-events: none;
+}
+.scroll-top-btn.visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.scroll-top-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text, #e2e8f0);
+}
+html.light .scroll-top-btn {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #555;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+html.light .scroll-top-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1f2328;
+}
+
+/* ── Copy For Menu ─────────────────────────────────────────────────────── */
+.copy-for-picker {
+  position: relative;
+}
+.copy-for-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: var(--surface, #1a1a2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 200;
+}
+.copy-for-menu.open {
+  display: block;
+}
+.copy-for-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+.copy-for-opt:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+.copy-for-opt .copy-for-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.copy-for-opt .copy-for-label {
+  flex: 1;
+}
+.copy-for-feedback {
+  font-size: 0.75rem;
+  color: #6ee7b7;
+}
+
+/* ── Light mode: dropdown menus ─────────────────────────────────────────── */
+/* Dropdowns use var(--surface, #1a1a2e) which falls back to a dark colour.
+   Templates don't define --surface for html.light, so text turns dark while
+   the dropdown background stays dark → invisible text. Fix with explicit rules. */
+html.light .style-menu,
+html.light .copy-for-menu,
+html.light .font-menu,
+html.light .color-menu {
+  background: rgba(255, 255, 255, 0.97);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #1f2328;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+html.light .style-preview-float {
+  background: rgba(255, 255, 255, 0.97);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+html.light .style-name {
+  color: #1f2328;
+}
+html.light .style-desc {
+  color: #64748b;
+}
+html.light .style-opt:hover,
+html.light .copy-for-opt:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+html.light .style-opt.active {
+  background: rgba(0, 0, 0, 0.05);
+}
+html.light .style-badge {
+  background: rgba(0, 0, 0, 0.08);
+  color: #555;
+}
+html.light .style-badge-ready {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+
+
+/* Terminal / Retro CRT Style */
+
+/* ─── Theme Definitions ──────────────────────────────────────────────────── */
+
+[data-theme="matrix"], :root {
+  --term-text: #33ff33;
+  --term-bg: #000;
+  --term-bg-light: #0a0a0a;
+  --term-dim: #1a5c1a;
+  --term-bright: #00ff41;
+  --term-accent: #00e5ff;
+  --term-border: #1a3a1a;
+  --term-surface: #111;
+  --term-amber: #ffd700;
+  --term-orange: #ff8c00;
+  --term-red: #ff4444;
+  --term-glow: rgba(0, 255, 65, 0.5);
+  --term-glow-dim: rgba(0, 255, 65, 0.2);
+  --term-dot-close: #ff4444;
+  --term-dot-min: #ffd700;
+  --term-dot-max: #33ff33;
+}
+
+[data-theme="amber"] {
+  --term-text: #ffb000;
+  --term-bg: #1a0e00;
+  --term-bg-light: #1a0e00;
+  --term-dim: #664400;
+  --term-bright: #ffd700;
+  --term-accent: #ff6600;
+  --term-border: #3a2a00;
+  --term-surface: #1f1200;
+  --term-amber: #ffd700;
+  --term-orange: #ff8c00;
+  --term-red: #ff4444;
+  --term-glow: rgba(255, 176, 0, 0.5);
+  --term-glow-dim: rgba(255, 176, 0, 0.2);
+  --term-dot-close: #ff4444;
+  --term-dot-min: #ffd700;
+  --term-dot-max: #ffb000;
+}
+
+[data-theme="dracula"] {
+  --term-text: #bd93f9;
+  --term-bg: #282a36;
+  --term-bg-light: #282a36;
+  --term-dim: #6272a4;
+  --term-bright: #ff79c6;
+  --term-accent: #50fa7b;
+  --term-border: #44475a;
+  --term-surface: #21222c;
+  --term-amber: #f1fa8c;
+  --term-orange: #ffb86c;
+  --term-red: #ff5555;
+  --term-glow: rgba(189, 147, 249, 0.5);
+  --term-glow-dim: rgba(189, 147, 249, 0.2);
+  --term-dot-close: #ff5555;
+  --term-dot-min: #f1fa8c;
+  --term-dot-max: #50fa7b;
+}
+
+[data-theme="solarized"] {
+  --term-text: #839496;
+  --term-bg: #002b36;
+  --term-bg-light: #002b36;
+  --term-dim: #586e75;
+  --term-bright: #93a1a1;
+  --term-accent: #268bd2;
+  --term-border: #073642;
+  --term-surface: #073642;
+  --term-amber: #b58900;
+  --term-orange: #cb4b16;
+  --term-red: #dc322f;
+  --term-glow: rgba(131, 148, 150, 0.4);
+  --term-glow-dim: rgba(131, 148, 150, 0.15);
+  --term-dot-close: #dc322f;
+  --term-dot-min: #b58900;
+  --term-dot-max: #859900;
+}
+
+[data-theme="nord"] {
+  --term-text: #d8dee9;
+  --term-bg: #2e3440;
+  --term-bg-light: #2e3440;
+  --term-dim: #4c566a;
+  --term-bright: #88c0d0;
+  --term-accent: #a3be8c;
+  --term-border: #3b4252;
+  --term-surface: #3b4252;
+  --term-amber: #ebcb8b;
+  --term-orange: #d08770;
+  --term-red: #bf616a;
+  --term-glow: rgba(136, 192, 208, 0.4);
+  --term-glow-dim: rgba(136, 192, 208, 0.15);
+  --term-dot-close: #bf616a;
+  --term-dot-min: #ebcb8b;
+  --term-dot-max: #a3be8c;
+}
+
+[data-theme="monokai"] {
+  --term-text: #f8f8f2;
+  --term-bg: #272822;
+  --term-bg-light: #272822;
+  --term-dim: #75715e;
+  --term-bright: #a6e22e;
+  --term-accent: #f92672;
+  --term-border: #3e3d32;
+  --term-surface: #1e1f1a;
+  --term-amber: #e6db74;
+  --term-orange: #fd971f;
+  --term-red: #f92672;
+  --term-glow: rgba(166, 226, 46, 0.5);
+  --term-glow-dim: rgba(166, 226, 46, 0.2);
+  --term-dot-close: #f92672;
+  --term-dot-min: #e6db74;
+  --term-dot-max: #a6e22e;
+}
+
+[data-theme="gruvbox"] {
+  --term-text: #ebdbb2;
+  --term-bg: #282828;
+  --term-bg-light: #282828;
+  --term-dim: #928374;
+  --term-bright: #fabd2f;
+  --term-accent: #fb4934;
+  --term-border: #3c3836;
+  --term-surface: #1d2021;
+  --term-amber: #fabd2f;
+  --term-orange: #fe8019;
+  --term-red: #fb4934;
+  --term-glow: rgba(250, 189, 47, 0.5);
+  --term-glow-dim: rgba(250, 189, 47, 0.2);
+  --term-dot-close: #fb4934;
+  --term-dot-min: #fabd2f;
+  --term-dot-max: #b8bb26;
+}
+
+[data-theme="catppuccin"] {
+  --term-text: #cdd6f4;
+  --term-bg: #1e1e2e;
+  --term-bg-light: #1e1e2e;
+  --term-dim: #585b70;
+  --term-bright: #cba6f7;
+  --term-accent: #f5c2e7;
+  --term-border: #313244;
+  --term-surface: #181825;
+  --term-amber: #f9e2af;
+  --term-orange: #fab387;
+  --term-red: #f38ba8;
+  --term-glow: rgba(203, 166, 247, 0.5);
+  --term-glow-dim: rgba(203, 166, 247, 0.2);
+  --term-dot-close: #f38ba8;
+  --term-dot-min: #f9e2af;
+  --term-dot-max: #a6e3a1;
+}
+
+[data-theme="tokyonight"] {
+  --term-text: #a9b1d6;
+  --term-bg: #1a1b26;
+  --term-bg-light: #1a1b26;
+  --term-dim: #565f89;
+  --term-bright: #7aa2f7;
+  --term-accent: #bb9af7;
+  --term-border: #292e42;
+  --term-surface: #16161e;
+  --term-amber: #e0af68;
+  --term-orange: #ff9e64;
+  --term-red: #f7768e;
+  --term-glow: rgba(122, 162, 247, 0.5);
+  --term-glow-dim: rgba(122, 162, 247, 0.2);
+  --term-dot-close: #f7768e;
+  --term-dot-min: #e0af68;
+  --term-dot-max: #9ece6a;
+}
+
+[data-theme="onedark"] {
+  --term-text: #abb2bf;
+  --term-bg: #282c34;
+  --term-bg-light: #282c34;
+  --term-dim: #5c6370;
+  --term-bright: #61afef;
+  --term-accent: #e06c75;
+  --term-border: #3e4452;
+  --term-surface: #21252b;
+  --term-amber: #e5c07b;
+  --term-orange: #d19a66;
+  --term-red: #e06c75;
+  --term-glow: rgba(97, 175, 239, 0.5);
+  --term-glow-dim: rgba(97, 175, 239, 0.2);
+  --term-dot-close: #e06c75;
+  --term-dot-min: #e5c07b;
+  --term-dot-max: #98c379;
+}
+
+[data-theme="cyberpunk"] {
+  --term-text: #00ff9f;
+  --term-bg: #0a0a1a;
+  --term-bg-light: #0a0a1a;
+  --term-dim: #333366;
+  --term-bright: #ff00ff;
+  --term-accent: #00ffff;
+  --term-border: #1a1a3a;
+  --term-surface: #050510;
+  --term-amber: #ffff00;
+  --term-orange: #ff6600;
+  --term-red: #ff0044;
+  --term-glow: rgba(255, 0, 255, 0.5);
+  --term-glow-dim: rgba(255, 0, 255, 0.2);
+  --term-dot-close: #ff0044;
+  --term-dot-min: #ffff00;
+  --term-dot-max: #00ff9f;
+}
+
+[data-theme="phosphor"] {
+  --term-text: #33ff00;
+  --term-bg: #0a1a0a;
+  --term-bg-light: #0a1a0a;
+  --term-dim: #1a4a1a;
+  --term-bright: #66ff33;
+  --term-accent: #99ff66;
+  --term-border: #1a3a1a;
+  --term-surface: #061006;
+  --term-amber: #99ff66;
+  --term-orange: #66cc33;
+  --term-red: #ff4444;
+  --term-glow: rgba(102, 255, 51, 0.5);
+  --term-glow-dim: rgba(102, 255, 51, 0.2);
+  --term-dot-close: #ff4444;
+  --term-dot-min: #99ff66;
+  --term-dot-max: #33ff00;
+}
+
+[data-theme="ibm3278"] {
+  --term-text: #41ff00;
+  --term-bg: #000000;
+  --term-bg-light: #000000;
+  --term-dim: #1a5c00;
+  --term-bright: #5bff2e;
+  --term-accent: #33cc00;
+  --term-border: #0a2a00;
+  --term-surface: #050a00;
+  --term-amber: #5bff2e;
+  --term-orange: #33cc00;
+  --term-red: #ff3300;
+  --term-glow: rgba(91, 255, 46, 0.5);
+  --term-glow-dim: rgba(91, 255, 46, 0.2);
+  --term-dot-close: #ff3300;
+  --term-dot-min: #5bff2e;
+  --term-dot-max: #41ff00;
+}
+
+[data-theme="sunset"] {
+  --term-text: #ffd5b4;
+  --term-bg: #1a0f0a;
+  --term-bg-light: #1a0f0a;
+  --term-dim: #8b5e3c;
+  --term-bright: #ff7e47;
+  --term-accent: #ff4444;
+  --term-border: #3a2a1a;
+  --term-surface: #120a06;
+  --term-amber: #ffc040;
+  --term-orange: #ff7e47;
+  --term-red: #ff4444;
+  --term-glow: rgba(255, 126, 71, 0.5);
+  --term-glow-dim: rgba(255, 126, 71, 0.2);
+  --term-dot-close: #ff4444;
+  --term-dot-min: #ffc040;
+  --term-dot-max: #ff7e47;
+}
+
+[data-theme="ice"] {
+  --term-text: #b4d5ff;
+  --term-bg: #0a0f1a;
+  --term-bg-light: #0a0f1a;
+  --term-dim: #3c5e8b;
+  --term-bright: #47b4ff;
+  --term-accent: #44aaff;
+  --term-border: #1a2a3a;
+  --term-surface: #060a12;
+  --term-amber: #88ccff;
+  --term-orange: #5599dd;
+  --term-red: #ff5566;
+  --term-glow: rgba(71, 180, 255, 0.5);
+  --term-glow-dim: rgba(71, 180, 255, 0.2);
+  --term-dot-close: #ff5566;
+  --term-dot-min: #88ccff;
+  --term-dot-max: #47b4ff;
+}
+
+[data-theme="paper"] {
+  --term-text: #1a1a2e;
+  --term-bg: #f5f5f0;
+  --term-bg-light: #eeeee8;
+  --term-dim: #8b8b80;
+  --term-bright: #111;
+  --term-accent: #2563eb;
+  --term-border: #d4d4cc;
+  --term-surface: #fafaf5;
+  --term-amber: #b45309;
+  --term-orange: #c2410c;
+  --term-red: #dc2626;
+  --term-glow: transparent;
+  --term-glow-dim: transparent;
+  --term-dot-close: #dc2626;
+  --term-dot-min: #b45309;
+  --term-dot-max: #16a34a;
+}
+
+/* ─── Syntax Highlighting Overrides (per-theme) ──────────────────────────── */
+
+[data-theme="paper"] {
+  --hl-keyword: #a626a4;
+  --hl-string: #059669;
+  --hl-comment: #9ca3af;
+  --hl-function: #2563eb;
+  --hl-type: #c41a7f;
+  --hl-number: #986801;
+  --hl-operator: #4b5563;
+  --hl-attr: #7c3aed;
+}
+
+[data-theme="matrix"] {
+  --hl-keyword: #00ff41;
+  --hl-string: #ffd700;
+  --hl-comment: #1a5c1a;
+  --hl-number: #00e5ff;
+  --hl-type: #87ceeb;
+  --hl-attr: #ff8c00;
+  --hl-operator: #1a5c1a;
+  --hl-function: #00e5ff;
+}
+
+[data-theme="amber"] {
+  --hl-keyword: #ffd700;
+  --hl-string: #ff6600;
+  --hl-comment: #664400;
+  --hl-number: #ffb000;
+  --hl-type: #ffd700;
+  --hl-attr: #ff8c00;
+  --hl-operator: #664400;
+  --hl-function: #ff6600;
+}
+
+[data-theme="dracula"] {
+  --hl-keyword: #ff79c6;
+  --hl-string: #f1fa8c;
+  --hl-comment: #6272a4;
+  --hl-number: #bd93f9;
+  --hl-type: #8be9fd;
+  --hl-attr: #ffb86c;
+  --hl-operator: #6272a4;
+  --hl-function: #50fa7b;
+}
+
+[data-theme="solarized"] {
+  --hl-keyword: #859900;
+  --hl-string: #2aa198;
+  --hl-comment: #586e75;
+  --hl-number: #d33682;
+  --hl-type: #268bd2;
+  --hl-attr: #cb4b16;
+  --hl-operator: #586e75;
+  --hl-function: #268bd2;
+}
+
+[data-theme="nord"] {
+  --hl-keyword: #81a1c1;
+  --hl-string: #a3be8c;
+  --hl-comment: #4c566a;
+  --hl-number: #b48ead;
+  --hl-type: #88c0d0;
+  --hl-attr: #d08770;
+  --hl-operator: #4c566a;
+  --hl-function: #88c0d0;
+}
+
+[data-theme="monokai"] {
+  --hl-keyword: #f92672;
+  --hl-string: #e6db74;
+  --hl-comment: #75715e;
+  --hl-number: #ae81ff;
+  --hl-type: #66d9ef;
+  --hl-attr: #fd971f;
+  --hl-operator: #75715e;
+  --hl-function: #a6e22e;
+}
+
+[data-theme="gruvbox"] {
+  --hl-keyword: #fb4934;
+  --hl-string: #b8bb26;
+  --hl-comment: #928374;
+  --hl-number: #d3869b;
+  --hl-type: #83a598;
+  --hl-attr: #fe8019;
+  --hl-operator: #928374;
+  --hl-function: #fabd2f;
+}
+
+[data-theme="catppuccin"] {
+  --hl-keyword: #cba6f7;
+  --hl-string: #a6e3a1;
+  --hl-comment: #585b70;
+  --hl-number: #fab387;
+  --hl-type: #89dceb;
+  --hl-attr: #f5c2e7;
+  --hl-operator: #585b70;
+  --hl-function: #89b4fa;
+}
+
+[data-theme="tokyonight"] {
+  --hl-keyword: #bb9af7;
+  --hl-string: #9ece6a;
+  --hl-comment: #565f89;
+  --hl-number: #ff9e64;
+  --hl-type: #2ac3de;
+  --hl-attr: #e0af68;
+  --hl-operator: #565f89;
+  --hl-function: #7aa2f7;
+}
+
+[data-theme="onedark"] {
+  --hl-keyword: #c678dd;
+  --hl-string: #98c379;
+  --hl-comment: #5c6370;
+  --hl-number: #d19a66;
+  --hl-type: #56b6c2;
+  --hl-attr: #e5c07b;
+  --hl-operator: #5c6370;
+  --hl-function: #61afef;
+}
+
+[data-theme="cyberpunk"] {
+  --hl-keyword: #ff00ff;
+  --hl-string: #00ffff;
+  --hl-comment: #333366;
+  --hl-number: #ffff00;
+  --hl-type: #00ff9f;
+  --hl-attr: #ff6600;
+  --hl-operator: #333366;
+  --hl-function: #00ffff;
+}
+
+[data-theme="phosphor"] {
+  --hl-keyword: #66ff33;
+  --hl-string: #99ff66;
+  --hl-comment: #1a4a1a;
+  --hl-number: #ccff99;
+  --hl-type: #44dd22;
+  --hl-attr: #88ee44;
+  --hl-operator: #1a4a1a;
+  --hl-function: #66ff33;
+}
+
+[data-theme="ibm3278"] {
+  --hl-keyword: #5bff2e;
+  --hl-string: #33cc00;
+  --hl-comment: #1a5c00;
+  --hl-number: #77ff55;
+  --hl-type: #41ff00;
+  --hl-attr: #5bff2e;
+  --hl-operator: #1a5c00;
+  --hl-function: #33cc00;
+}
+
+[data-theme="sunset"] {
+  --hl-keyword: #ff4444;
+  --hl-string: #ffc040;
+  --hl-comment: #8b5e3c;
+  --hl-number: #ffaa66;
+  --hl-type: #ff7e47;
+  --hl-attr: #ffd5b4;
+  --hl-operator: #8b5e3c;
+  --hl-function: #ff7e47;
+}
+
+[data-theme="ice"] {
+  --hl-keyword: #44aaff;
+  --hl-string: #88ccff;
+  --hl-comment: #3c5e8b;
+  --hl-number: #aaddff;
+  --hl-type: #47b4ff;
+  --hl-attr: #77bbee;
+  --hl-operator: #3c5e8b;
+  --hl-function: #44aaff;
+}
+
+/* ─── Reset ──────────────────────────────────────────────────────────────── */
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--term-bg-light);
+  color: var(--term-text);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+/* CRT scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 2px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+[data-theme="paper"]::after {
+  display: none;
+}
+
+/* ─── Links ──────────────────────────────────────────────────────────────── */
+
+a {
+  color: var(--term-accent);
+  text-decoration: none;
+  transition: text-shadow 0.2s, color 0.2s;
+}
+
+a:hover {
+  color: var(--term-bright);
+  text-shadow: 0 0 8px var(--term-glow);
+}
+
+a:visited {
+  color: var(--term-accent);
+}
+
+/* ─── Terminal window chrome ─────────────────────────────────────────────── */
+
+.terminal-window {
+  max-width: 900px;
+  width: 100%;
+  border: 1px solid var(--term-text);
+  background: var(--term-bg-light);
+  position: relative;
+}
+
+.title-bar {
+  background: var(--term-surface);
+  border-bottom: 1px solid var(--term-text);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.title-bar .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot.close { background: var(--term-dot-close); }
+.dot.minimize { background: var(--term-dot-min); }
+.dot.maximize { background: var(--term-dot-max); }
+
+.title-bar .title-text {
+  margin-left: 12px;
+  color: var(--term-dim);
+  font-size: 12px;
+}
+
+.title-bar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.content {
+  padding: 28px 32px 40px;
+}
+
+/* ─── Title with typing animation ────────────────────────────────────────── */
+
+.report-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--term-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  border-right: none;
+  width: 0;
+  /* animation is set inline per-report based on title length */
+  text-shadow: 0 0 8px var(--term-glow);
+}
+
+.cursor {
+  display: inline-block;
+  color: var(--term-bright);
+  animation: blink 1s step-end infinite;
+  text-shadow: 0 0 8px var(--term-glow);
+  font-size: 20px;
+  vertical-align: baseline;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.subtitle {
+  color: var(--term-dim);
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+/* ─── System stats line ──────────────────────────────────────────────────── */
+
+.system-stats {
+  color: var(--term-dim);
+  font-size: 12px;
+  margin-top: 6px;
+  opacity: 0.8;
+}
+
+/* ─── Search bar ─────────────────────────────────────────────────────────── */
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  margin-bottom: 4px;
+}
+
+.search-label {
+  color: var(--term-bright);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.search-input {
+  background: var(--term-bg);
+  color: var(--term-text);
+  border: 1px solid var(--term-border);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  flex: 1;
+  max-width: 320px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.search-input:focus {
+  border-color: var(--term-bright);
+  box-shadow: 0 0 6px var(--term-glow-dim);
+}
+
+.search-input::placeholder {
+  color: var(--term-dim);
+  opacity: 0.6;
+}
+
+.search-count {
+  color: var(--term-dim);
+  font-size: 12px;
+}
+
+/* ─── No results ─────────────────────────────────────────────────────────── */
+
+.no-results {
+  color: var(--term-red);
+  margin: 20px 0;
+  font-size: 13px;
+}
+
+.no-results pre {
+  font-family: inherit;
+}
+
+/* ─── Navigation ─────────────────────────────────────────────────────────── */
+
+.nav {
+  margin-top: 24px;
+  margin-bottom: 28px;
+  border-top: 1px solid var(--term-border);
+  border-bottom: 1px solid var(--term-border);
+  padding: 12px 0;
+}
+
+.nav .prompt {
+  color: var(--term-dim);
+}
+
+.nav-links {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+
+.nav-links a {
+  color: var(--term-text);
+  text-decoration: none;
+  transition: text-shadow 0.2s;
+}
+
+.nav-links a:hover {
+  text-shadow: 0 0 10px var(--term-glow);
+  color: var(--term-bright);
+}
+
+/* ─── Section headings ───────────────────────────────────────────────────── */
+
+.section {
+  margin-top: 36px;
+}
+
+.section-header {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--term-bright);
+  text-shadow: 0 0 6px var(--term-glow);
+  margin-bottom: 16px;
+}
+
+.subsection-header {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--term-bright);
+  text-shadow: 0 0 4px var(--term-glow-dim);
+  margin-top: 20px;
+  margin-bottom: 12px;
+}
+
+/* ─── Paragraphs ─────────────────────────────────────────────────────────── */
+
+p {
+  margin-bottom: 14px;
+  text-shadow: 0 0 2px var(--term-glow-dim);
+}
+
+/* ─── Inline code ────────────────────────────────────────────────────────── */
+
+p code, li code, td code, .term-list-item code {
+  background: rgba(26, 58, 26, 0.5);
+  background: color-mix(in srgb, var(--term-border) 50%, transparent);
+  color: var(--term-amber);
+  padding: 1px 5px;
+  font-size: 0.92em;
+  border-radius: 2px;
+}
+
+/* ─── Blockquotes ────────────────────────────────────────────────────────── */
+
+.blockquote {
+  color: var(--term-orange);
+  padding-left: 12px;
+  border-left: 3px solid var(--term-orange);
+  margin: 14px 0;
+  line-height: 1.7;
+}
+
+/* ─── ASCII tables ───────────────────────────────────────────────────────── */
+
+.ascii-table {
+  margin: 16px 0;
+  overflow-x: auto;
+  font-size: 13px;
+}
+
+.ascii-table pre {
+  color: var(--term-text);
+  text-shadow: 0 0 2px var(--term-glow-dim);
+  white-space: pre;
+  font-family: inherit;
+  border: 1px solid var(--term-border);
+  padding: 8px;
+}
+
+/* ─── Status indicators ──────────────────────────────────────────────────── */
+
+.status-ok { color: var(--term-bright); }
+.status-warn { color: var(--term-amber); }
+.status-fail { color: var(--term-red); }
+
+/* ─── Code blocks ────────────────────────────────────────────────────────── */
+
+.code-block {
+  background: var(--term-surface);
+  border: 1px solid var(--term-border);
+  padding: 16px 18px;
+  margin: 14px 0;
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.code-block pre {
+  font-family: inherit;
+  white-space: pre;
+}
+
+.code-block code {
+  font-family: inherit;
+}
+
+.code-block .code-label {
+  color: var(--term-dim);
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+/* ─── Lists ──────────────────────────────────────────────────────────────── */
+
+.term-list {
+  margin: 14px 0;
+}
+
+.term-list-item {
+  padding-left: 4px;
+  margin-bottom: 4px;
+}
+
+/* ─── Horizontal rule ────────────────────────────────────────────────────── */
+
+.term-hr {
+  color: var(--term-border);
+  margin: 20px 0;
+}
+
+/* ─── Tree ───────────────────────────────────────────────────────────────── */
+
+.tree-desc {
+  color: var(--term-dim);
+  font-style: italic;
+}
+
+/* ─── Math blocks ────────────────────────────────────────────────────────── */
+
+.math-block {
+  margin: 16px 0;
+  text-align: center;
+  color: var(--term-accent);
+}
+
+.math-inline {
+  color: var(--term-accent);
+}
+
+/* KaTeX color overrides for terminal */
+.math-block .katex,
+.math-inline .katex {
+  color: var(--term-accent);
+}
+
+/* ─── Width picker (terminal style) ──────────────────────────────────────── */
+
+.width-picker {
+  display: inline-flex;
+  gap: 0;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+}
+
+.width-picker .width-btn {
+  padding: 2px 4px;
+  font-size: 11px;
+  font-weight: 400;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--term-dim);
+  font-family: inherit;
+  opacity: 1;
+  transition: color 0.15s, text-shadow 0.15s;
+}
+
+.width-picker .width-btn:hover {
+  color: var(--term-text);
+  opacity: 1;
+}
+
+.width-picker .width-btn.active {
+  color: var(--term-bright);
+  text-shadow: 0 0 6px var(--term-glow);
+  background: transparent;
+  opacity: 1;
+}
+
+/* ─── Theme select (terminal style) ──────────────────────────────────────── */
+
+.theme-select {
+  background: var(--term-bg);
+  color: var(--term-text);
+  border: 1px solid var(--term-border);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  cursor: pointer;
+  outline: none;
+}
+
+.theme-select:focus {
+  border-color: var(--term-bright);
+}
+
+.theme-select option {
+  background: var(--term-bg);
+  color: var(--term-text);
+}
+
+/* ─── Search highlight (terminal override) ───────────────────────────────── */
+
+mark {
+  background: rgba(255, 215, 0, 0.3);
+  color: inherit;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--term-bg-light); }
+::-webkit-scrollbar-thumb { background: var(--term-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--term-text); }
+
+/* ─── Print ──────────────────────────────────────────────────────────────── */
+
+@media print {
+  body::after { display: none; }
+  .cursor { animation: none; opacity: 1; }
+  .report-title { width: auto !important; animation: none !important; }
+  body { padding: 0; }
+  .terminal-window { border: none; max-width: 100%; }
+  .title-bar { display: none; }
+  .search-bar { display: none; }
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  body { padding: 8px; }
+  .content { padding: 16px 14px 24px; }
+  .report-title { font-size: 16px; }
+  .section-header { font-size: 14px; }
+  .ascii-table { font-size: 11px; }
+  .code-block { font-size: 12px; padding: 12px; }
+  .nav-links { flex-direction: column; gap: 4px; }
+  .title-bar-right { display: none; }
+}
+
+/* Terminal has its own width/theme controls in the title bar.
+   The floating toolbar still shows for the style-picker and unified theme toggle. */
+
+</style>
+<style>
+  .report-title {
+    animation: typing 2.4s steps(32, end) 0.5s forwards;
+  }
+  @keyframes typing {
+    from { width: 0; }
+    to { width: 32ch; }
+  }
+</style>
+<script>
+window.__RPT_CURRENT_STYLE = "terminal";
+window.__RPT_GENERATED_STYLES = [];
+window.__RPT_REPORT_DIR = "/Users/alcatraz627/Code/local-models/.claude/output/20260707-1334-mlx-report";
+</script>
+</head>
+<body data-theme="matrix">
+
+<div class="terminal-window">
+  <!-- Title bar -->
+  <div class="title-bar">
+    <span class="dot close"></span>
+    <span class="dot minimize"></span>
+    <span class="dot maximize"></span>
+    <span class="title-text">report.sh &mdash; bash &mdash; <span class="title-res">80x40</span></span>
+    <div class="title-bar-right">
+      <div class="width-picker">
+        <button class="width-btn" data-width="sm">[SM]</button>
+        <button class="width-btn" data-width="md">[MD]</button>
+        <button class="width-btn" data-width="lg">[LG]</button>
+        <button class="width-btn" data-width="xl">[XL]</button>
+      </div>
+      <select id="theme-select" class="theme-select" title="Terminal color theme">
+        <option value="matrix">Matrix Green</option>
+        <option value="amber">Amber CRT</option>
+        <option value="dracula">Dracula Purple</option>
+        <option value="solarized">Solarized</option>
+        <option value="nord">Nord Blue</option>
+        <option value="monokai">Monokai</option>
+        <option value="gruvbox">Gruvbox</option>
+        <option value="catppuccin">Catppuccin</option>
+        <option value="tokyonight">Tokyo Night</option>
+        <option value="onedark">One Dark</option>
+        <option value="cyberpunk">Cyberpunk</option>
+        <option value="phosphor">Phosphor</option>
+        <option value="ibm3278">IBM 3278</option>
+        <option value="sunset">Sunset</option>
+        <option value="ice">Ice</option>
+        <option value="paper">Paper (Light)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="terminal-body content">
+    <!-- Title with typing animation -->
+    <div style="display:flex;align-items:baseline;">
+      <div class="report-title">MLX on Ollama — measured verdict</div><span class="cursor">&#x2588;</span>
+    </div>
+    <div class="subtitle">&gt; Ollama 0.30.10 · M5 Pro 64 GB · qwen3.6:35b-a3b — Q4_K_M (llama.cpp/Metal) vs NVFP4 (MLX)</div>
+    <div class="system-stats">[sys] 6 sections · 1 code block · 1 table</div>
+
+    <!-- Search -->
+    <div class="search-bar">
+      <label class="search-label" for="search">grep:</label>
+      <input type="text" id="search" class="search-input" placeholder="pattern..." autocomplete="off" spellcheck="false">
+      <span id="search-count" class="search-count"></span>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav">
+      <div class="prompt">&gt; ls sections/</div>
+      <div class="nav-links">
+        <a href="#verdict">[01] Verdict</a>
+        <a href="#how-mlx-actually-engages">[02] How MLX actually engages</a>
+        <a href="#the-numbers">[03] The numbers</a>
+        <a href="#the-judgment-gate">[04] The judgment gate</a>
+        <a href="#decision">[05] Decision</a>
+        <a href="#unmeasured-follow-ups">[06] Unmeasured follow-ups</a>
+      </div>
+    </nav>
+
+    <!-- No results -->
+    <div id="no-results" class="no-results" style="display:none;">
+      <pre>grep: no matches found</pre>
+    </div>
+
+    <!-- Sections -->
+    <div class="section" id="verdict">
+  <div class="section-header">=== [01] Verdict ===</div>
+<p><strong>MLX is now native in Ollama 0.30.10 — no parallel runtime to build. It loads the model 3.2× faster and decodes ~7% faster, but prefills 28% slower, and the NVFP4 quant regressed judgment terseness. <code>CODE_MODEL</code> stays on Q4_K_M.</strong></p>
+<p>Machine: M5 Pro, 64 GB unified memory. Model under test: <code>qwen3.6:35b-a3b</code> (35B MoE, ~3B active) as Q4_K_M GGUF (24 GB, llama.cpp/Metal) vs NVFP4 safetensors (21 GB, MLX runner).</p>
+</div>
+
+    <div class="section" id="how-mlx-actually-engages">
+  <div class="section-header">=== [02] How MLX actually engages (the discovery) ===</div>
+<div class="term-list"><div class="term-list-item">- <strong>It is format-routed, not a toggle.</strong> Ollama ≥0.19 ships an in-process MLX runner; safetensors-format library tags (<code>-nvfp4</code>, <code>-mxfp8</code>, <code>-mlx-bf16</code>) route to it, GGUF blobs always go to the <code>llama-server</code> subprocess. Source: <code>llm/server.go</code> ("All GGML models are served via the upstream llama-server subprocess") + our server log.</div>
+<div class="term-list-item">- <strong><code>OLLAMA_USE_MLX</code> never existed</strong> — the old <code>bin/lm-serve</code> human NOTE was right to call it cargo-cult. There is no env var today either.</div>
+<div class="term-list-item">- <strong>Proof of engagement</strong> comes from the server log, never the tag name: <code>starting mlx runner subprocess model=qwen3.6:35b-a3b-nvfp4</code> · <code>MLX engine initialized (0.31.2) device=gpu</code>.</div></div>
+</div>
+
+    <div class="section" id="the-numbers">
+  <div class="section-header">=== [03] The numbers ===</div>
+<p>Benchmark: cold-load run, then two warm runs (1,254-token prompt, 400-token generation, temperature 0). Prefill measured on the first warm run only — repeating an identical prompt hits Ollama's KV cache and inflates prefill ~30×.</p>
+<div class="ascii-table"><pre>+---------------------------------+----------------------------+---------------+---------------+
+|  metric                          |  Q4_K_M · llama.cpp/Metal   |  NVFP4 · MLX   |  delta         |
++---------------------------------+----------------------------+---------------+---------------+
+|  cold load                       |  15.4 s                     |  4.9 s         |  3.2× faster   |
+|  cold call, end-to-end (short)   |  15.8 s                     |  12.7 s        |  ~20% faster   |
+|  prefill (1,254 tok)             |  1,291 tok/s                |  931 tok/s     |  28% slower    |
+|  decode                          |  64–68 tok/s                |  ~70 tok/s     |  +5–9%         |
+|  disk                            |  24 GB                      |  21 GB         |  −3 GB         |
++---------------------------------+----------------------------+---------------+---------------+</pre></div>
+<p>The blog's headline (~2× decode, 58→112 tok/s) did not reproduce here — this machine's llama.cpp/Metal baseline already decodes at 64–68 tok/s. MLX's first request after load also pays a visible warmup (shader JIT), folded into the cold numbers above.</p>
+</div>
+
+    <div class="section" id="the-judgment-gate">
+  <div class="section-header">=== [04] The judgment gate (why speed didn't win) ===</div>
+<p>Re-ran the 9-item probe suite on the NVFP4 variant (<code>probe/runs/qwen3.6_35b-a3b-nvfp4-20260707-131716.md</code>) against the Q4_K_M baseline run:</p>
+<div class="term-list"><div class="term-list-item">- <strong>7 of 9 items: identical flags</strong> — abstention (both), ask-vs-assume, 5/5 command consistency, multi-turn constraint, multifile edit, scope-trap all hold.</div>
+<div class="term-list-item">- <strong>2 of 9 items: terseness regression.</strong> On <code>tool-decision</code>, Q4_K_M answered in 3 clean sentences; NVFP4 reached the same answer through ~35 lines of leaked deliberation ("Wait… Actually…"), tripping pass AND fail markers. On <code>invariant-aware-edit</code>, NVFP4 produced a ~180-line second-guessing loop around a correct conclusion.</div>
+<div class="term-list-item">- <strong>Lesson: re-quantized weights need re-gating.</strong> Same model, same conclusions, different <em>behavior</em>. A tok/s benchmark alone would have shipped the regression.</div></div>
+</div>
+
+    <div class="section" id="decision">
+  <div class="section-header">=== [05] Decision ===</div>
+<p><strong>Keep <code>CODE_MODEL = qwen3.6:35b-a3b</code> (Q4_K_M).</strong> The workloads that matter (fleet runs, reviews) are prefill-heavy and lease-amortized — cold-load speed barely counts there, and prefill is where MLX loses. The judgment regression is the tie-breaker. The 21 GB NVFP4 variant was reclaimed; one command re-pulls it if the calculus changes:</p>
+<div class="code-block">
+  <div class="code-label">// bash</div>
+  <pre><code>ollama pull qwen3.6:35b-a3b-nvfp4</code></pre>
+</div>
+</div>
+
+    <div class="section" id="unmeasured-follow-ups">
+  <div class="section-header">=== [06] Unmeasured follow-ups ===</div>
+<div class="term-list"><div class="term-list-item">- <strong>MTP tags</strong> (<code>-mtp-q4_K_M</code> etc.) + <code>OLLAMA_MLX_MTP_*</code> draft-token vars — multi-token prediction as speculative decoding; could stack on either backend.</div>
+<div class="term-list-item">- <strong>MXFP8</strong> (38 GB, MLX) — the 8-bit variant might not carry NVFP4's behavior regression, at the cost of RAM headroom for the two-model fleet.</div>
+<div class="term-list-item">- Re-test on future Ollama releases: the MLX runner is in preview and prefill is its known weak edge.</div></div>
+<div class="term-hr">────────────────────────────────────────────────</div>
+<p><em>Sources: <code>docs/05-perf-levers-and-usage-audit.md</code> §1 (verdict) · benchmark script <code>scratchpad/baseline-qwen36.sh</code> · server log <code>logs/ollama-serve.err.log</code> · probe runs in <code>probe/runs/</code>. Ollama MLX announcement: ollama.com/blog/mlx.</em></p>
+</div>
+
+  </div><!-- .content -->
+</div><!-- .terminal-window -->
+
+
+
+<!-- Unified floating toolbar -->
+<div class="floating-toolbar" id="floating-toolbar">
+  <div class="ftb-row ftb-row-2" id="ftb-row-2" style="display:none"></div>
+  <div class="ftb-row ftb-row-1">
+    <button id="ftb-theme-btn" class="ftb-btn" title="Toggle light/dark theme">🌙</button>
+    <span class="ftb-sep"></span>
+    <div class="ftb-group copy-for-picker" id="copy-for-wrap">
+      <button id="copy-for-btn" class="ftb-btn ftb-dropdown-btn" title="Copy report content" aria-expanded="false">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+        <span class="ftb-label">Copy</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div id="copy-for-menu" class="copy-for-menu">
+        <button class="copy-for-opt" data-format="notion"><span class="copy-for-icon">N</span><span class="copy-for-label">Copy for Notion</span></button>
+        <button class="copy-for-opt" data-format="slack"><span class="copy-for-icon">#</span><span class="copy-for-label">Copy for Slack</span></button>
+        <button class="copy-for-opt" data-format="markdown"><span class="copy-for-icon">M&darr;</span><span class="copy-for-label">Copy as Markdown</span></button>
+      </div>
+    </div>
+    <button id="ftb-print-btn" class="ftb-btn" title="Print report">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <polyline points="6 9 6 2 18 2 18 9"/>
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+        <rect x="6" y="14" width="12" height="8"/>
+      </svg>
+    </button>
+    <span class="ftb-sep"></span>
+    <div class="ftb-group style-picker" id="style-picker-wrap">
+      <button id="style-picker-btn" class="ftb-btn ftb-dropdown-btn" title="Switch report style" aria-expanded="false">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+        </svg>
+        <span class="ftb-label">terminal</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div id="style-menu" class="style-menu">
+        <div class="style-group-label">Classic</div>
+<button class="style-opt" data-style="default" data-ready="false" title="Dark sidebar with accent colors" data-preview="&lt;rect fill=&quot;#0f0f17&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#1a1a2e&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;40&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#6366f1&quot; x=&quot;6&quot; y=&quot;8&quot; width=&quot;28&quot; height=&quot;3&quot; rx=&quot;1&quot;/&gt;
+    &lt;rect fill=&quot;#2d2d44&quot; x=&quot;6&quot; y=&quot;16&quot; width=&quot;24&quot; height=&quot;2&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#2d2d44&quot; x=&quot;6&quot; y=&quot;22&quot; width=&quot;20&quot; height=&quot;2&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#2d2d44&quot; x=&quot;6&quot; y=&quot;28&quot; width=&quot;22&quot; height=&quot;2&quot; rx=&quot;1&quot;/&gt;
+    &lt;rect fill=&quot;#6366f1&quot; x=&quot;50&quot; y=&quot;10&quot; width=&quot;50&quot; height=&quot;4&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;&lt;rect fill=&quot;#e2e8f0&quot; x=&quot;50&quot; y=&quot;20&quot; width=&quot;90&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#e2e8f0&quot; x=&quot;50&quot; y=&quot;26&quot; width=&quot;80&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;&lt;rect fill=&quot;#1a1a2e&quot; x=&quot;50&quot; y=&quot;36&quot; width=&quot;100&quot; height=&quot;30&quot; rx=&quot;3&quot;/&gt;&lt;rect fill=&quot;#e2e8f0&quot; x=&quot;50&quot; y=&quot;74&quot; width=&quot;70&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;"><span class="style-dot" style="background:#6366f1"></span><span class="style-info"><span class="style-name">default</span><span class="style-desc">Dark sidebar with accent colors</span></span></button>
+<button class="style-opt" data-style="minimal" data-ready="false" title="Ultra-clean reading-focused layout" data-preview="&lt;rect fill=&quot;#fafafa&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#111&quot; x=&quot;30&quot; y=&quot;12&quot; width=&quot;100&quot; height=&quot;5&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#6b7280&quot; x=&quot;50&quot; y=&quot;22&quot; width=&quot;60&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;
+    &lt;rect fill=&quot;#e5e7eb&quot; x=&quot;30&quot; y=&quot;32&quot; width=&quot;100&quot; height=&quot;.5&quot;/&gt;
+    &lt;rect fill=&quot;#374151&quot; x=&quot;30&quot; y=&quot;42&quot; width=&quot;100&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#374151&quot; x=&quot;30&quot; y=&quot;48&quot; width=&quot;96&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#374151&quot; x=&quot;30&quot; y=&quot;54&quot; width=&quot;100&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#374151&quot; x=&quot;30&quot; y=&quot;60&quot; width=&quot;80&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;
+    &lt;rect fill=&quot;#e5e7eb&quot; x=&quot;30&quot; y=&quot;70&quot; width=&quot;100&quot; height=&quot;.5&quot;/&gt;"><span class="style-dot" style="background:#6b7280"></span><span class="style-info"><span class="style-name">minimal</span><span class="style-desc">Ultra-clean reading-focused layout</span></span></button>
+<button class="style-opt" data-style="notion" data-ready="false" title="Clean Notion-style with cards" data-preview="&lt;rect fill=&quot;#ffffff&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#f7f6f3&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;160&quot; height=&quot;14&quot; rx=&quot;4&quot;/&gt;&lt;rect fill=&quot;#37352f&quot; x=&quot;8&quot; y=&quot;5&quot; width=&quot;40&quot; height=&quot;4&quot; rx=&quot;1&quot;/&gt;
+    &lt;rect fill=&quot;#fff&quot; x=&quot;12&quot; y=&quot;22&quot; width=&quot;136&quot; height=&quot;30&quot; rx=&quot;4&quot; stroke=&quot;#e3e2de&quot; stroke-width=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#f7f6f3&quot; x=&quot;16&quot; y=&quot;26&quot; width=&quot;60&quot; height=&quot;3&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#9b9a97&quot; x=&quot;16&quot; y=&quot;32&quot; width=&quot;90&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#9b9a97&quot; x=&quot;16&quot; y=&quot;38&quot; width=&quot;70&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;
+    &lt;rect fill=&quot;#fff&quot; x=&quot;12&quot; y=&quot;58&quot; width=&quot;136&quot; height=&quot;30&quot; rx=&quot;4&quot; stroke=&quot;#e3e2de&quot; stroke-width=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#f7f6f3&quot; x=&quot;16&quot; y=&quot;62&quot; width=&quot;50&quot; height=&quot;3&quot; rx=&quot;1&quot;/&gt;"><span class="style-dot" style="background:#9b9a97"></span><span class="style-info"><span class="style-name">notion</span><span class="style-desc">Clean Notion-style with cards</span></span></button>
+<div class="style-group-label">Data</div>
+<button class="style-opt" data-style="dashboard" data-ready="false" title="Analytics dashboard with metrics" data-preview="&lt;rect fill=&quot;#0f172a&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#1e293b&quot; x=&quot;4&quot; y=&quot;4&quot; width=&quot;36&quot; height=&quot;20&quot; rx=&quot;3&quot;/&gt;&lt;rect fill=&quot;#3b82f6&quot; x=&quot;8&quot; y=&quot;8&quot; width=&quot;16&quot; height=&quot;6&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#64748b&quot; x=&quot;8&quot; y=&quot;17&quot; width=&quot;24&quot; height=&quot;2&quot; rx=&quot;1&quot;/&gt;
+    &lt;rect fill=&quot;#1e293b&quot; x=&quot;44&quot; y=&quot;4&quot; width=&quot;36&quot; height=&quot;20&quot; rx=&quot;3&quot;/&gt;&lt;rect fill=&quot;#10b981&quot; x=&quot;48&quot; y=&quot;8&quot; width=&quot;16&quot; height=&quot;6&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#64748b&quot; x=&quot;48&quot; y=&quot;17&quot; width=&quot;24&quot; height=&quot;2&quot; rx=&quot;1&quot;/&gt;
+    &lt;rect fill=&quot;#1e293b&quot; x=&quot;84&quot; y=&quot;4&quot; width=&quot;36&quot; height=&quot;20&quot; rx=&quot;3&quot;/&gt;&lt;rect fill=&quot;#f59e0b&quot; x=&quot;88&quot; y=&quot;8&quot; width=&quot;16&quot; height=&quot;6&quot; rx=&quot;1&quot;/&gt;
+    &lt;rect fill=&quot;#1e293b&quot; x=&quot;124&quot; y=&quot;4&quot; width=&quot;32&quot; height=&quot;20&quot; rx=&quot;3&quot;/&gt;&lt;rect fill=&quot;#ef4444&quot; x=&quot;128&quot; y=&quot;8&quot; width=&quot;16&quot; height=&quot;6&quot; rx=&quot;1&quot;/&gt;
+    &lt;rect fill=&quot;#1e293b&quot; x=&quot;4&quot; y=&quot;28&quot; width=&quot;76&quot; height=&quot;68&quot; rx=&quot;3&quot;/&gt;&lt;rect fill=&quot;#3b82f6&quot; x=&quot;10&quot; y=&quot;40&quot; width=&quot;6&quot; height=&quot;30&quot; rx=&quot;1&quot; opacity=&quot;.7&quot;/&gt;&lt;rect fill=&quot;#3b82f6&quot; x=&quot;20&quot; y=&quot;50&quot; width=&quot;6&quot; height=&quot;20&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#3b82f6&quot; x=&quot;30&quot; y=&quot;35&quot; width=&quot;6&quot; height=&quot;35&quot; rx=&quot;1&quot; opacity=&quot;.8&quot;/&gt;&lt;rect fill=&quot;#3b82f6&quot; x=&quot;40&quot; y=&quot;45&quot; width=&quot;6&quot; height=&quot;25&quot; rx=&quot;1&quot; opacity=&quot;.6&quot;/&gt;
+    &lt;rect fill=&quot;#1e293b&quot; x=&quot;84&quot; y=&quot;28&quot; width=&quot;72&quot; height=&quot;68&quot; rx=&quot;3&quot;/&gt;"><span class="style-dot" style="background:#3b82f6"></span><span class="style-info"><span class="style-name">dashboard</span><span class="style-desc">Analytics dashboard with metrics</span></span></button>
+<button class="style-opt" data-style="data-table" data-ready="false" title="Spreadsheet table layout" data-preview="&lt;rect fill=&quot;#f8fafc&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#16a34a&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;160&quot; height=&quot;10&quot; rx=&quot;4&quot;/&gt;&lt;rect fill=&quot;#fff&quot; x=&quot;6&quot; y=&quot;3&quot; width=&quot;30&quot; height=&quot;4&quot; rx=&quot;1&quot; opacity=&quot;.8&quot;/&gt;
+    &lt;rect fill=&quot;#e2e8f0&quot; x=&quot;4&quot; y=&quot;16&quot; width=&quot;152&quot; height=&quot;8&quot;/&gt;&lt;rect fill=&quot;#64748b&quot; x=&quot;8&quot; y=&quot;18&quot; width=&quot;24&quot; height=&quot;4&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#64748b&quot; x=&quot;48&quot; y=&quot;18&quot; width=&quot;30&quot; height=&quot;4&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#64748b&quot; x=&quot;96&quot; y=&quot;18&quot; width=&quot;20&quot; height=&quot;4&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;
+    &lt;rect fill=&quot;#fff&quot; x=&quot;4&quot; y=&quot;26&quot; width=&quot;152&quot; height=&quot;8&quot;/&gt;&lt;rect fill=&quot;#334155&quot; x=&quot;8&quot; y=&quot;28&quot; width=&quot;30&quot; height=&quot;4&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;&lt;rect fill=&quot;#334155&quot; x=&quot;48&quot; y=&quot;28&quot; width=&quot;24&quot; height=&quot;4&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#f1f5f9&quot; x=&quot;4&quot; y=&quot;36&quot; width=&quot;152&quot; height=&quot;8&quot;/&gt;&lt;rect fill=&quot;#334155&quot; x=&quot;8&quot; y=&quot;38&quot; width=&quot;28&quot; height=&quot;4&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#fff&quot; x=&quot;4&quot; y=&quot;46&quot; width=&quot;152&quot; height=&quot;8&quot;/&gt;"><span class="style-dot" style="background:#16a34a"></span><span class="style-info"><span class="style-name">data-table</span><span class="style-desc">Spreadsheet table layout</span></span></button>
+<button class="style-opt" data-style="jupyter" data-ready="false" title="Jupyter notebook with executable-style cells" data-preview="&lt;rect fill=&quot;#fff&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#f57c00&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;160&quot; height=&quot;10&quot; rx=&quot;4&quot;/&gt;&lt;rect fill=&quot;#fff&quot; x=&quot;6&quot; y=&quot;3&quot; width=&quot;24&quot; height=&quot;4&quot; rx=&quot;1&quot; opacity=&quot;.8&quot;/&gt;
+    &lt;rect fill=&quot;#f5f5f5&quot; x=&quot;4&quot; y=&quot;16&quot; width=&quot;152&quot; height=&quot;24&quot; rx=&quot;3&quot; stroke=&quot;#e0e0e0&quot; stroke-width=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#f57c00&quot; x=&quot;4&quot; y=&quot;16&quot; width=&quot;3&quot; height=&quot;24&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#333&quot; x=&quot;14&quot; y=&quot;20&quot; width=&quot;60&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#333&quot; x=&quot;14&quot; y=&quot;26&quot; width=&quot;80&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;&lt;rect fill=&quot;#333&quot; x=&quot;14&quot; y=&quot;32&quot; width=&quot;50&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#f5f5f5&quot; x=&quot;4&quot; y=&quot;46&quot; width=&quot;152&quot; height=&quot;24&quot; rx=&quot;3&quot; stroke=&quot;#e0e0e0&quot; stroke-width=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#42a5f5&quot; x=&quot;4&quot; y=&quot;46&quot; width=&quot;3&quot; height=&quot;24&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#333&quot; x=&quot;14&quot; y=&quot;50&quot; width=&quot;70&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;"><span class="style-dot" style="background:#f57c00"></span><span class="style-info"><span class="style-name">jupyter</span><span class="style-desc">Jupyter notebook with executable-style cells</span></span></button>
+<div class="style-group-label">Creative</div>
+<button class="style-opt" data-style="neon" data-ready="false" title="Cyberpunk neon-glow dark theme with gradients" data-preview="&lt;rect fill=&quot;#0a0a1a&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#00f0ff&quot; x=&quot;8&quot; y=&quot;8&quot; width=&quot;50&quot; height=&quot;5&quot; rx=&quot;1&quot; opacity=&quot;.8&quot;/&gt;&lt;rect fill=&quot;#ff00ff&quot; x=&quot;8&quot; y=&quot;16&quot; width=&quot;30&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;
+    &lt;rect fill=&quot;#00f0ff&quot; x=&quot;8&quot; y=&quot;26&quot; width=&quot;144&quot; height=&quot;.5&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#1a1a3e&quot; x=&quot;8&quot; y=&quot;32&quot; width=&quot;68&quot; height=&quot;40&quot; rx=&quot;4&quot; stroke=&quot;#00f0ff&quot; stroke-width=&quot;.5&quot; opacity=&quot;.6&quot;/&gt;&lt;rect fill=&quot;#00f0ff&quot; x=&quot;14&quot; y=&quot;36&quot; width=&quot;30&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;
+    &lt;rect fill=&quot;#1a1a3e&quot; x=&quot;84&quot; y=&quot;32&quot; width=&quot;68&quot; height=&quot;40&quot; rx=&quot;4&quot; stroke=&quot;#ff00ff&quot; stroke-width=&quot;.5&quot; opacity=&quot;.6&quot;/&gt;&lt;rect fill=&quot;#ff00ff&quot; x=&quot;90&quot; y=&quot;36&quot; width=&quot;30&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;
+    &lt;rect fill=&quot;#00f0ff&quot; x=&quot;8&quot; y=&quot;80&quot; width=&quot;144&quot; height=&quot;12&quot; rx=&quot;3&quot; opacity=&quot;.1&quot;/&gt;&lt;rect fill=&quot;#00f0ff&quot; x=&quot;14&quot; y=&quot;84&quot; width=&quot;40&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;"><span class="style-dot" style="background:#00f0ff"></span><span class="style-info"><span class="style-name">neon</span><span class="style-desc">Cyberpunk neon-glow dark theme with gradients</span></span></button>
+<button class="style-opt active" data-style="terminal" data-ready="false" title="Green-on-black retro terminal" data-preview="&lt;rect fill=&quot;#0a0a0a&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#1a1a1a&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;160&quot; height=&quot;12&quot; rx=&quot;4&quot;/&gt;&lt;circle fill=&quot;#ff5f57&quot; cx=&quot;8&quot; cy=&quot;6&quot; r=&quot;2.5&quot;/&gt;&lt;circle fill=&quot;#febc2e&quot; cx=&quot;16&quot; cy=&quot;6&quot; r=&quot;2.5&quot;/&gt;&lt;circle fill=&quot;#28c840&quot; cx=&quot;24&quot; cy=&quot;6&quot; r=&quot;2.5&quot;/&gt;
+    &lt;rect fill=&quot;#33ff33&quot; x=&quot;8&quot; y=&quot;18&quot; width=&quot;12&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.8&quot;/&gt;&lt;rect fill=&quot;#33ff33&quot; x=&quot;24&quot; y=&quot;18&quot; width=&quot;60&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;
+    &lt;rect fill=&quot;#33ff33&quot; x=&quot;8&quot; y=&quot;26&quot; width=&quot;8&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.6&quot;/&gt;&lt;rect fill=&quot;#33ff33&quot; x=&quot;20&quot; y=&quot;26&quot; width=&quot;80&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#33ff33&quot; x=&quot;8&quot; y=&quot;32&quot; width=&quot;8&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.6&quot;/&gt;&lt;rect fill=&quot;#33ff33&quot; x=&quot;20&quot; y=&quot;32&quot; width=&quot;50&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#33ff33&quot; x=&quot;8&quot; y=&quot;42&quot; width=&quot;4&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.9&quot;/&gt;&lt;rect fill=&quot;#33ff33&quot; x=&quot;14&quot; y=&quot;42&quot; width=&quot;1&quot; height=&quot;3&quot; opacity=&quot;.5&quot;/&gt;"><span class="style-dot" style="background:#33ff33"></span><span class="style-info"><span class="style-name">terminal</span><span class="style-desc">Green-on-black retro terminal</span></span><span class="style-badge">current</span></button>
+<button class="style-opt" data-style="magazine" data-ready="false" title="Editorial with serif typography" data-preview="&lt;rect fill=&quot;#faf8f5&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#8b2252&quot; x=&quot;8&quot; y=&quot;6&quot; width=&quot;60&quot; height=&quot;5&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#333&quot; x=&quot;8&quot; y=&quot;14&quot; width=&quot;40&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;
+    &lt;rect fill=&quot;#eee&quot; x=&quot;8&quot; y=&quot;22&quot; width=&quot;68&quot; height=&quot;40&quot; rx=&quot;2&quot;/&gt;&lt;rect fill=&quot;#8b2252&quot; x=&quot;12&quot; y=&quot;26&quot; width=&quot;30&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#333&quot; x=&quot;84&quot; y=&quot;22&quot; width=&quot;68&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#333&quot; x=&quot;84&quot; y=&quot;28&quot; width=&quot;64&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#333&quot; x=&quot;84&quot; y=&quot;34&quot; width=&quot;68&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;&lt;rect fill=&quot;#333&quot; x=&quot;84&quot; y=&quot;40&quot; width=&quot;60&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#333&quot; x=&quot;84&quot; y=&quot;46&quot; width=&quot;66&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#8b2252&quot; x=&quot;8&quot; y=&quot;68&quot; width=&quot;144&quot; height=&quot;.5&quot; opacity=&quot;.3&quot;/&gt;"><span class="style-dot" style="background:#8b2252"></span><span class="style-info"><span class="style-name">magazine</span><span class="style-desc">Editorial with serif typography</span></span></button>
+<button class="style-opt" data-style="feed" data-ready="false" title="Social feed timeline cards" data-preview="&lt;rect fill=&quot;#15202b&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;circle fill=&quot;#1d9bf0&quot; cx=&quot;16&quot; cy=&quot;16&quot; r=&quot;6&quot; opacity=&quot;.7&quot;/&gt;&lt;rect fill=&quot;#e7e9ea&quot; x=&quot;28&quot; y=&quot;12&quot; width=&quot;30&quot; height=&quot;3&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#71767b&quot; x=&quot;28&quot; y=&quot;18&quot; width=&quot;20&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.6&quot;/&gt;
+    &lt;rect fill=&quot;#71767b&quot; x=&quot;28&quot; y=&quot;26&quot; width=&quot;100&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#71767b&quot; x=&quot;28&quot; y=&quot;32&quot; width=&quot;80&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#2f3336&quot; x=&quot;8&quot; y=&quot;42&quot; width=&quot;144&quot; height=&quot;.5&quot;/&gt;
+    &lt;circle fill=&quot;#1d9bf0&quot; cx=&quot;16&quot; cy=&quot;54&quot; r=&quot;6&quot; opacity=&quot;.7&quot;/&gt;&lt;rect fill=&quot;#e7e9ea&quot; x=&quot;28&quot; y=&quot;50&quot; width=&quot;24&quot; height=&quot;3&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#71767b&quot; x=&quot;28&quot; y=&quot;56&quot; width=&quot;16&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.6&quot;/&gt;
+    &lt;rect fill=&quot;#1e3a4f&quot; x=&quot;28&quot; y=&quot;64&quot; width=&quot;110&quot; height=&quot;26&quot; rx=&quot;6&quot;/&gt;"><span class="style-dot" style="background:#1d9bf0"></span><span class="style-info"><span class="style-name">feed</span><span class="style-desc">Social feed timeline cards</span></span></button>
+<div class="style-group-label">Print</div>
+<button class="style-opt" data-style="academic" data-ready="false" title="LaTeX-inspired academic paper with serif fonts" data-preview="&lt;rect fill=&quot;#fefefe&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#374151&quot; x=&quot;30&quot; y=&quot;8&quot; width=&quot;100&quot; height=&quot;5&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#6b7280&quot; x=&quot;50&quot; y=&quot;16&quot; width=&quot;60&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.5&quot;/&gt;
+    &lt;rect fill=&quot;#374151&quot; x=&quot;20&quot; y=&quot;26&quot; width=&quot;30&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.6&quot;/&gt;
+    &lt;rect fill=&quot;#4b5563&quot; x=&quot;20&quot; y=&quot;34&quot; width=&quot;120&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#4b5563&quot; x=&quot;20&quot; y=&quot;40&quot; width=&quot;118&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.35&quot;/&gt;&lt;rect fill=&quot;#4b5563&quot; x=&quot;20&quot; y=&quot;46&quot; width=&quot;120&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#4b5563&quot; x=&quot;20&quot; y=&quot;52&quot; width=&quot;100&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.35&quot;/&gt;
+    &lt;rect fill=&quot;#374151&quot; x=&quot;20&quot; y=&quot;62&quot; width=&quot;25&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.6&quot;/&gt;&lt;rect fill=&quot;#4b5563&quot; x=&quot;20&quot; y=&quot;70&quot; width=&quot;120&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;"><span class="style-dot" style="background:#374151"></span><span class="style-info"><span class="style-name">academic</span><span class="style-desc">LaTeX-inspired academic paper with serif fonts</span></span></button>
+<button class="style-opt" data-style="corporate" data-ready="false" title="Print-ready corporate report" data-preview="&lt;rect fill=&quot;#fff&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#0f2b46&quot; x=&quot;0&quot; y=&quot;0&quot; width=&quot;160&quot; height=&quot;14&quot; rx=&quot;4&quot;/&gt;&lt;rect fill=&quot;#fff&quot; x=&quot;8&quot; y=&quot;4&quot; width=&quot;40&quot; height=&quot;5&quot; rx=&quot;1&quot; opacity=&quot;.8&quot;/&gt;
+    &lt;rect fill=&quot;#0f2b46&quot; x=&quot;12&quot; y=&quot;22&quot; width=&quot;80&quot; height=&quot;5&quot; rx=&quot;1&quot;/&gt;&lt;rect fill=&quot;#64748b&quot; x=&quot;12&quot; y=&quot;32&quot; width=&quot;136&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#64748b&quot; x=&quot;12&quot; y=&quot;38&quot; width=&quot;120&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#f0f4f8&quot; x=&quot;12&quot; y=&quot;48&quot; width=&quot;136&quot; height=&quot;40&quot; rx=&quot;2&quot;/&gt;&lt;rect fill=&quot;#0f2b46&quot; x=&quot;16&quot; y=&quot;52&quot; width=&quot;40&quot; height=&quot;3&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;&lt;rect fill=&quot;#64748b&quot; x=&quot;16&quot; y=&quot;60&quot; width=&quot;100&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;"><span class="style-dot" style="background:#0f2b46"></span><span class="style-info"><span class="style-name">corporate</span><span class="style-desc">Print-ready corporate report</span></span></button>
+<button class="style-opt" data-style="slide" data-ready="false" title="Presentation slide deck with navigation" data-preview="&lt;rect fill=&quot;#1e1b4b&quot; width=&quot;160&quot; height=&quot;100&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#312e81&quot; x=&quot;4&quot; y=&quot;4&quot; width=&quot;152&quot; height=&quot;72&quot; rx=&quot;4&quot;/&gt;
+    &lt;rect fill=&quot;#818cf8&quot; x=&quot;20&quot; y=&quot;16&quot; width=&quot;80&quot; height=&quot;6&quot; rx=&quot;1&quot; opacity=&quot;.8&quot;/&gt;&lt;rect fill=&quot;#a5b4fc&quot; x=&quot;20&quot; y=&quot;28&quot; width=&quot;120&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.4&quot;/&gt;&lt;rect fill=&quot;#a5b4fc&quot; x=&quot;20&quot; y=&quot;34&quot; width=&quot;100&quot; height=&quot;2&quot; rx=&quot;1&quot; opacity=&quot;.3&quot;/&gt;
+    &lt;rect fill=&quot;#818cf8&quot; x=&quot;20&quot; y=&quot;46&quot; width=&quot;50&quot; height=&quot;16&quot; rx=&quot;3&quot; opacity=&quot;.2&quot;/&gt;&lt;rect fill=&quot;#818cf8&quot; x=&quot;78&quot; y=&quot;46&quot; width=&quot;50&quot; height=&quot;16&quot; rx=&quot;3&quot; opacity=&quot;.2&quot;/&gt;
+    &lt;circle fill=&quot;#818cf8&quot; cx=&quot;74&quot; cy=&quot;84&quot; r=&quot;3&quot; opacity=&quot;.5&quot;/&gt;&lt;circle fill=&quot;#818cf8&quot; cx=&quot;82&quot; cy=&quot;84&quot; r=&quot;3&quot; opacity=&quot;.8&quot;/&gt;&lt;circle fill=&quot;#818cf8&quot; cx=&quot;90&quot; cy=&quot;84&quot; r=&quot;3&quot; opacity=&quot;.5&quot;/&gt;"><span class="style-dot" style="background:#818cf8"></span><span class="style-info"><span class="style-name">slide</span><span class="style-desc">Presentation slide deck with navigation</span></span></button>
+      </div>
+      <div id="style-preview-float" class="style-preview-float" aria-hidden="true">
+        <svg viewBox="0 0 160 100" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+  var root = document.documentElement;
+
+  // ── Theme button ─────────────────────────────────────────────────────────
+  var themeBtn = document.getElementById('ftb-theme-btn');
+  function syncThemeIcon() {
+    if (themeBtn) themeBtn.textContent = root.classList.contains('light') ? '☀️' : '🌙';
+  }
+  syncThemeIcon();
+  if (themeBtn) {
+    themeBtn.addEventListener('click', function() {
+      root.classList.toggle('light');
+      // Sync inverse dark class for templates that use html.dark (jupyter)
+      if (root.classList.contains('light')) {
+        root.classList.remove('dark');
+      } else {
+        root.classList.add('dark');
+      }
+      syncThemeIcon();
+      try { localStorage.setItem('rpt-theme', root.classList.contains('light') ? 'light' : 'dark'); } catch(e){}
+      // Notify templates that coordinate on a shared theme event
+      root.dispatchEvent(new CustomEvent('rpt:theme-change', { detail: { theme: root.classList.contains('light') ? 'light' : 'dark' } }));
+    });
+  }
+
+  // ── Print button — delegates to __RPT_TOOLBAR.print() if registered ──────
+  var printBtn = document.getElementById('ftb-print-btn');
+  if (printBtn) {
+    printBtn.addEventListener('click', function() {
+      if (window.__RPT_TOOLBAR && typeof window.__RPT_TOOLBAR.print === 'function') {
+        window.__RPT_TOOLBAR.print();
+      } else {
+        window.print();
+      }
+    });
+  }
+
+  // ── Close all toolbar dropdowns on outside click / Escape ─────────────────
+  document.addEventListener('click', function() {
+    document.querySelectorAll('.floating-toolbar .style-menu, .floating-toolbar .copy-for-menu, .floating-toolbar .font-menu, .floating-toolbar .color-menu').forEach(function(m) { m.classList.remove('open'); });
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.floating-toolbar .style-menu, .floating-toolbar .copy-for-menu, .floating-toolbar .font-menu, .floating-toolbar .color-menu').forEach(function(m) { m.classList.remove('open'); });
+    }
+  });
+
+  // ── DOMContentLoaded: inject row 2, init shared RPT features ─────────────
+  document.addEventListener('DOMContentLoaded', function() {
+    // Inject row 2 from __RPT_TOOLBAR if provided by the template
+    var row2 = document.getElementById('ftb-row-2');
+    if (row2 && window.__RPT_TOOLBAR && window.__RPT_TOOLBAR.row2Html) {
+      row2.innerHTML = window.__RPT_TOOLBAR.row2Html;
+      row2.style.display = '';
+      if (typeof window.__RPT_TOOLBAR.row2Init === 'function') {
+        window.__RPT_TOOLBAR.row2Init();
+      }
+    }
+    // Init shared __RPT features
+    if (window.__RPT) {
+      if (window.__RPT.initStylePicker) window.__RPT.initStylePicker('#style-picker-btn', '#style-menu');
+      if (window.__RPT.initProgressBar) window.__RPT.initProgressBar();
+      if (window.__RPT.initScrollToTop) window.__RPT.initScrollToTop();
+      if (window.__RPT.initTextSize) window.__RPT.initTextSize('main,.content,article,.notebook,.slide-container', 'rpt-text-size');
+      if (window.__RPT.initCopyForMenu) window.__RPT.initCopyForMenu('#copy-for-btn', '#copy-for-menu');
+    }
+  });
+})();
+</script>
+<script>
+/**
+ * shared.js — Reusable interactive modules for create-report templates.
+ *
+ * Attaches to window.__RPT namespace. Templates call only what they need:
+ *   __RPT.initThemeToggle('#theme-btn');
+ *   __RPT.initSearch('#search', '#search-count', '#no-results', 'section[data-section-id]');
+ *   __RPT.initCodeDialog('#code-dialog');
+ *   __RPT.initCopyButtons('.copy-btn');
+ *   __RPT.initWidthPicker('main.content', 'rpt-width');
+ *   __RPT.initMath();
+ *   __RPT.openExternalLinks();
+ */
+(function () {
+  "use strict";
+
+  const root = document.documentElement;
+
+  // ── Safe localStorage (file:// may block access) ──────────────────────────
+  const store = (() => {
+    const mem = Object.create(null);
+    try {
+      localStorage.setItem("__rpt_test", "1");
+      localStorage.removeItem("__rpt_test");
+      return localStorage;
+    } catch (_) {
+      return {
+        getItem: (k) => (k in mem ? mem[k] : null),
+        setItem: (k, v) => {
+          mem[k] = String(v);
+        },
+        removeItem: (k) => {
+          delete mem[k];
+        },
+      };
+    }
+  })();
+
+  // ── SVG icons ─────────────────────────────────────────────────────────────
+  const SUN_SVG =
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+  const MOON_SVG =
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+  // ── Theme Toggle ──────────────────────────────────────────────────────────
+  /**
+   * @param {string} btnSelector - CSS selector for the toggle button
+   * @param {object} opts
+   * @param {string} opts.storageKey - localStorage key (default: 'rpt-theme')
+   * @param {string} opts.darkClass - class to add for light mode (default: 'light')
+   * @param {string} opts.defaultTheme - 'dark' or 'light' (default: 'dark')
+   * @param {string} opts.lightLabel - label text for light mode
+   * @param {string} opts.darkLabel - label text for dark mode
+   */
+  function initThemeToggle(btnSelector, opts) {
+    opts = Object.assign(
+      {
+        storageKey: "rpt-theme",
+        darkClass: "light",
+        defaultTheme: "light",
+        lightLabel: "Light",
+        darkLabel: "Dark",
+        // 'light-class': html.light = light mode (default for most templates)
+        // 'dark-class':  html.dark  = dark mode (for templates where :root is already light)
+        convention: "light-class",
+      },
+      opts,
+    );
+
+    var btn = document.querySelector(btnSelector);
+    if (!btn) return;
+
+    var saved = store.getItem(opts.storageKey) || opts.defaultTheme;
+    if (opts.convention === "dark-class") {
+      if (saved === "dark") root.classList.add(opts.darkClass);
+    } else {
+      if (saved === "light") root.classList.add(opts.darkClass);
+    }
+
+    function isCurrentlyLight() {
+      return opts.convention === "dark-class"
+        ? !root.classList.contains(opts.darkClass)
+        : root.classList.contains(opts.darkClass);
+    }
+
+    function sync() {
+      var light = isCurrentlyLight();
+      btn.innerHTML = light
+        ? SUN_SVG + ' <span class="btn-label">' + opts.lightLabel + "</span>"
+        : MOON_SVG + ' <span class="btn-label">' + opts.darkLabel + "</span>";
+    }
+    sync();
+
+    btn.addEventListener("click", function () {
+      root.classList.toggle(opts.darkClass);
+      store.setItem(opts.storageKey, isCurrentlyLight() ? "light" : "dark");
+      sync();
+    });
+
+    return {
+      getTheme: () => (isCurrentlyLight() ? "light" : "dark"),
+    };
+  }
+
+  // ── Search (Chrome-like: multi-word OR, next/back cycling, match index) ──
+  /**
+   * Chrome-like find-in-page. Splits query by spaces (OR search), highlights
+   * all matching words, provides next/back cycling with index/count display.
+   *
+   * Expected HTML near the search input:
+   *   <input id="search">
+   *   <span id="search-count"></span>           ← shows "3 / 12"
+   *   <button class="search-prev">▲</button>    ← optional, auto-created if missing
+   *   <button class="search-next">▼</button>    ← optional, auto-created if missing
+   *
+   * @param {string} inputSel
+   * @param {string} countSel
+   * @param {string} noResultsSel
+   * @param {string} sectionSel
+   * @param {object} opts
+   */
+  function initSearch(inputSel, countSel, noResultsSel, sectionSel, opts) {
+    opts = Object.assign(
+      { navLinkSel: null, hiddenClass: "hidden-search" },
+      opts,
+    );
+
+    var searchEl = document.querySelector(inputSel);
+    var countEl = document.querySelector(countSel);
+    var noResultEl = document.querySelector(noResultsSel);
+    var allSections = Array.from(document.querySelectorAll(sectionSel));
+    if (!searchEl || !allSections.length) return;
+
+    // Auto-create prev/next buttons if not present
+    var wrap = searchEl.closest(".search-wrap") || searchEl.parentElement;
+    var prevBtn = wrap.querySelector(".search-prev");
+    var nextBtn = wrap.querySelector(".search-next");
+    if (!prevBtn || !nextBtn) {
+      var navContainer = document.createElement("span");
+      navContainer.className = "search-nav";
+      navContainer.innerHTML =
+        '<button class="search-prev" title="Previous (Shift+Enter)">&#9650;</button>' +
+        '<button class="search-next" title="Next (Enter)">&#9660;</button>';
+      if (countEl && countEl.parentNode) {
+        countEl.parentNode.insertBefore(navContainer, countEl.nextSibling);
+      } else {
+        wrap.appendChild(navContainer);
+      }
+      prevBtn = navContainer.querySelector(".search-prev");
+      nextBtn = navContainer.querySelector(".search-next");
+    }
+
+    // State
+    var allMarks = []; // all <mark> elements in document order
+    var currentIdx = -1;
+    var ACTIVE_CLASS = "search-active";
+
+    function clearMarks() {
+      allSections.forEach(function (sec) {
+        sec.querySelectorAll("mark").forEach(function (m) {
+          var parent = m.parentNode;
+          if (parent)
+            parent.replaceChild(
+              document.createTextNode(m.textContent || ""),
+              m,
+            );
+        });
+        sec.normalize();
+      });
+      allMarks = [];
+      currentIdx = -1;
+    }
+
+    function addMarksForWord(el, word) {
+      var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      var nodes = [];
+      var n;
+      while ((n = walker.nextNode())) {
+        if (n.parentElement && !n.parentElement.closest("script,style,mark"))
+          nodes.push(n);
+      }
+      nodes.forEach(function (node) {
+        var txt = node.textContent || "";
+        var lo = txt.toLowerCase();
+        if (!lo.includes(word)) return;
+        var frag = document.createDocumentFragment();
+        var last = 0;
+        var idx = lo.indexOf(word, last);
+        while (idx !== -1) {
+          if (idx > last)
+            frag.appendChild(document.createTextNode(txt.slice(last, idx)));
+          var mark = document.createElement("mark");
+          mark.textContent = txt.slice(idx, idx + word.length);
+          frag.appendChild(mark);
+          last = idx + word.length;
+          idx = lo.indexOf(word, last);
+        }
+        if (last < txt.length)
+          frag.appendChild(document.createTextNode(txt.slice(last)));
+        if (node.parentNode) node.parentNode.replaceChild(frag, node);
+      });
+    }
+
+    function updateCount() {
+      if (!countEl) return;
+      if (allMarks.length === 0) {
+        countEl.textContent = "";
+        return;
+      }
+      countEl.textContent = currentIdx + 1 + " / " + allMarks.length;
+    }
+
+    function goToMark(idx) {
+      if (allMarks.length === 0) return;
+      // Remove active from previous
+      if (currentIdx >= 0 && currentIdx < allMarks.length) {
+        allMarks[currentIdx].classList.remove(ACTIVE_CLASS);
+      }
+      currentIdx =
+        ((idx % allMarks.length) + allMarks.length) % allMarks.length;
+      var mark = allMarks[currentIdx];
+      mark.classList.add(ACTIVE_CLASS);
+      mark.scrollIntoView({ behavior: "smooth", block: "center" });
+      updateCount();
+    }
+
+    function goNext() {
+      goToMark(currentIdx + 1);
+    }
+    function goPrev() {
+      goToMark(currentIdx - 1);
+    }
+
+    var timer;
+    function doSearch() {
+      var raw = (searchEl.value || "").trim().toLowerCase();
+      clearMarks();
+
+      if (!raw) {
+        allSections.forEach(function (sec) {
+          sec.classList.remove(opts.hiddenClass, "search-reveal");
+        });
+        if (opts.navLinkSel) {
+          document.querySelectorAll(opts.navLinkSel).forEach(function (n) {
+            n.classList.remove(opts.hiddenClass);
+          });
+        }
+        if (noResultEl) noResultEl.style.display = "none";
+        updateCount();
+        return;
+      }
+
+      // Split by spaces for OR search, filter empty
+      var words = raw.split(/\s+/).filter(function (w) {
+        return w.length > 0;
+      });
+
+      // For section visibility: a section matches if ANY word is found
+      allSections.forEach(function (sec) {
+        var text = (sec.textContent || "").toLowerCase();
+        var hit = words.some(function (w) {
+          return text.includes(w);
+        });
+        sec.classList.toggle(opts.hiddenClass, !hit);
+        if (hit) {
+          sec.classList.remove("search-reveal");
+          void sec.offsetHeight;
+          sec.classList.add("search-reveal");
+          // Add marks for each word
+          words.forEach(function (w) {
+            addMarksForWord(sec, w);
+          });
+        }
+      });
+
+      // Nav link visibility
+      if (opts.navLinkSel) {
+        allSections.forEach(function (sec) {
+          var id = sec.dataset.sectionId || sec.id || "";
+          if (!id) return;
+          var link = document.querySelector(
+            opts.navLinkSel + ' a[href="#' + id + '"]',
+          );
+          var navItem = link && link.closest(opts.navLinkSel);
+          if (navItem)
+            navItem.classList.toggle(
+              opts.hiddenClass,
+              sec.classList.contains(opts.hiddenClass),
+            );
+        });
+      }
+
+      // Collect all marks in document order
+      allMarks = Array.from(document.querySelectorAll("mark"));
+
+      if (noResultEl)
+        noResultEl.style.display = allMarks.length === 0 ? "block" : "none";
+
+      // Jump to first match
+      if (allMarks.length > 0) {
+        goToMark(0);
+      } else {
+        updateCount();
+      }
+    }
+
+    // Event handlers
+    searchEl.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(doSearch, 180);
+    });
+    searchEl.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        searchEl.value = "";
+        doSearch();
+        searchEl.blur();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          goPrev();
+        } else {
+          goNext();
+        }
+      }
+    });
+    document.addEventListener("keydown", function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchEl.focus();
+        searchEl.select();
+      }
+    });
+
+    prevBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      goPrev();
+    });
+    nextBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      goNext();
+    });
+  }
+
+  // ── Code Dialog ───────────────────────────────────────────────────────────
+  /**
+   * @param {string} dialogSel - CSS selector for the <dialog> element
+   */
+  function initCodeDialog(dialogSel) {
+    var dialog = document.querySelector(dialogSel);
+    if (!dialog) return;
+
+    var dlgLang = dialog.querySelector(".dlg-lang");
+    var dlgTitle = dialog.querySelector(".dlg-title");
+    var dlgLines = dialog.querySelector(".dlg-lines");
+    var dlgBody = dialog.querySelector(".dlg-body");
+    var dlgCopy = dialog.querySelector(".dlg-copy");
+    var dlgClose = dialog.querySelector(".dlg-close");
+
+    function setupCopy(btn, getText) {
+      if (!btn) return;
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var text = getText();
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(function () {
+          btn.textContent = "Copied!";
+          btn.classList.add("copied");
+          setTimeout(function () {
+            btn.textContent = "Copy";
+            btn.classList.remove("copied");
+          }, 2000);
+        });
+      });
+    }
+
+    function openDialog(wrap) {
+      var pre = wrap.querySelector("pre");
+      var code = wrap.querySelector("pre code");
+      var langEl = wrap.querySelector(".code-lang");
+      var lang = langEl ? langEl.textContent : "";
+      var lines = (code ? code.textContent || "" : "").split("\n").length;
+
+      if (dlgLang) dlgLang.textContent = lang || "text";
+      if (dlgTitle)
+        dlgTitle.textContent = lang ? lang + " snippet" : "Code preview";
+      if (dlgLines)
+        dlgLines.textContent = lines + " line" + (lines !== 1 ? "s" : "");
+
+      if (dlgBody) {
+        dlgBody.innerHTML = "";
+        if (pre) dlgBody.appendChild(pre.cloneNode(true));
+      }
+
+      if (dlgCopy) {
+        dlgCopy.textContent = "Copy";
+        dlgCopy.classList.remove("copied");
+        // Remove old listener by cloning
+        var newCopy = dlgCopy.cloneNode(true);
+        dlgCopy.parentNode.replaceChild(newCopy, dlgCopy);
+        dlgCopy = newCopy;
+        dialog.querySelector(".dlg-copy"); // re-query not needed, we have ref
+        setupCopy(newCopy, function () {
+          return code ? code.textContent || "" : "";
+        });
+      }
+
+      dialog.showModal();
+      if (dlgBody) dlgBody.scrollTop = 0;
+    }
+
+    function closeDialog() {
+      dialog.setAttribute("data-closing", "");
+      dialog.addEventListener(
+        "animationend",
+        function () {
+          dialog.removeAttribute("data-closing");
+          dialog.close();
+        },
+        { once: true },
+      );
+      // Fallback if no animation
+      setTimeout(function () {
+        if (dialog.hasAttribute("data-closing")) {
+          dialog.removeAttribute("data-closing");
+          dialog.close();
+        }
+      }, 400);
+    }
+
+    // Wire expand buttons and pre clicks
+    document.querySelectorAll(".code-wrap").forEach(function (wrap) {
+      var expandBtn = wrap.querySelector(".code-expand");
+      if (expandBtn)
+        expandBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          openDialog(wrap);
+        });
+      // Pre click removed — only expand button opens the dialog
+    });
+
+    if (dlgClose) dlgClose.addEventListener("click", closeDialog);
+    dialog.addEventListener("click", function (e) {
+      var r = dialog.getBoundingClientRect();
+      if (
+        e.clientX < r.left ||
+        e.clientX > r.right ||
+        e.clientY < r.top ||
+        e.clientY > r.bottom
+      ) {
+        closeDialog();
+      }
+    });
+    dialog.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeDialog();
+      }
+    });
+  }
+
+  // ── Copy Buttons ──────────────────────────────────────────────────────────
+  function initCopyButtons(sel) {
+    document.querySelectorAll(sel || ".copy-btn").forEach(function (btn) {
+      var wrap = btn.closest(".code-wrap");
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var code = wrap && wrap.querySelector("pre code");
+        var text = code ? code.textContent || "" : "";
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(function () {
+          btn.textContent = "Copied!";
+          btn.classList.add("copied");
+          setTimeout(function () {
+            btn.textContent = "Copy";
+            btn.classList.remove("copied");
+          }, 2000);
+        });
+      });
+    });
+  }
+
+  // ── Width Picker ──────────────────────────────────────────────────────────
+  var WIDTH_MAP = { sm: "640px", md: "960px", lg: "1200px", xl: "100%" };
+
+  function initWidthPicker(contentSel, storageKey) {
+    storageKey = storageKey || "rpt-width";
+    var contentEl = document.querySelector(contentSel);
+    if (!contentEl) return;
+
+    var active = store.getItem(storageKey) || "md";
+
+    function apply(w) {
+      // Use CSS classes instead of inline maxWidth to avoid overriding
+      // style-specific width rules (e.g., slide template's !important rules)
+      contentEl.style.maxWidth = '';  // Clear any legacy inline style
+      ['width-sm', 'width-md', 'width-lg', 'width-xl'].forEach(function(cls) {
+        contentEl.classList.remove(cls);
+      });
+      if (w) contentEl.classList.add('width-' + w);
+      active = w;
+      store.setItem(storageKey, w);
+      document.querySelectorAll(".width-btn").forEach(function (b) {
+        b.classList.toggle("active", b.dataset.width === w);
+      });
+    }
+    apply(active);
+
+    document.querySelectorAll(".width-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        apply(btn.dataset.width);
+      });
+    });
+
+    return {
+      getWidth: function () {
+        return active;
+      },
+    };
+  }
+
+  // ── Math (KaTeX) ──────────────────────────────────────────────────────────
+  function initMath() {
+    if (typeof renderMathInElement !== "undefined") {
+      renderMathInElement(document.body, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+          { left: "\\\\(", right: "\\\\)", display: false },
+          { left: "\\\\[", right: "\\\\]", display: true },
+        ],
+        throwOnError: false,
+      });
+    }
+  }
+
+  // ── External Links ────────────────────────────────────────────────────────
+  function openExternalLinks() {
+    document.querySelectorAll('a[href^="http"]').forEach(function (a) {
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener noreferrer");
+    });
+  }
+
+  // ── Inline code path:line coloring ────────────────────────────────────────
+  function initCodePaths() {
+    var PATH_RE = /^(.+\.[a-z0-9]+):(\d+)$/i;
+    document
+      .querySelectorAll("p code, li code, td code")
+      .forEach(function (el) {
+        var text = el.textContent || "";
+        var m = PATH_RE.exec(text.trim());
+        if (!m) return;
+        el.classList.add("code-path");
+        el.innerHTML =
+          '<span class="code-path-file">' +
+          m[1] +
+          "</span>" +
+          '<span class="code-path-line">:' +
+          m[2] +
+          "</span>";
+      });
+  }
+
+  // ── Style Picker ──────────────────────────────────────────────────────────
+  /**
+   * @param {string} btnSel    - CSS selector for the toggle button
+   * @param {string} menuSel   - CSS selector for the dropdown menu
+   */
+  function initStylePicker(btnSel, menuSel) {
+    var btn = document.querySelector(btnSel);
+    var menu = document.querySelector(menuSel);
+    if (!btn || !menu) return;
+    if (btn._stylePickerInit) return;
+    btn._stylePickerInit = true;
+
+    var currentStyle = window.__RPT_CURRENT_STYLE || "default";
+    var generatedStyles = window.__RPT_GENERATED_STYLES || [];
+
+    function closeMenu() {
+      menu.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+      var pf = document.getElementById("style-preview-float");
+      if (pf) pf.classList.remove("visible");
+    }
+    function toggleMenu() {
+      var isOpen = menu.classList.toggle("open");
+      btn.setAttribute("aria-expanded", String(isOpen));
+    }
+
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      toggleMenu();
+    });
+    document.addEventListener("click", function () {
+      closeMenu();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeMenu();
+    });
+
+    // Style preview float on hover — move to body to escape transform containing block
+    var previewFloat = document.getElementById("style-preview-float");
+    if (previewFloat) {
+      document.body.appendChild(previewFloat);
+      var previewSvg = previewFloat.querySelector("svg");
+      menu.addEventListener("mouseover", function (e) {
+        var opt = e.target.closest(".style-opt");
+        if (!opt || !opt.dataset.preview) {
+          previewFloat.classList.remove("visible");
+          return;
+        }
+        previewSvg.innerHTML = opt.dataset.preview;
+        var menuRect = menu.getBoundingClientRect();
+        var optRect = opt.getBoundingClientRect();
+        var top = optRect.top + optRect.height / 2 - 60;
+        top = Math.max(8, Math.min(top, window.innerHeight - 140));
+        previewFloat.style.top = top + "px";
+        previewFloat.style.left = menuRect.left - 192 + "px";
+        previewFloat.classList.add("visible");
+      });
+      menu.addEventListener("mouseleave", function () {
+        previewFloat.classList.remove("visible");
+      });
+    }
+
+    // Handle clicks on style option buttons
+    menu.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var opt = e.target.closest(".style-opt");
+      if (!opt) return;
+
+      var style = opt.dataset.style;
+      if (!style || style === currentStyle) {
+        closeMenu();
+        return;
+      }
+
+      var isReady = opt.dataset.ready === "true";
+      if (isReady) {
+        // Open pre-generated style in new tab
+        window.open("./" + style + "/index.html", "_blank");
+        closeMenu();
+      } else {
+        // Copy restyle command to clipboard and show polished toast
+        var reportDir = window.__RPT_REPORT_DIR || "";
+        var cmd =
+          "bash ~/.claude/skills/create-report/restyle-report.sh " +
+          reportDir +
+          " " +
+          style;
+        function showRestyleToast(cmdText) {
+          // Remove any existing toast
+          var old = document.querySelector(".restyle-toast");
+          if (old) old.remove();
+          var toast = document.createElement("div");
+          toast.className = "restyle-toast";
+          toast.innerHTML =
+            '<span class="restyle-toast-label">Copied to clipboard</span>' +
+            '<code class="restyle-toast-cmd">' +
+            cmdText.replace(/</g, "&lt;") +
+            "</code>";
+          document.body.appendChild(toast);
+          setTimeout(function () {
+            toast.style.opacity = "0";
+            toast.style.transform = "translateY(8px)";
+            toast.style.transition = "opacity 0.2s, transform 0.2s";
+            setTimeout(function () {
+              toast.remove();
+            }, 200);
+          }, 2500);
+        }
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(cmd).then(function () {
+            showRestyleToast(cmd);
+          });
+        } else {
+          showRestyleToast(cmd + " (copy manually)");
+        }
+        closeMenu();
+      }
+    });
+
+    // Mark already-generated styles as ready (in case state changed after page load)
+    menu.querySelectorAll(".style-opt").forEach(function (opt) {
+      if (
+        generatedStyles.indexOf(opt.dataset.style) !== -1 &&
+        opt.dataset.style !== currentStyle
+      ) {
+        opt.dataset.ready = "true";
+        var badge = opt.querySelector(".style-badge");
+        if (!badge) {
+          var b = document.createElement("span");
+          b.className = "style-badge style-badge-ready";
+          b.textContent = "ready";
+          opt.appendChild(b);
+        }
+      }
+    });
+  }
+
+  // ── Reading Progress Bar ─────────────────────────────────────────────────
+  function initProgressBar() {
+    if (document.querySelector(".reading-progress")) return; // already initialized
+    var bar = document.createElement("div");
+    bar.className = "reading-progress";
+    document.body.appendChild(bar);
+    var ticking = false;
+    window.addEventListener("scroll", function () {
+      if (!ticking) {
+        requestAnimationFrame(function () {
+          var scrollTop = window.scrollY || document.documentElement.scrollTop;
+          var docHeight =
+            document.documentElement.scrollHeight - window.innerHeight;
+          var pct = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+          bar.style.width = Math.min(100, pct) + "%";
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+  }
+
+  // ── Text Size Controls ──────────────────────────────────────────────────
+  /**
+   * @param {string} contentSel - CSS selector for the main content area
+   * @param {string} storeKey   - localStorage key for persisting size
+   */
+  function initTextSize(contentSel, storeKey) {
+    storeKey = storeKey || "rpt-text-size";
+    var content = document.querySelector(contentSel);
+    if (!content) return;
+    if (content._textSizeInit) return;
+    content._textSizeInit = true;
+
+    var sizes = [80, 90, 100, 110, 120, 130];
+    var current = parseInt(store.getItem(storeKey) || "100", 10);
+    if (sizes.indexOf(current) === -1) current = 100;
+
+    function apply() {
+      content.style.fontSize = current + "%";
+      var label = document.querySelector(".text-size-label");
+      if (label) label.textContent = current + "%";
+      store.setItem(storeKey, String(current));
+    }
+    apply();
+
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest(".text-size-btn");
+      if (!btn) return;
+      var dir = btn.dataset.dir;
+      var idx = sizes.indexOf(current);
+      if (dir === "down" && idx > 0) {
+        current = sizes[idx - 1];
+      } else if (dir === "up" && idx < sizes.length - 1) {
+        current = sizes[idx + 1];
+      }
+      apply();
+    });
+  }
+
+  // ── Scroll to Top ──────────────────────────────────────────────────────
+  function initScrollToTop() {
+    if (document.querySelector(".scroll-top-btn")) return; // already initialized
+    var btn = document.createElement("button");
+    btn.className = "scroll-top-btn";
+    btn.title = "Scroll to top";
+    btn.setAttribute("aria-label", "Scroll to top");
+    btn.innerHTML =
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>';
+    document.body.appendChild(btn);
+
+    var ticking = false;
+    window.addEventListener("scroll", function () {
+      if (!ticking) {
+        requestAnimationFrame(function () {
+          var y = window.scrollY || document.documentElement.scrollTop;
+          if (y > 400) {
+            btn.classList.add("visible");
+          } else {
+            btn.classList.remove("visible");
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+
+    btn.addEventListener("click", function () {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  // ── Notion-compatible HTML builder ─────────────────────────────────────
+  // Walks the report DOM and emits only the flat semantic elements that
+  // Notion's clipboard parser recognises as block types.
+  function toNotionHtml(root) {
+    var parts = [];
+
+    // Preserve inline formatting (bold, italic, code, links) but strip classes/styles
+    function inlineHtml(el) {
+      var out = "";
+      el.childNodes.forEach(function (n) {
+        if (n.nodeType === 3) {
+          // text node
+          out += n.textContent;
+          return;
+        }
+        if (n.nodeType !== 1) return;
+        var tag = n.tagName.toLowerCase();
+        if (tag === "strong" || tag === "b") {
+          out += "<strong>" + inlineHtml(n) + "</strong>";
+        } else if (tag === "em" || tag === "i") {
+          out += "<em>" + inlineHtml(n) + "</em>";
+        } else if (tag === "code") {
+          out += "<code>" + n.textContent + "</code>";
+        } else if (tag === "a") {
+          out += '<a href="' + (n.getAttribute("href") || "") + '">' + inlineHtml(n) + "</a>";
+        } else if (tag === "br") {
+          out += "<br>";
+        } else {
+          // Unwrap unknown inline wrappers (spans, etc.)
+          out += inlineHtml(n);
+        }
+      });
+      return out;
+    }
+
+    function walk(el) {
+      var children = el.children;
+      for (var i = 0; i < children.length; i++) {
+        var node = children[i];
+        var tag = node.tagName.toLowerCase();
+
+        // Skip hidden, toolbar, nav, dialog elements
+        if (node.hidden || node.offsetParent === null && tag !== "body" && tag !== "html") continue;
+        if (tag === "nav" || tag === "dialog" || tag === "script" || tag === "style") continue;
+        if (node.classList.contains("floating-toolbar") ||
+            node.classList.contains("toolbar") ||
+            node.classList.contains("sidebar") ||
+            node.classList.contains("metrics") ||
+            node.classList.contains("header-controls") ||
+            node.classList.contains("toc-bar") ||
+            node.classList.contains("toc") ||
+            node.classList.contains("running-header") ||
+            node.classList.contains("search-wrap") ||
+            node.classList.contains("dlg-header")) continue;
+
+        // Headings
+        if (tag === "h1") {
+          parts.push("<h1>" + inlineHtml(node) + "</h1>");
+        } else if (tag === "h2") {
+          parts.push("<h2>" + inlineHtml(node) + "</h2>");
+        } else if (tag === "h3") {
+          parts.push("<h3>" + inlineHtml(node) + "</h3>");
+        } else if (tag === "h4") {
+          // Notion only has H1-H3, map H4 to bold paragraph
+          parts.push("<p><strong>" + inlineHtml(node) + "</strong></p>");
+        }
+        // Paragraphs
+        else if (tag === "p") {
+          var text = node.textContent.trim();
+          if (text) parts.push("<p>" + inlineHtml(node) + "</p>");
+        }
+        // Horizontal rules / dividers
+        else if (tag === "hr") {
+          parts.push("<hr>");
+        }
+        // Blockquotes
+        else if (tag === "blockquote") {
+          parts.push("<blockquote>" + inlineHtml(node) + "</blockquote>");
+        }
+        // Lists (unordered and ordered)
+        else if (tag === "ul") {
+          var items = node.querySelectorAll(":scope > li");
+          var listHtml = "<ul>";
+          items.forEach(function (li) { listHtml += "<li>" + inlineHtml(li) + "</li>"; });
+          listHtml += "</ul>";
+          parts.push(listHtml);
+        } else if (tag === "ol") {
+          var oItems = node.querySelectorAll(":scope > li");
+          var oListHtml = "<ol>";
+          oItems.forEach(function (li) { oListHtml += "<li>" + inlineHtml(li) + "</li>"; });
+          oListHtml += "</ol>";
+          parts.push(oListHtml);
+        }
+        // Code blocks
+        else if (tag === "pre") {
+          var codeEl = node.querySelector("code");
+          var codeText = codeEl ? codeEl.textContent : node.textContent;
+          parts.push("<pre><code>" + codeText + "</code></pre>");
+        }
+        // Tables
+        else if (tag === "table") {
+          var tableHtml = "<table>";
+          node.querySelectorAll("tr").forEach(function (tr) {
+            tableHtml += "<tr>";
+            tr.querySelectorAll("th, td").forEach(function (cell) {
+              var cellTag = cell.tagName.toLowerCase();
+              tableHtml += "<" + cellTag + ">" + inlineHtml(cell) + "</" + cellTag + ">";
+            });
+            tableHtml += "</tr>";
+          });
+          tableHtml += "</table>";
+          parts.push(tableHtml);
+        }
+        // Containers — recurse into divs, sections, details, main, article, etc.
+        else if (tag === "div" || tag === "section" || tag === "details" ||
+                 tag === "main" || tag === "article" || tag === "summary" ||
+                 tag === "header" || tag === "footer" || tag === "figure") {
+          walk(node);
+        }
+        // Skip everything else (canvas, svg, img, form, input, etc.)
+      }
+    }
+
+    walk(root);
+    return parts.join("\n");
+  }
+
+  // ── Copy For Menu (Notion / Slack) ─────────────────────────────────────
+  /**
+   * @param {string} btnSel  - CSS selector for the toggle button
+   * @param {string} menuSel - CSS selector for the dropdown
+   */
+  function initCopyForMenu(btnSel, menuSel) {
+    var btn = document.querySelector(btnSel);
+    var menu = document.querySelector(menuSel);
+    if (!btn || !menu) return;
+    if (btn._copyForInit) return;
+    btn._copyForInit = true;
+
+    function closeMenu() {
+      menu.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+    }
+    function toggleMenu() {
+      var isOpen = menu.classList.toggle("open");
+      btn.setAttribute("aria-expanded", String(isOpen));
+    }
+
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      toggleMenu();
+    });
+    document.addEventListener("click", function () {
+      closeMenu();
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeMenu();
+    });
+
+    function getReportContent() {
+      var main =
+        document.querySelector("main.content") ||
+        document.querySelector("main") ||
+        document.querySelector(".content") ||
+        document.body;
+      return main;
+    }
+
+    function showFeedback(optEl, msg) {
+      var label = optEl.querySelector(".copy-for-label");
+      var orig = label ? label.textContent : "";
+      if (label) label.textContent = msg;
+      setTimeout(function () {
+        if (label) label.textContent = orig;
+      }, 1500);
+    }
+
+    menu.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var opt = e.target.closest(".copy-for-opt");
+      if (!opt) return;
+
+      var format = opt.dataset.format;
+      var content = getReportContent();
+
+      if (format === "notion") {
+        // Build Notion-compatible HTML from semantic elements
+        var html = toNotionHtml(content);
+        if (navigator.clipboard && window.ClipboardItem) {
+          var blob = new Blob([html], { type: "text/html" });
+          navigator.clipboard
+            .write([new ClipboardItem({ "text/html": blob })])
+            .then(function () {
+              showFeedback(opt, "Copied!");
+            })
+            .catch(function () {
+              showFeedback(opt, "Failed");
+            });
+        } else {
+          // Fallback: copy as plain text
+          navigator.clipboard.writeText(content.innerText).then(function () {
+            showFeedback(opt, "Copied (text)");
+          });
+        }
+      } else if (format === "slack") {
+        // Convert to Slack mrkdwn format
+        var text = content.innerText || content.textContent || "";
+        // Basic mrkdwn: keep structure, trim excessive whitespace
+        text = text.replace(/\n{3,}/g, "\n\n").trim();
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text).then(function () {
+            showFeedback(opt, "Copied!");
+          });
+        }
+      } else if (format === "markdown") {
+        // Simple markdown: headings + text
+        var md = "";
+        content.querySelectorAll("h1,h2,h3,h4,p,li,code,pre").forEach(function (el) {
+          var tag = el.tagName.toLowerCase();
+          var t = el.textContent.trim();
+          if (!t) return;
+          if (tag === "h1") md += "# " + t + "\n\n";
+          else if (tag === "h2") md += "## " + t + "\n\n";
+          else if (tag === "h3") md += "### " + t + "\n\n";
+          else if (tag === "h4") md += "#### " + t + "\n\n";
+          else if (tag === "li") md += "- " + t + "\n";
+          else if (tag === "pre") md += "```\n" + t + "\n```\n\n";
+          else if (tag === "code" && el.parentElement.tagName !== "PRE") return;
+          else md += t + "\n\n";
+        });
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(md.trim()).then(function () {
+            showFeedback(opt, "Copied!");
+          });
+        }
+      }
+
+      closeMenu();
+    });
+  }
+
+  // ── Print: force tree <details> open ─────────────────────────────────────
+  // CSS cannot toggle the `open` attribute — use beforeprint/afterprint events.
+  (function () {
+    var savedStates = [];
+    window.addEventListener("beforeprint", function () {
+      savedStates = [];
+      document.querySelectorAll("details.tree-node").forEach(function (d) {
+        savedStates.push({ el: d, wasOpen: d.open });
+        d.open = true;
+      });
+    });
+    window.addEventListener("afterprint", function () {
+      savedStates.forEach(function (s) {
+        s.el.open = s.wasOpen;
+      });
+      savedStates = [];
+    });
+  })();
+
+  // ── Expose namespace ──────────────────────────────────────────────────────
+  window.__RPT = {
+    store: store,
+    initThemeToggle: initThemeToggle,
+    initSearch: initSearch,
+    initCodeDialog: initCodeDialog,
+    initCopyButtons: initCopyButtons,
+    initWidthPicker: initWidthPicker,
+    initStylePicker: initStylePicker,
+    initMath: initMath,
+    openExternalLinks: openExternalLinks,
+    initCodePaths: initCodePaths,
+    initProgressBar: initProgressBar,
+    initTextSize: initTextSize,
+    initScrollToTop: initScrollToTop,
+    initCopyForMenu: initCopyForMenu,
+    WIDTH_MAP: WIDTH_MAP,
+  };
+})();
+
+
+/**
+ * Terminal style — report.js
+ *
+ * Handles:
+ * - Smooth scroll for nav links
+ * - Active section highlighting in nav
+ * - Copy button for code blocks (if added)
+ * - Keyboard navigation
+ * - Theme switching
+ * - Search, width picker, math, external links
+ */
+
+(function () {
+  "use strict";
+
+  // ─── Theme switcher ───────────────────────────────────────────────────────────
+
+  var themeSelect = document.getElementById("theme-select");
+  var savedTheme = (__RPT.store.getItem("terminal-theme")) || "matrix";
+
+  function applyTheme(theme) {
+    document.body.setAttribute("data-theme", theme);
+    __RPT.store.setItem("terminal-theme", theme);
+    if (themeSelect) themeSelect.value = theme;
+  }
+
+  applyTheme(savedTheme);
+
+  if (themeSelect) {
+    themeSelect.addEventListener("change", function () {
+      applyTheme(themeSelect.value);
+    });
+  }
+
+  // ─── Smooth scrolling for nav links ──────────────────────────────────────────
+
+  document.querySelectorAll('.nav-links a[href^="#"]').forEach(function (link) {
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      var target = document.querySelector(this.getAttribute("href"));
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        // Update URL hash without jumping
+        history.pushState(null, "", this.getAttribute("href"));
+      }
+    });
+  });
+
+  // ─── Active section tracking ─────────────────────────────────────────────────
+
+  var sections = document.querySelectorAll(".section");
+  var navLinks = document.querySelectorAll(".nav-links a");
+
+  function updateActiveNav() {
+    var scrollTop = window.scrollY + 120;
+    var active = null;
+
+    sections.forEach(function (section) {
+      if (section.offsetTop <= scrollTop) {
+        active = section.id;
+      }
+    });
+
+    navLinks.forEach(function (link) {
+      var href = link.getAttribute("href");
+      if (href === "#" + active) {
+        link.style.textShadow = "0 0 10px rgba(51, 255, 51, 0.7)";
+        link.style.color = "";
+        link.classList.add("active-nav");
+      } else {
+        link.style.textShadow = "";
+        link.style.color = "";
+        link.classList.remove("active-nav");
+      }
+    });
+  }
+
+  var scrollTimer;
+  window.addEventListener("scroll", function () {
+    if (scrollTimer) cancelAnimationFrame(scrollTimer);
+    scrollTimer = requestAnimationFrame(updateActiveNav);
+  });
+
+  updateActiveNav();
+
+  // ─── Copy button for code blocks ─────────────────────────────────────────────
+
+  document.querySelectorAll(".code-block").forEach(function (block) {
+    var pre = block.querySelector("pre");
+    if (!pre) return;
+
+    var btn = document.createElement("button");
+    btn.className = "copy-btn";
+    btn.textContent = "Copy";
+    btn.style.cssText =
+      "position:absolute;top:8px;right:8px;background:var(--term-border);color:var(--term-text);" +
+      "border:1px solid var(--term-text);padding:2px 8px;font-size:11px;cursor:pointer;" +
+      "font-family:inherit;opacity:0;transition:opacity 0.2s;border-radius:2px;";
+
+    block.style.position = "relative";
+    block.appendChild(btn);
+
+    block.addEventListener("mouseenter", function () {
+      btn.style.opacity = "1";
+    });
+    block.addEventListener("mouseleave", function () {
+      btn.style.opacity = "0";
+    });
+
+    btn.addEventListener("click", function () {
+      var code = pre.querySelector("code");
+      var text = (code || pre).textContent || "";
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = "Copied!";
+        btn.style.color = "var(--term-bright)";
+        setTimeout(function () {
+          btn.textContent = "Copy";
+          btn.style.color = "var(--term-text)";
+        }, 1500);
+      });
+    });
+  });
+
+  // ─── Keyboard shortcuts ──────────────────────────────────────────────────────
+
+  document.addEventListener("keydown", function (e) {
+    // Press 1-9 to jump to section
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+      var active = document.activeElement;
+      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT")) return;
+
+      var num = parseInt(e.key, 10);
+      if (num >= 1 && num <= sections.length) {
+        e.preventDefault();
+        sections[num - 1].scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+
+    // Press 't' to scroll to top
+    if (e.key === "t" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      var active = document.activeElement;
+      if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT")) return;
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  });
+
+  // ─── Flicker effect on title bar dots ────────────────────────────────────────
+
+  var dots = document.querySelectorAll(".title-bar .dot");
+  dots.forEach(function (dot) {
+    dot.addEventListener("mouseenter", function () {
+      dot.style.boxShadow = "0 0 8px " + getComputedStyle(dot).backgroundColor;
+    });
+    dot.addEventListener("mouseleave", function () {
+      dot.style.boxShadow = "";
+    });
+  });
+
+  // ─── Shared module integrations ──────────────────────────────────────────────
+
+  // Search
+  __RPT.initSearch('#search', '#search-count', '#no-results', '.section');
+
+  // Copy buttons (shared module — also works alongside hover copy above)
+  __RPT.initCopyButtons('.copy-btn');
+
+  // Width picker
+  __RPT.initWidthPicker('.terminal-window', 'terminal-width');
+
+  // Math rendering
+  __RPT.initMath();
+
+  // External links open in new tab
+  __RPT.openExternalLinks();
+
+  // ── Toolbar interface ─────────────────────────────────────────────────────
+  window.__RPT_TOOLBAR = {
+    print: function() { window.print(); },
+    row2Html: window.__RPT_DEFAULT_ROW2_HTML || '',
+    row2Init: function() {
+      if (window.__RPT && __RPT.initWidthPicker) {
+        __RPT.initWidthPicker('.terminal-window', 'terminal-width');
+      }
+    },
+  };
+})();
+
+</script>
+</body>
+</html>

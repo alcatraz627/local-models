@@ -19,6 +19,14 @@ overview() {
   printf '\n%sCOMMANDS%s\n' "$Y" "$Rs"
   printf '  %s%-20s%s %squick local LLM — answers, macOS cmds, titles, file Q&A; size tiers%s\n' "$C" 'lm q "..."' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slocal image generation (Flux/Qwen on the GPU)%s\n' "$C" 'lm imagine "..."' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sread an image/screenshot into text (local VLM)%s\n' "$C" 'lm see <img>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sreview a PR / files / folder / diff (local coder)%s\n' "$C" 'lm review <x>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sjudge if a local model is trustworthy — reliability/judgment eval%s\n' "$C" 'lm probe <model>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sfan one intent across N files, judged (batch runner)%s\n' "$C" 'lm fleet <intent> …' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sopencode on the local code model — auto pin/unpin around the session%s\n' "$C" 'lm opencode [args]' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %srepo symbol map — build once, "where is X" instantly%s\n' "$C" 'lm index [find X]' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sthe gemini lane — huge-context ingestion, ideation (wrapper-only)%s\n' "$C" 'lm gemini "..."' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %scheck enumerable UI claims against a screenshot (local verify gate)%s\n' "$C" 'lm ui-verify <img> …' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
@@ -35,7 +43,8 @@ overview() {
   printf '  %s$%s lm warm on                                %s# pin the small model — q is then sub-second%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
   printf '\n%sMORE%s\n' "$Y" "$Rs"
   printf '  per-command help (every flag + examples):  %sq -h%s · %simagine -h%s · %swarm -h%s\n' "$C" "$Rs" "$C" "$Rs" "$C" "$Rs"
-  printf '  %sdocs: ~/Code/local-models/docs/  (STATE · q-spec · 03-tool-orchestration-decision · research)%s\n' "$Dm" "$Rs"
+  printf '  the full menu with examples:  %sglow ~/Code/local-models/docs/CAPABILITIES.md%s\n' "$C" "$Rs"
+  printf '  %sdocs: ~/Code/local-models/docs/  (STATE · CAPABILITIES · q-spec · 03-tool-orchestration-decision · research)%s\n' "$Dm" "$Rs"
 }
 
 # Machine-readable status for GUI hosts (better-file-browser native host).
@@ -94,7 +103,7 @@ lm_doctor() {
   check "warm model built (${WARM_MODEL:-gemma4-e4b-warm})" \
         sh -c "ollama list 2>/dev/null | grep -q '^${WARM_MODEL:-gemma4-e4b-warm}'"
   check "mflux venv ($DIR/.venv)"            test -x "$DIR/.venv/bin/mflux-generate"
-  local c; for c in lm q imagine warm; do
+  local c; for c in lm q imagine warm see review; do
     check "on PATH: $c -> $BIN/$c"           sh -c "command -v $c | grep -q ."
   done
   check "logs dir writable"                  sh -c "mkdir -p '$DIR/logs' && touch '$DIR/logs/.w' && rm -f '$DIR/logs/.w'"
@@ -138,9 +147,15 @@ lm_timeline() {
   # their continuation lines through the timeline.
   {
     [ -f "$DIR/logs/q-history.jsonl" ] && \
-      jq -r '"\(.ts)  q        \(.intent)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/logs/q-history.jsonl"
+      jq -r '"\(.ts)  q        \(.intent)\(if .error then " ✗" else "" end)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/logs/q-history.jsonl"
     [ -f "$DIR/outputs/imagine-history.jsonl" ] && \
       jq -r '"\(.ts)  imagine  \(.kind // "gen")\(if .star then " ★" else "" end)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/outputs/imagine-history.jsonl"
+    [ -f "$DIR/logs/see-history.jsonl" ] && \
+      jq -r '"\(.ts)  see      \(.img | split("/") | last)  \(((.prompt // "describe") | gsub("\\s+"; " "))[0:40])"' "$DIR/logs/see-history.jsonl"
+    [ -f "$DIR/logs/fleet-history.jsonl" ] && \
+      jq -r '"\(.ts)  fleet    \(.intent) ×\(.items)  \(.pass)✓/\(.fail)✗"' "$DIR/logs/fleet-history.jsonl"
+    [ -f "$DIR/logs/gem-history.jsonl" ] && \
+      jq -r '"\(.ts)  gemini   \(.kind)\(if .kind == "error" then " ✗" else "" end)  \(((.prompt // "") | gsub("\\s+"; " "))[0:50])"' "$DIR/logs/gem-history.jsonl"
   } | sort | tail -n "$n"
 }
 
@@ -148,6 +163,24 @@ case "${1:-}" in
   ''|-h|--help|help) overview ;;
   q)        shift; exec "$BIN/q" "$@" ;;
   imagine)  shift; exec "$BIN/imagine" "$@" ;;
+  see)      shift; exec "$BIN/see" "$@" ;;
+  review)   shift; exec "$BIN/review" "$@" ;;
+  probe)    shift; exec "$BIN/probe" "$@" ;;
+  fleet)    shift; exec "$DIR/lib/fleet" "$@" ;;
+  index)    shift; exec "$DIR/lib/repo-index" "$@" ;;
+  gemini)   shift; exec "$DIR/lib/gemini" "$@" ;;
+  ui-verify) shift; exec "$DIR/lib/ui-verify" "$@" ;;
+  rag)      shift; exec "$DIR/lib/rag" "$@" ;;
+  opencode)
+    # Run opencode against the local code tier without paying the no-idle tax:
+    # lease the model for the session (bounded — self-heals if we die hard),
+    # release when opencode exits. NOT exec — the trap must outlive the child.
+    shift
+    command -v opencode >/dev/null 2>&1 || { echo "lm: opencode not installed (brew install opencode)"; exit 1; }
+    "$BIN/warm" on code "${LM_OPENCODE_LEASE:-4h}" >&2
+    trap '"$BIN/warm" off code >/dev/null 2>&1 || true' EXIT INT TERM
+    opencode "$@"
+    ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
   status)   shift; if [ "${1:-}" = "--json" ]; then lm_status_json; else lm_status; fi ;;
   models)   shift; lm_models "${1:-}" ;;

@@ -1,0 +1,4 @@
+name = "qa"
+summary = "answer grounded ONLY in the context document"
+needs_ctx = true
+system_prompt = "Answer the user's question using ONLY the provided document as ground truth. If the document does not contain the answer, say exactly that — never fill gaps from general knowledge. Be direct, at most 4 sentences unless the question demands structure."

@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# rag — a local vector index over your docs, and grounded answers from it.
+#
+# Index markdown docs once (chunk → local embeddings → one sqlite-vec file),
+# then ask questions answered ONLY from retrieved excerpts, with citations.
+# Fully local and zero-idle: the embedder loads on demand, the "DB" is a file.
+# The conductor retrieves, the model answers — local models never drive their
+# own tools (docs/03).
+#
+#   lm rag index ~/.claude/rules ~/.claude/features    build/rebuild the index
+#   lm rag ask "which hook blocks rm?"                 grounded, cited answer
+#   lm rag search "warm leases"                        raw top-k chunks (no model)
+#   lm rag status                                      corpus + embedder facts
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/config.sh" 2>/dev/null || true
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"
+
+# Python children read these from the environment (.claude/conventions/env-access.md)
+export OLLAMA_HOST RAG_EMBED_MODEL
+PY="$DIR/.venv/bin/python"
+CORE="$DIR/lib/rag.py"
+DB="${RAG_DB:-$DIR/outputs/rag/index.db}"
+MODE=text
+K=6
+BIG=false
+positionals=()
+
+show_help() {
+  printf '%s%slm rag%s %s— local vector index over docs + grounded, cited answers%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  _sec USAGE
+  _cmd 'lm rag index <dir|file.md>…' 'chunk + embed markdown into the index (rebuilds from scratch)'
+  _cmd 'lm rag ask "question"'       'answer ONLY from retrieved excerpts, citations mandatory'
+  _cmd 'lm rag search "query"'       'raw top-k retrieval, no model call (debugging/eval)'
+  _cmd 'lm rag status'               'chunks, files, embedder, DB size'
+  _sec EXAMPLES
+  _ex 'lm rag index ~/.claude/rules ~/.claude/features ~/.claude/conventions' ''
+  _ex 'lm rag ask "what must happen before git add in the gcc repo?"'         ''
+  _ex 'lm rag ask --big -k 8 "how do warm leases interact with fleet?"'       '# heavier answerer, wider retrieval'
+  _ex 'lm rag ask "…" --json | jq .sources'                                   '# machine mode'
+  _sec OPTIONS
+  _opt '-k N'    "retrieved chunks (default $K)"
+  _opt '--big'   'answer on the big tier (default: warm small)'
+  _opt '--json'  'machine mode: {ok, text, sources, model, ms}'
+  _opt '-h'      'this help'
+  _sec NOTES
+  printf '  %sfully local: embeddings + answers never leave the box · DB: %s%s\n' "$Dm" "$DB" "$Rs"
+  printf '  %sanswers refuse to guess: NOT IN CONTEXT means retrieval missed — try -k 8 or rephrase%s\n' "$Dm" "$Rs"
+}
+
+emit_error() { # CODE MESSAGE EXIT
+  if [ "$MODE" = json ]; then jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}'
+  else echo "lm rag: $2" >&2; fi
+  exit "$3"
+}
+
+CMD="${1:-}"; shift 2>/dev/null || true
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -h|--help) show_help; exit 0 ;;
+    --json)    MODE=json; shift ;;
+    --big)     BIG=true; shift ;;
+    -k)        K="$2"; shift 2 ;;
+    *)         positionals+=("$1"); shift ;;
+  esac
+done
+[ -x "$PY" ] || emit_error venv_missing "project venv missing at $PY" 12
+
+case "$CMD" in
+  ""|-h|--help|help) show_help; exit 0 ;;
+
+  index)
+    [ "${#positionals[@]}" -gt 0 ] || emit_error invalid_args "index needs dirs/files: lm rag index <dir|file.md>…" 2
+    files=()
+    for p in "${positionals[@]}"; do
+      if   [ -d "$p" ]; then while IFS= read -r f; do files+=("$f"); done < <(find "$p" -name '*.md' -type f | sort)
+      elif [ -f "$p" ]; then files+=("$p")
+      else emit_error item_missing "no such file/dir: $p" 12; fi
+    done
+    [ "${#files[@]}" -gt 0 ] || emit_error item_missing "no .md files found under the given paths" 12
+    # An index is a copy of its corpus — the same secret-scan that gates gcc
+    # commits gates ingestion. Any hit aborts before a single byte is embedded.
+    if rg -l -o 'ghp_[A-Za-z0-9]{20,}|gho_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9]{20,}|xoxb-[A-Za-z0-9-]{10,}|figd_[A-Za-z0-9]+|AKIA[A-Z0-9]{16}|-----BEGIN [A-Z ]*PRIVATE KEY' "${files[@]}" 2>/dev/null; then
+      emit_error secrets_found "secret-pattern hits in the files above — clean them before indexing" 12
+    fi
+    "$PY" "$CORE" index "$DB" "${files[@]}"
+    ;;
+
+  search)
+    [ "${#positionals[@]}" -gt 0 ] || emit_error invalid_args 'search needs a query' 2
+    "$PY" "$CORE" search "$DB" -k "$K" "${positionals[*]}"
+    ;;
+
+  status)
+    "$PY" "$CORE" status "$DB"
+    ;;
+
+  ask)
+    [ "${#positionals[@]}" -gt 0 ] || emit_error invalid_args 'ask needs a question: lm rag ask "…"' 2
+    Q="${positionals[*]}"
+    t0=$(date +%s)
+    R="$("$PY" "$CORE" search "$DB" -k "$K" "$Q")" || emit_error search_failed "retrieval failed: $R" 10
+    CTX="$(printf '%s' "$R" | jq -r '.chunks[] | "=== [\(.ref)] \(.path) § \(.heading) (from line \(.start_line)) ===\n\(.text)\n"')"
+    [ -n "$CTX" ] || emit_error no_index "nothing retrieved — is the index built? (lm rag status)" 12
+    PROMPT="Answer the question using ONLY the retrieved excerpts in the context document. After each factual claim, cite the excerpt(s) it came from like [1] or [2][3]. Quote exact values/commands verbatim. If the excerpts do not contain the answer, reply exactly: NOT IN CONTEXT — do not guess and do not use outside knowledge.
+Question: $Q"
+    q_args=(--json --ctx - --ctx-name "retrieved-excerpts" --max-ctx 24000)
+    $BIG && q_args+=(--big)
+    Q_ENV="$(printf '%s' "$CTX" | "$DIR/bin/q" "${q_args[@]}" "$PROMPT")" \
+      || emit_error answer_failed "q call failed: $(printf '%s' "$Q_ENV" | jq -r '.message // "unknown"' 2>/dev/null)" 10
+    ANSWER="$(printf '%s' "$Q_ENV" | jq -r '.text // empty')"
+    [ -n "$ANSWER" ] || emit_error answer_failed "no answer from the model" 10
+    MODEL_USED="$(printf '%s' "$Q_ENV" | jq -r '.model // "?"')"
+    ms=$(( ($(date +%s) - t0) * 1000 ))
+    if [ "$MODE" = json ]; then
+      jq -cn --arg t "$ANSWER" --arg m "$MODEL_USED" --argjson ms "$ms" --argjson k "$K" \
+        --argjson src "$(printf '%s' "$R" | jq -c '[.chunks[] | {ref, path, heading, distance}]')" \
+        '{ok:true, text:$t, model:$m, ms:$ms, k:$k, sources:$src}'
+    else
+      printf '%s\n' "$ANSWER"
+      printf '%s' "$R" | jq -r '.chunks[] | "  [\(.ref)] \(.path) § \(.heading)"' >&2
+      [ -t 2 ] && printf '%s· %s · %dms · k=%d%s\n' "$Dm" "$MODEL_USED" "$ms" "$K" "$Rs" >&2
+    fi
+    exit 0
+    ;;
+
+  *) emit_error invalid_args "unknown subcommand '$CMD' — lm rag -h" 2 ;;
+esac
