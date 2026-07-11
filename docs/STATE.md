@@ -80,6 +80,15 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-07-11 · E1 numeric position deltas (first `/bloop` run):** `moved` entries
+  in the L1 pack carry `from_xy`/`to_xy` normalized centers; `delta_xy` only for
+  unambiguous 1-vs-1 pairings (duplicate averaging would fabricate motion);
+  malformed/non-finite geometry skipped whole. Battery grew to 19 (F9 synthesized-OCR
+  contract — E1 finally guarded model-free — + F9b malformed-geometry/strict-JSON).
+  Built via the gcc `/bloop` loop as its first live test; the adversarial gate again
+  caught a real fabrication (bb.get defaults → confident (0,0) motion) that
+  self-review missed — 3/3 runs now. Report:
+  `.claude/output/20260711-e1-coords-validation/report.md`.
 - **2026-07-10 · visual-compare L1 (evidence half):** **`see diff` evidence pack** —
   deterministic `$0` extractors (`lib/vis-compare.py`, pure PIL, no numpy/opencv): E1 text/pos ·
   E3 palette/ΔE (CIE76) · E4 dHash+aHash · E5 grid-ΔE heatmap · E6 edge/shape grid;

@@ -357,7 +357,8 @@ shaped by one manual round-trip, not guessed).
 
 Surfaced by an adversarial validation pass; recorded so nobody mistakes the
 design's ambition for the current code. Built and battery-green: E0 (modality
-probe + comparability gate), E1 (text/pos diff from OCR), E3 (palette/ΔE,
+probe + comparability gate), E1 (text/pos diff from OCR; moved entries carry
+numeric `from_xy`/`to_xy`/`delta_xy`), E3 (palette/ΔE,
 **population-weighted** so a re-encode can't fabricate a divergence — the F3b
 guard), E4, E5, E6, contact sheet, slice-rerun cache, `next:` nudges, the
 compare-history journal, and soft-failure handling (a down/failed VLM or absent
@@ -375,8 +376,14 @@ them — do not assume they exist):
 - **E3 texty per-element fg/bg sampling** (`element_samples`) — only the iconlike
   grid-cell-mean path exists; the per-text-fragment color sampling that U1 wants is
   not built. E3 currently reports the global palette match, not per-element color.
-- **E1 numeric position deltas** — `moved` carries 3×3 grid labels, not raw
-  normalized coordinates yet.
+- **E1 within-bucket motion.** `moved` entries carry numeric centers since
+  2026-07-11 (`from_xy`/`to_xy` always; `delta_xy` only for an unambiguous
+  1-vs-1 pairing — averaging duplicates would fabricate a motion; observations
+  with absent/non-finite geometry are skipped whole, F9/F9b guards, validation:
+  `.claude/output/20260711-e1-coords-validation/report.md`). Still deferred:
+  *detection* is label-gated (`A[k]["pos"] != B[k]["pos"]`), so text moving
+  within its 3×3 bucket produces no `moved` entry — and no delta — at all.
+  A numeric detection threshold is a Phase-D calibration question.
 - **Telemetry (§5.5) — partial.** `failures` emits `vlm_unavailable` + `ocr_missing`
   and `cost.model_calls` records the VLM seat, but token counts are not captured and
   there is no auto-retry (extractor or VLM). The taxonomy's other codes are defined,
