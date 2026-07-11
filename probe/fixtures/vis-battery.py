@@ -201,6 +201,84 @@ except ValueError as e:
     check("F9b malformed geometry: pack is strict JSON (no NaN/Infinity)", False, str(e))
 shutil.rmtree(_td, ignore_errors=True)
 
+# F10 · loop ledger — transitions + convergence stop-rules (pure JSON, no images).
+# Drives lib/vis-ledger.py through a synthesized 5-round loop: fix, regress, stall,
+# converge. Status words are set-comparisons over divergence ids — script territory,
+# so the battery owns their correctness.
+VL = [os.path.join(ROOT, ".venv/bin/python"), os.path.join(ROOT, "lib/vis-ledger.py")]
+
+
+def _verdict(path, overall, ids_judgments, iteration):
+    json.dump({"overall": overall, "policy_version": "v3", "iteration": iteration,
+               "divergences": [{"id": i, "class": "brand-color", "judgment": j,
+                                "gestalt": False} for i, j in ids_judgments]},
+              open(path, "w"))
+
+
+def _ladd(loopdir, vpath, *args):
+    out = subprocess.run(VL + ["add", loopdir, vpath] + list(args),
+                         capture_output=True, text=True)
+    try:
+        return out.returncode, json.loads(out.stdout)
+    except Exception:
+        return out.returncode, {"_raw": (out.stdout + out.stderr)[:300]}
+
+
+_ld = os.path.join(tempfile.mkdtemp(), "loop1")
+_vp = os.path.join(tempfile.mkdtemp(), "v.json")
+
+_verdict(_vp, "diverges", [("d-a", "looks-worse"), ("d-b", "neutral")], 1)
+rc1, r1 = _ladd(_ld, _vp)
+check("F10 ledger r1: both divergences enter as new",
+      rc1 == 0 and sorted(r1.get("transitions", {}).get("new", [])) == ["d-a", "d-b"]
+      and not r1.get("signals", {}).get("stop"), "r1=%s" % r1)
+
+_verdict(_vp, "diverges", [("d-b", "neutral"), ("d-c", "looks-worse")], 2)
+rc2, r2 = _ladd(_ld, _vp)
+t2 = r2.get("transitions", {})
+check("F10 ledger r2: d-a fixed, d-b persisting, d-c new",
+      rc2 == 0 and t2.get("fixed") == ["d-a"] and t2.get("persisting") == ["d-b"]
+      and t2.get("new") == ["d-c"], "r2=%s" % r2)
+
+_verdict(_vp, "diverges", [("d-a", "looks-worse"), ("d-b", "neutral"), ("d-c", "looks-worse")], 3)
+rc3, r3 = _ladd(_ld, _vp)
+check("F10 ledger r3: d-a regressed (was fixed, is back); no stall yet",
+      rc3 == 0 and r3.get("transitions", {}).get("regressed") == ["d-a"]
+      and not r3.get("signals", {}).get("stall"), "r3=%s" % r3)
+
+_verdict(_vp, "diverges", [("d-a", "looks-worse"), ("d-b", "neutral"), ("d-c", "looks-worse")], 4)
+rc4, r4 = _ladd(_ld, _vp)
+t4, s4 = r4.get("transitions", {}), r4.get("signals", {})
+check("F10 ledger r4: identical round fabricates nothing (all persisting) AND stalls",
+      rc4 == 0 and sorted(t4.get("persisting", [])) == ["d-a", "d-b", "d-c"]
+      and not t4.get("new") and not t4.get("fixed") and not t4.get("regressed")
+      and s4.get("stall") is True and s4.get("next"), "r4=%s" % r4)
+
+_verdict(_vp, "pass", [], 5)
+rc5, r5 = _ladd(_ld, _vp)
+check("F10 ledger r5: policy-pass stop, remaining divergences all fixed",
+      rc5 == 0 and r5.get("signals", {}).get("stop") == "policy-pass"
+      and sorted(r5.get("transitions", {}).get("fixed", [])) == ["d-a", "d-b", "d-c"],
+      "r5=%s" % r5)
+
+# comparability hard block (§5.6): a loop round against a poor pair is rejected
+# with a fix-proposing error, and the ledger file is left untouched
+def _ledger_raw(loopdir):
+    try:
+        return open(os.path.join(loopdir, "ledger.json")).read()
+    except OSError:
+        return ""
+
+
+_pp = os.path.join(os.path.dirname(_vp), "pack-poor.json")
+json.dump({"meta": {"comparable": "poor", "comparable_why": "aspect 3.1x"}}, open(_pp, "w"))
+_verdict(_vp, "diverges", [("d-z", "looks-worse")], 6)
+_before = _ledger_raw(_ld)
+rc6, r6 = _ladd(_ld, _vp, "--pack", _pp)
+check("F10 ledger: comparable-poor round rejected, ledger untouched, error explains",
+      rc6 != 0 and _before != "" and _before == _ledger_raw(_ld) and bool(r6),
+      "rc=%s r6=%s" % (rc6, r6))
+
 fails = [c for c in CHECKS if not c[1]]
 for name, ok, detail in CHECKS:
     tail = ("  [%s]" % detail) if (detail and not ok) else ""
