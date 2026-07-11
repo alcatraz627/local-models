@@ -36,6 +36,7 @@ EVIDENCE=""        # diff mode: the vis-compare evidence pack JSON (empty otherw
 VLM_FAILED=false   # diff mode: the VLM prose read was skipped/failed — pack still ships
 OCR_MISSING=false  # diff mode: mac-ocr absent — E1 text lane skipped, recorded as a failure
 ONLY=""            # diff --only E5,E6 → slice rerun (no model), returns the delta
+NO_READ=false      # diff --no-read → skip the VLM prose seat (loop-round default)
 GRID=""            # diff --grid N → override the grid resolution (4–64)
 positionals=()
 LOG="$DIR/logs/see-history.jsonl"
@@ -66,6 +67,7 @@ show_help() {
   _ex 'see more "what does the badge say?"'    '# drill into the image you just read'
   _ex 'see diff logo-a.png logo-b.png --json'  '# full evidence pack in .evidence + judged prose'
   _ex 'see diff a.png b.png --only E5 --grid 32' '# refine one extractor, get the delta (no model)'
+  _ex 'see diff a.png b.png --no-read --json'  '# loop rounds: evidence pack only, VLM prose seat skipped'
   _ex 'see --menubar "which app is focused?"'  '# grab + read the top strip (crop-first beats full-screen)'
   _ex 'see panel.png --ui --json | jq .data'   '# structured elements array for an agent'
   _sec OPTIONS
@@ -138,6 +140,7 @@ while [ $# -gt 0 ]; do
     --json)     MODE=json; shift ;;
     --ui)       UI=true; shift ;;
     --ocr)      OCR=true; shift ;;
+    --no-read)  NO_READ=true; shift ;;
     --menubar)  MENUBAR=true; UI=true; shift ;;
     --crop)     CROP="$2"; shift 2 ;;
     --region)   REGION="$2"; shift 2 ;;
@@ -310,7 +313,10 @@ else
 # For a diff the L1 evidence pack is $0 and model-independent, so a down server
 # must NOT abort it — it only skips the optional VLM prose. Every other mode still
 # hard-fails, since without the model they have no output at all.
-if ! ollama_up; then
+if $NO_READ && ! $DIFF; then
+  emit_error invalid_args "--no-read only applies to diff (other modes ARE the read) — drop the flag, or use: see diff <A> <B> --no-read" 2
+fi
+if ! $NO_READ && ! ollama_up; then
   $DIFF || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
   VLM_FAILED=true
 fi
@@ -456,7 +462,11 @@ fi
 # (Keep apostrophes out of the PY block below — bash 3.2 misparses quotes in
 # heredocs inside $(...).)
 t0=$(python3 -c 'import time; print(int(time.time()*1000))')
-if $VLM_FAILED; then
+if $NO_READ; then
+  # deliberate skip (loop rounds iterate on machine evidence) — not a failure
+  TEXT="(visual read skipped: --no-read — the deterministic evidence pack below is complete)"
+  rc=0
+elif $VLM_FAILED; then
   # ollama was unreachable at the gate — skip the read, keep the pack (diff only)
   TEXT="(visual read skipped: ollama unreachable — the deterministic evidence pack below is complete)"
   rc=0
@@ -523,8 +533,10 @@ ms=$(( end - t0 ))
 if $DIFF && [ -n "$EVIDENCE" ]; then
   _vf=false; $VLM_FAILED && _vf=true
   _om=false; $OCR_MISSING && _om=true
-  EVIDENCE="$(printf '%s' "$EVIDENCE" | jq -c --arg m "$MODEL" --argjson vms "$ms" --argjson vf "$_vf" --argjson om "$_om" \
-    'if $vf then (.failures += [{stage:"vlm", code:"vlm_unavailable", retriable:true,
+  _nr=false; $NO_READ && _nr=true
+  EVIDENCE="$(printf '%s' "$EVIDENCE" | jq -c --arg m "$MODEL" --argjson vms "$ms" --argjson vf "$_vf" --argjson om "$_om" --argjson nr "$_nr" \
+    'if $nr then .   # --no-read: deliberate skip — no model call, no failure entry
+     elif $vf then (.failures += [{stage:"vlm", code:"vlm_unavailable", retriable:true,
                                  fix:"start ollama, or ignore — the evidence layer is model-independent"}])
      else (.cost.model_calls = [{seat:"local-read", model:$m, ms:$vms}]) end
      | (if $om then (.failures += [{stage:"E1", code:"ocr_missing", retriable:true,
