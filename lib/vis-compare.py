@@ -231,10 +231,11 @@ def e3_palette(a, b, k=6):
 
 # ── E1 · text + position diff (from mac-ocr jsonl, fed by bin/see) ────────────
 def _load_ocr(path):
-    """Parse a mac-ocr `--format jsonl` file into {lowered_text: {text, pos}}.
+    """Parse a mac-ocr `--format jsonl` file into {lowered_text: {text, pos, centers}}.
     mac-ocr emits one JSON object with an `observations` array; each carries the
     text and a normalized top-left boundingBox. The 3×3 pos label matches the
-    grid `see --ocr` already computes, so labels stay consistent across the tool."""
+    grid `see --ocr` already computes, so labels stay consistent across the tool;
+    the numeric center of each observation is kept alongside for position deltas."""
     try:
         obs = json.load(open(path)).get("observations", [])
     except Exception:
@@ -251,7 +252,9 @@ def _load_ocr(path):
         row = "top" if cy < 0.333 else ("middle" if cy < 0.667 else "bottom")
         col = "left" if cx < 0.333 else ("center" if cx < 0.667 else "right")
         pos = "center" if (row == "middle" and col == "center") else row + "-" + col
-        out.setdefault(t.lower(), {"text": t, "pos": set()})["pos"].add(pos)
+        e = out.setdefault(t.lower(), {"text": t, "pos": set(), "centers": []})
+        e["pos"].add(pos)
+        e["centers"].append([round(cx, 4), round(cy, 4)])
     return out, words
 
 
@@ -262,16 +265,28 @@ def e1_text_diff(a_jsonl, b_jsonl):
     B, wb = _load_ocr(b_jsonl)
     removed = [A[k]["text"] for k in A if k not in B]
     added = [B[k]["text"] for k in B if k not in A]
-    moved = [{"text": A[k]["text"], "from": sorted(A[k]["pos"]), "to": sorted(B[k]["pos"])}
-             for k in A if k in B and A[k]["pos"] != B[k]["pos"]]
+    # delta_xy only when the pairing is unambiguous (one instance each side) —
+    # averaging duplicate instances would fabricate a motion no element made.
+    moved = []
+    for k in A:
+        if k in B and A[k]["pos"] != B[k]["pos"]:
+            fx = sorted(A[k]["centers"], key=lambda c: (c[1], c[0]))
+            tx = sorted(B[k]["centers"], key=lambda c: (c[1], c[0]))
+            delta = ([round(tx[0][0] - fx[0][0], 4), round(tx[0][1] - fx[0][1], 4)]
+                     if len(fx) == 1 and len(tx) == 1 else None)
+            moved.append({"text": A[k]["text"], "from": sorted(A[k]["pos"]),
+                          "to": sorted(B[k]["pos"]), "from_xy": fx, "to_xy": tx,
+                          "delta_xy": delta})
     lines = []
     if removed:
         lines.append("REMOVED (in A only): " + " | ".join('"%s"' % t for t in removed[:25]))
     if added:
         lines.append("ADDED (in B only): " + " | ".join('"%s"' % t for t in added[:25]))
     if moved:
-        lines.append("MOVED: " + " | ".join('"%s" %s -> %s'
-                     % (m["text"], ",".join(m["from"]), ",".join(m["to"])) for m in moved[:25]))
+        lines.append("MOVED: " + " | ".join('"%s" %s -> %s%s'
+                     % (m["text"], ",".join(m["from"]), ",".join(m["to"]),
+                        " (d=%+.2f,%+.2f)" % tuple(m["delta_xy"]) if m["delta_xy"] else "")
+                     for m in moved[:25]))
     if not lines:
         lines.append("(no text-layer differences detected)")
     return ({"removed": removed, "added": added, "moved": moved},

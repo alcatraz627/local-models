@@ -130,6 +130,50 @@ check("F8 salvage: E3-E6 ship without OCR, E1 skipped, exit 0",
       "grid_heat" in p and "edge_shape" in p and "color" in p
       and "E1" in p["meta"]["skipped_extractors"])
 
+# F9 · E1 numeric moved coords — synthesized OCR jsonl (model-free; runs without
+# mac-ocr, unlike F4/F6's text checks). Plants a known 0.5,0.6 displacement, an
+# unmoved line, and an ambiguous 2-vs-1 duplicate ("OK") whose pairing must NOT
+# fabricate a scalar delta.
+def _obs(*items):
+    return {"observations": [
+        {"text": t, "boundingBox": {"x": x, "y": y, "width": w, "height": h}}
+        for t, x, y, w, h in items]}
+
+
+_td = tempfile.mkdtemp()
+_oa, _ob = os.path.join(_td, "oa.json"), os.path.join(_td, "ob.json")
+json.dump(_obs(("Submit button", 0.1, 0.1, 0.2, 0.05),    # center (0.2, 0.125)
+               ("Static footer text", 0.4, 0.8, 0.2, 0.05),
+               ("OK", 0.05, 0.05, 0.1, 0.05),
+               ("OK", 0.85, 0.05, 0.1, 0.05)), open(_oa, "w"))
+json.dump(_obs(("Submit button", 0.6, 0.7, 0.2, 0.05),    # center (0.7, 0.725)
+               ("Static footer text", 0.4, 0.8, 0.2, 0.05),
+               ("OK", 0.45, 0.45, 0.1, 0.05)), open(_ob, "w"))
+p = run("f3-a.png", "f3-b.png", "--ocr-a", _oa, "--ocr-b", _ob)
+mv = {m["text"]: m for m in p["text_diff"]["moved"]}
+
+
+def _near(got, want, tol=1e-6):
+    return got is not None and len(got) == len(want) and \
+        all(abs(g - w) < tol for g, w in zip(got, want))
+
+
+sub = mv.get("Submit button", {})
+check("F9 E1 coords: planted move carries from_xy/to_xy/delta_xy",
+      _near(sub.get("from_xy", [[]])[0], [0.2, 0.125])
+      and _near(sub.get("to_xy", [[]])[0], [0.7, 0.725])
+      and _near(sub.get("delta_xy"), [0.5, 0.6]), "sub=%s" % sub)
+check("F9 E1 coords: unmoved text stays out of `moved`",
+      "Static footer text" not in mv
+      and not p["text_diff"]["removed"] and not p["text_diff"]["added"],
+      "moved=%s" % sorted(mv))
+ok = mv.get("OK", {})
+check("F9 E1 coords: ambiguous 2-vs-1 duplicate ships coords but NO scalar delta",
+      "OK" in mv and ok.get("delta_xy") is None
+      and len(ok.get("from_xy", [])) == 2 and len(ok.get("to_xy", [])) == 1,
+      "ok=%s" % ok)
+shutil.rmtree(_td, ignore_errors=True)
+
 fails = [c for c in CHECKS if not c[1]]
 for name, ok, detail in CHECKS:
     tail = ("  [%s]" % detail) if (detail and not ok) else ""
