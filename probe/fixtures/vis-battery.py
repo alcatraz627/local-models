@@ -170,8 +170,35 @@ check("F9 E1 coords: unmoved text stays out of `moved`",
 ok = mv.get("OK", {})
 check("F9 E1 coords: ambiguous 2-vs-1 duplicate ships coords but NO scalar delta",
       "OK" in mv and ok.get("delta_xy") is None
-      and len(ok.get("from_xy", [])) == 2 and len(ok.get("to_xy", [])) == 1,
+      and ok.get("from_xy") == [[0.1, 0.075], [0.9, 0.075]]  # sorted by (cy, cx)
+      and ok.get("to_xy") == [[0.5, 0.475]],
       "ok=%s" % ok)
+shutil.rmtree(_td, ignore_errors=True)
+
+# F9b · malformed-geometry guard — an observation missing its boundingBox (or with
+# non-finite fields) must NOT fabricate a position/motion; it is skipped like
+# text-less observations, so the text degrades to ADDED, and the pack stays
+# strict-JSON (no NaN tokens).
+_td = tempfile.mkdtemp()
+_oa, _ob = os.path.join(_td, "oa.json"), os.path.join(_td, "ob.json")
+_a = _obs(("Anchor line here please", 0.1, 0.1, 0.2, 0.05))
+_a["observations"].append({"text": "Ghost label"})  # no boundingBox at all
+_a["observations"].append({"text": "Nan box", "boundingBox":
+                           {"x": 0.2, "y": 0.2, "width": float("nan"), "height": 0.05}})
+json.dump(_a, open(_oa, "w"))
+json.dump(_obs(("Anchor line here please", 0.1, 0.1, 0.2, 0.05),
+               ("Ghost label", 0.8, 0.8, 0.1, 0.05),
+               ("Nan box", 0.6, 0.6, 0.1, 0.05)), open(_ob, "w"))
+p = run("f3-a.png", "f3-b.png", "--ocr-a", _oa, "--ocr-b", _ob)
+td = p["text_diff"]
+check("F9b malformed geometry: no fabricated move, text degrades to ADDED",
+      not td["moved"] and sorted(td["added"]) == ["Ghost label", "Nan box"]
+      and not td["removed"], "td=%s" % td)
+try:
+    json.dumps(p, allow_nan=False)
+    check("F9b malformed geometry: pack is strict JSON (no NaN/Infinity)", True)
+except ValueError as e:
+    check("F9b malformed geometry: pack is strict JSON (no NaN/Infinity)", False, str(e))
 shutil.rmtree(_td, ignore_errors=True)
 
 fails = [c for c in CHECKS if not c[1]]

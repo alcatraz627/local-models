@@ -23,6 +23,7 @@ Output: evidence-pack JSON on stdout (schema: docs/10 §5).
 import argparse
 import hashlib
 import json
+import math
 import os
 import sys
 import time
@@ -245,10 +246,17 @@ def _load_ocr(path):
         t = " ".join(o.get("text", "").split())
         if not t:
             continue
-        words += len(t.split())
+        # geometry is as mandatory as text: defaulting an absent/non-finite
+        # boundingBox field would fabricate a position (and from it a motion),
+        # so a malformed observation is skipped whole, like a text-less one
         bb = o.get("boundingBox", {})
-        cx = bb.get("x", 0) + bb.get("width", 0) / 2
-        cy = bb.get("y", 0) + bb.get("height", 0) / 2
+        geo = [bb.get(k) for k in ("x", "y", "width", "height")]
+        if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in geo):
+            continue
+        words += len(t.split())
+        x, y, w, h = geo
+        cx = x + w / 2
+        cy = y + h / 2
         row = "top" if cy < 0.333 else ("middle" if cy < 0.667 else "bottom")
         col = "left" if cx < 0.333 else ("center" if cx < 0.667 else "right")
         pos = "center" if (row == "middle" and col == "center") else row + "-" + col
