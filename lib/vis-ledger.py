@@ -7,7 +7,9 @@ divergences evolve across fix rounds and says when the loop should stop.
 
 JSON in/out, no model, no PIL (bare python3). Status words (new/persisting/
 regressed/fixed) are set comparisons over divergence ids — script territory, the
-judge never assigns them. Semantics + loop protocol: docs/10 §2 L3, §5.6–5.7.
+judge never assigns them. Adds are sequential by design (one controlling agent
+per loop); there is no file lock, so concurrent adds would lose an update.
+Semantics + loop protocol: docs/10 §2 L3, §5.6–5.7.
 """
 import argparse
 import json
@@ -19,6 +21,21 @@ import time
 def die(msg, fix):
     print(json.dumps({"ok": False, "error": msg, "fix": fix}))
     sys.exit(2)
+
+
+def expect(cond, msg, fix):
+    """Shape gate: valid JSON of the wrong structure must die structured, never
+    reach a .get()/[...] that tracebacks (adversarial validation 2026-07-12)."""
+    if not cond:
+        die(msg, fix)
+
+
+def validate_ledger(ledger, path):
+    ok = (isinstance(ledger, dict) and isinstance(ledger.get("rounds"), list)
+          and all(isinstance(r, dict) and isinstance(r.get("divergences", {}), dict)
+                  for r in ledger.get("rounds", [])))
+    expect(ok, "ledger at %s is corrupted or an unexpected shape" % path,
+           "move it aside and restart the loop (trash %s), or restore it from a backup" % path)
 
 
 def load_json(path, what):
@@ -41,7 +58,9 @@ def load_ledger(loopdir):
     p = ledger_path(loopdir)
     if not os.path.exists(p):
         return {"loop": os.path.basename(os.path.abspath(loopdir)), "rounds": []}
-    return load_json(p, "ledger")
+    ledger = load_json(p, "ledger")
+    validate_ledger(ledger, p)
+    return ledger
 
 
 def write_atomic(path, obj):
@@ -81,9 +100,15 @@ def signals_for(rounds):
 
 def add_round(args):
     verdict = load_json(args.verdict, "verdict")
+    expect(isinstance(verdict, dict),
+           "verdict is not a JSON object (got %s)" % type(verdict).__name__,
+           "re-run the judge — verdict.json must be the object docs/10 §5 describes")
     pack, meta = None, {}
     if args.pack:
         pack = load_json(args.pack, "evidence pack")
+        expect(isinstance(pack, dict) and isinstance(pack.get("meta", {}), dict),
+               "evidence pack is not a JSON object with an object `meta`",
+               "pass the evidence.json that `see diff --json` writes (its .evidence)")
         meta = pack.get("meta", {})
         if meta.get("comparable") == "poor":
             die("pair is not comparable (%s) — a loop round against it would measure noise"
@@ -91,6 +116,9 @@ def add_round(args):
                 "crop both sides to a shared region first: see diff <cropped-A> <cropped-B> --json")
 
     divs = verdict.get("divergences", [])
+    expect(isinstance(divs, list) and all(isinstance(d, dict) for d in divs),
+           "verdict.divergences must be a list of objects (got %s)" % type(divs).__name__,
+           "re-run the judge — each divergence is an object with an id (docs/10 §5)")
     ids = [d.get("id") for d in divs]
     if any(not i for i in ids):
         die("a divergence has no id — the ledger keys every status on stable ids",
@@ -138,9 +166,16 @@ def add_round(args):
         rnd["scores"] = pack.get("scores", {})
         rnd["a"], rnd["b"] = meta.get("a"), meta.get("b")
 
-    os.makedirs(args.loopdir, exist_ok=True)
+    expect(not (os.path.exists(args.loopdir) and not os.path.isdir(args.loopdir)),
+           "loop-dir %s exists and is a file, not a directory" % args.loopdir,
+           "pick a directory path (convention: outputs/see/loops/<slug>/)")
     rounds.append(rnd)
-    write_atomic(ledger_path(args.loopdir), ledger)
+    try:
+        os.makedirs(args.loopdir, exist_ok=True)
+        write_atomic(ledger_path(args.loopdir), ledger)
+    except OSError as e:
+        die("cannot write the ledger: %s" % e,
+            "check permissions on %s (or choose a writable loop-dir)" % args.loopdir)
 
     out = {"ok": True, "iteration": iteration, "transitions": transitions,
            "signals": signals_for(rounds)}
@@ -155,6 +190,7 @@ def show_status(args):
         die("no ledger at %s" % p,
             "start the loop: vis-ledger.py add %s <verdict.json>" % args.loopdir)
     ledger = load_json(p, "ledger")
+    validate_ledger(ledger, p)
     rounds = ledger.get("rounds", [])
     last = rounds[-1] if rounds else {}
     print(json.dumps({"ok": True, "loop": ledger.get("loop"), "rounds": len(rounds),

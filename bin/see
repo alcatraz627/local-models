@@ -554,6 +554,9 @@ if $OCR; then READ_MODE=ocr; $MENUBAR && READ_MODE=ocr-menubar; fi
 $DIFF && READ_MODE=diff
 ART=""
 NOW_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# The audit trail must not name a model that never fired: on a deliberate
+# --no-read skip, read.md / meta.json / see-history.jsonl carry this instead.
+HMODEL="$MODEL"; $NO_READ && HMODEL="none (--no-read)"
 if mkdir -p "$ART_ROOT" 2>/dev/null; then
   slug="$(printf '%s' "$(basename "${ORIG_IMG%.*}")" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//; s/-$//' | cut -c1-40)"
   [ -n "$slug" ] || slug=img
@@ -576,10 +579,10 @@ if mkdir -p "$ART_ROOT" 2>/dev/null; then
     { printf '# see %s read — %s\n\n- image: %s\n' "$READ_MODE" "$NOW_TS" "$ORIG_IMG"
       [ -n "$CROP_DESC" ] && printf -- '- crop: %s\n' "$CROP_DESC"
       [ -n "$QUERY" ] && printf -- '- question: %s\n' "$QUERY"
-      printf -- '- model: %s · %dms\n\n---\n\n%s\n' "$MODEL" "$ms" "$TEXT"
+      printf -- '- model: %s · %dms\n\n---\n\n%s\n' "$HMODEL" "$ms" "$TEXT"
     } > "$ART/read.md" 2>/dev/null || true
     jq -cn --arg ts "$NOW_TS" --arg src "$ORIG_IMG" --arg crop "$CROP_DESC" \
-       --arg mode "$READ_MODE" --arg model "$MODEL" --argjson ms "$ms" --arg p "$QUERY" \
+       --arg mode "$READ_MODE" --arg model "$HMODEL" --argjson ms "$ms" --arg p "$QUERY" \
        '{ts:$ts, source:$src, crop:(if $crop == "" then null else $crop end), mode:$mode,
          model:$model, ms:$ms, prompt:(if $p == "" then null else $p end)}' \
        > "$ART/meta.json" 2>/dev/null || true
@@ -591,7 +594,7 @@ if mkdir -p "$ART_ROOT" 2>/dev/null; then
 fi
 mkdir -p "$DIR/logs"
 jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg img2 "${IMG_B:-}" --arg p "$QUERY" \
-   --arg m "$MODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
+   --arg m "$HMODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
    --arg crop "$CROP_DESC" --arg art "$ART" \
    '{ts:$ts, img:$img, img2:(if $img2 == "" then null else $img2 end),
      prompt:(if $p == "" then null else $p end), mode:$rm,

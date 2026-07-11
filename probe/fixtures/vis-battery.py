@@ -279,6 +279,73 @@ check("F10 ledger: comparable-poor round rejected, ledger untouched, error expla
       rc6 != 0 and _before != "" and _before == _ledger_raw(_ld) and bool(r6),
       "rc=%s r6=%s" % (rc6, r6))
 
+# F10b · malformed SHAPES (valid JSON, wrong structure) — every case must produce
+# the structured fix-proposing error (exit 2, parseable ok:false), never a
+# traceback, and add/status must agree on a corrupted ledger instead of status
+# fabricating an empty loop.
+def _structured(rc, out):
+    return rc == 2 and isinstance(out, dict) and out.get("ok") is False and out.get("fix")
+
+
+_bd = tempfile.mkdtemp()
+_bad = os.path.join(_bd, "bad.json")
+
+open(_bad, "w").write('["not", "an", "object"]')
+rc, out = _ladd(os.path.join(_bd, "l1"), _bad)
+check("F10b shape: array verdict → structured error", _structured(rc, out), "rc=%s out=%s" % (rc, out))
+
+open(_bad, "w").write('{"overall": "diverges", "divergences": "nope"}')
+rc, out = _ladd(os.path.join(_bd, "l2"), _bad)
+check("F10b shape: string divergences → structured error", _structured(rc, out), "rc=%s out=%s" % (rc, out))
+
+_cl = os.path.join(_bd, "l3")
+os.makedirs(_cl)
+open(os.path.join(_cl, "ledger.json"), "w").write("{}")
+_verdict(_bad, "diverges", [("d-x", "looks-worse")], 1)
+rc, out = _ladd(_cl, _bad)
+rc2, out2 = (lambda o: (o.returncode, json.loads(o.stdout) if o.stdout.strip() else {}))(
+    subprocess.run(VL + ["status", _cl], capture_output=True, text=True))
+check("F10b shape: corrupt ledger → add AND status both error (no fabricated empty loop)",
+      _structured(rc, out) and _structured(rc2, out2),
+      "add rc=%s %s | status rc=%s %s" % (rc, out, rc2, out2))
+
+_fl = os.path.join(_bd, "im-a-file")
+open(_fl, "w").write("x")
+rc, out = _ladd(_fl, _bad)
+check("F10b shape: loop-dir is a file → structured error", _structured(rc, out), "rc=%s out=%s" % (rc, out))
+
+# F10c · write atomicity — poison json.dump to crash mid-write: the pre-existing
+# ledger must survive byte-identical (a de-atomized direct write corrupts it).
+import importlib.util
+
+_spec = importlib.util.spec_from_file_location("vis_ledger", os.path.join(ROOT, "lib/vis-ledger.py"))
+_vlm = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_vlm)
+_at = os.path.join(_bd, "ledger.json")
+_orig_content = '{"loop": "orig", "rounds": []}'
+open(_at, "w").write(_orig_content)
+_orig_dump = _vlm.json.dump
+
+
+def _poison(obj, f, **kw):
+    f.write('{"torn')
+    raise RuntimeError("simulated crash mid-write")
+
+
+_vlm.json.dump = _poison
+try:
+    try:
+        _vlm.write_atomic(_at, {"x": 1})
+        _crashed = False
+    except RuntimeError:
+        _crashed = True
+finally:
+    _vlm.json.dump = _orig_dump
+check("F10c atomic write: crash mid-dump leaves the ledger byte-identical",
+      _crashed and open(_at).read() == _orig_content,
+      "crashed=%s content=%r" % (_crashed, open(_at).read()[:40]))
+shutil.rmtree(_bd, ignore_errors=True)
+
 fails = [c for c in CHECKS if not c[1]]
 for name, ok, detail in CHECKS:
     tail = ("  [%s]" % detail) if (detail and not ok) else ""
