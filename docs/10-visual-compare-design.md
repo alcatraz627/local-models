@@ -1,6 +1,6 @@
 # Visual Compare — a full-stack capability for "does B faithfully imitate A?"
 
-<!-- sessions: vis-ab-3c@2026-07-12 · STATUS: Phases A (L1 evidence), B (L2 judge), D (calibration) DONE — lib/vis-compare.py + see diff + F1-F9b battery (lm side); gcc skill /vis-compare + policy.md v3 (judge side, ~/.claude/skills/vis-compare/); L1+L2 adversarially validated; Phase D acceptance signed 2026-07-12 (2 real pairs user-graded, calibration.md records in outputs/see/). Phase C (loop) is un-gated and pending -->
+<!-- sessions: vis-ab-3c@2026-07-12 · STATUS: ALL PHASES DONE — A (L1 evidence: lib/vis-compare.py + see diff, F1-F9b), B (L2 judge: /vis-compare + policy.md v3), D (calibration: acceptance signed 2026-07-12, 2 real pairs user-graded), C (loop: lib/vis-ledger.py + see diff --no-read + /vis-compare --loop protocol, F10/F10b/F10c). Every phase adversarially validated; E7/E8 remain documented lanes (§10) -->
 
 The independent vision capability the recreate-with-a-freer-hand workflow needs:
 compare two images (or an image against a live surface), produce machine-measured
@@ -392,3 +392,50 @@ them — do not assume they exist):
 These are Phase-B-onward or calibration-time items; the fabrication guard, the
 modality adaptivity, and the $0/model-independent contract — the load-bearing
 claims — are the ones that hold today.
+
+## 10 · L3 loop as shipped (Phase C, 2026-07-12)
+
+The loop's **mechanical half** is `lib/vis-ledger.py` (bare python3, no model, no
+PIL) plus `see diff --no-read` (the loop-round default — skips the VLM prose seat:
+no model call, no ollama probe, no failure entry, ~1s/round). The **driving half**
+is the `/vis-compare` skill's `--loop` mode (gcc side): apply fixes → re-render →
+`see diff A B --no-read --json` → `vis-ledger.py add <loop-dir> <verdict|pack>` →
+obey the signals. Loop dirs live at `outputs/see/loops/<slug>/`.
+
+**Status words** — set comparisons over divergence ids; the judge never assigns
+them (role discipline, §2):
+
+| status | meaning |
+|---|---|
+| `new` | never seen in any prior round |
+| `persisting` | present in the previous round, still present |
+| `regressed` | absent in the previous round but seen earlier — it came back |
+| `fixed` | present in the previous round, absent now (transitions-only) |
+
+**Convergence signals**: `stop: "policy-pass"` on judge overall `pass` only
+(`pass-with-notes` nudges "converged is the user's call" instead); `stall: true`
+after 2 consecutive rounds with zero `fixed` (streak resets on any fix) → nudge
+escalates to the native judge. The §5.6 hard block holds here: an `add --pack`
+whose meta says `comparable: poor` is rejected before the ledger is touched.
+Adds are sequential by design (one controlling agent per loop) — no file lock.
+Guards: F10 (transitions/stall/stop), F10b (malformed shapes die structured),
+F10c (a mid-write crash can't tear the ledger). Adversarial validation:
+`.claude/output/20260712-loop-ledger-validation/report.md` — the gate found the
+shape-validation gap + a status-fabricates-empty-loop inconsistency, both fixed
+with mechanisms.
+
+### E7/E8 lanes (documented, NOT built — do not assume they exist)
+
+For pairs of **live surfaces** (not static frames), two additional evidence lanes
+slot into the same pack shape when a real loop needs them:
+
+- **E7 · AX geometry** — `ax` CLI element frames when both sides are running
+  native apps (the accessibility lane verify.sh already checks). Element-level
+  positions/sizes, so `moved` gains true element identity instead of OCR keys.
+- **E8 · DOM computed styles** — computed color/spacing/typography via the
+  browser tooling (chrome-devtools/playwright evaluate) when both sides are web
+  surfaces. Exact values, no palette estimation.
+
+Both are thin glue (emit extractor-shaped JSON into the pack, honest
+`skipped_extractors` otherwise) and stay unbuilt until a live-surface loop
+actually demands them — the static-frame loop above is complete without them.

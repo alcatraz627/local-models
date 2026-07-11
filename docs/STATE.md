@@ -80,6 +80,15 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-07-12 · visual-compare Phase C (loop) — capability COMPLETE:** L3 mechanical
+  half shipped: `lib/vis-ledger.py` (status transitions as set comparisons, stall/
+  policy-pass signals, shape-validated fix-proposing errors, atomic writes) +
+  `see diff --no-read` (loop-round default, ~1s, skip ≠ failure in telemetry) +
+  `/vis-compare --loop` protocol (gcc). Battery 25→30 (F10 transitions/stall/stop ·
+  F10b malformed shapes · F10c torn-write). Gate caught a real BLOCKER again (shape
+  gap + status fabricating an empty loop on a corrupt ledger) — 4/4 /bloop runs now.
+  E7/E8 stay documented lanes (docs/10 §10). Report:
+  `.claude/output/20260712-loop-ledger-validation/report.md`.
 - **2026-07-12 · visual-compare Phase D CLOSED (acceptance signed):** two real pairs
   run end-to-end and user-graded — run 1 login pair (verdict re-graded
   faithful-with-notes; policy v2: `[info-add]` class + live-data rule) and run 2
