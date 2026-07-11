@@ -1,6 +1,6 @@
 # Visual Compare — a full-stack capability for "does B faithfully imitate A?"
 
-<!-- sessions: local-next-a4@2026-07-10 · vis-compare-A@2026-07-10 · STATUS: Phase A (L1 evidence) + Phase B (L2 judge) BUILT — lib/vis-compare.py + see diff + F1-F8 battery (lm side); gcc skill /vis-compare + policy.md (judge side, ~/.claude/skills/vis-compare/); both adversarially validated + hardened. Phase C (loop) / D (calibration) pending -->
+<!-- sessions: vis-ab-3c@2026-07-12 · STATUS: Phases A (L1 evidence), B (L2 judge), D (calibration) DONE — lib/vis-compare.py + see diff + F1-F9b battery (lm side); gcc skill /vis-compare + policy.md v3 (judge side, ~/.claude/skills/vis-compare/); L1+L2 adversarially validated; Phase D acceptance signed 2026-07-12 (2 real pairs user-graded, calibration.md records in outputs/see/). Phase C (loop) is un-gated and pending -->
 
 The independent vision capability the recreate-with-a-freer-hand workflow needs:
 compare two images (or an image against a live surface), produce machine-measured

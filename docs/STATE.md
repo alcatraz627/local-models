@@ -80,6 +80,13 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-07-12 · visual-compare Phase D CLOSED (acceptance signed):** two real pairs
+  run end-to-end and user-graded — run 1 login pair (verdict re-graded
+  faithful-with-notes; policy v2: `[info-add]` class + live-data rule) and run 2
+  data-forge tray icon pair, source vs 30px rung (pass-with-notes confirmed; policy
+  v3: `[render-fidelity]` class + derived-size leniency, hue exempt). Calibration
+  records sit next to each verdict.json under `outputs/see/`; policy lives at
+  `~/.claude/skills/vis-compare/policy.md`. Phase C (loop) un-gated, not started.
 - **2026-07-11 · E1 numeric position deltas (first `/bloop` run):** `moved` entries
   in the L1 pack carry `from_xy`/`to_xy` normalized centers; `delta_xy` only for
   unambiguous 1-vs-1 pairings (duplicate averaging would fabricate motion);
