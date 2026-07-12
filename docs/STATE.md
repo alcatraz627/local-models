@@ -80,6 +80,22 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-07-13 · capability wave (5, each through `/bloop`):** **asset-verify**
+  (`lib/asset-verify.py` — derived rungs judged against a best-achievable resample at
+  their own size; found data-forge's icon set already optimal) · **findings-gate**
+  (`lib/findings-gate.py` — the $0 local-review pre-gate's trust layer: fail-CLOSED
+  containment, so a fabricated file:line never reaches a human as evidence; wired as
+  /bloop Phase 4.0) · **fleet-over-real-code-task** (the routing experiment: the 35b
+  coder re-implemented the real E1 change under the battery judge, 33/33 round 1 — the
+  scoped-worker-under-a-judge seat CLEARS; the autonomous tier does not) · **E8 live-web
+  lane** (`lib/e8-{dom.py,extract.js}` — exact computed styles; the tool owns the diff,
+  not the browser) · **imagegen convergence lane** (docs/10 §11 — seed-locked `refine`,
+  or the ledger's fixed/persisting semantics are meaningless). Battery 25 → 48. Every
+  gate found real defects self-review missed (8/8 /bloop runs): a lazy-decode traceback,
+  a fixture structurally blind to compositing, a root-containment bypass, and E8's
+  alpha-dropping FALSE NEGATIVE (transparent→opaque black read as "negligible").
+  Reports: `.claude/output/20260713-*`.
+
 - **2026-07-12 · visual-compare Phase C (loop) — capability COMPLETE:** L3 mechanical
   half shipped: `lib/vis-ledger.py` (status transitions as set comparisons, stall/
   policy-pass signals, shape-validated fix-proposing errors, atomic writes) +

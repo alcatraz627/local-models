@@ -96,10 +96,10 @@ if command -v mac-ocr >/dev/null 2>&1; then
     && ok "see --ocr --json → positioned words (VERIFY FIXTURE @ top-left)" || bad "see --ocr positions wrong/missing"
 else skip "mac-ocr not installed (npm install -g mac-ocr)"; fi
 
-echo "── vis-compare: evidence battery (fixtures F1-F11, model-free) ──"
+echo "── vis-compare: evidence battery (fixtures F1-F12, model-free) ──"
 # The fabrication guard (F3 identical → all zero) + every extractor's
 # detect-F2 / stay-silent-on-F3 contract + loop ledger (F10*) + asset-verify
-# (F11). No model runs; ~2s.
+# (F11*) + the E8 live-web lane (F12*). No model runs; ~3s.
 VB="$(./.venv/bin/python probe/fixtures/vis-battery.py 2>&1)"; vbrc=$?
 if [ "$vbrc" -eq 0 ]; then
   ok "$(printf '%s' "$VB" | tail -1)"
