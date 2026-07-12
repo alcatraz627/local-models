@@ -96,9 +96,10 @@ if command -v mac-ocr >/dev/null 2>&1; then
     && ok "see --ocr --json → positioned words (VERIFY FIXTURE @ top-left)" || bad "see --ocr positions wrong/missing"
 else skip "mac-ocr not installed (npm install -g mac-ocr)"; fi
 
-echo "── vis-compare: evidence battery (fixtures F1-F6, model-free) ──"
+echo "── vis-compare: evidence battery (fixtures F1-F11, model-free) ──"
 # The fabrication guard (F3 identical → all zero) + every extractor's
-# detect-F2 / stay-silent-on-F3 contract. No model runs; ~1s.
+# detect-F2 / stay-silent-on-F3 contract + loop ledger (F10*) + asset-verify
+# (F11). No model runs; ~2s.
 VB="$(./.venv/bin/python probe/fixtures/vis-battery.py 2>&1)"; vbrc=$?
 if [ "$vbrc" -eq 0 ]; then
   ok "$(printf '%s' "$VB" | tail -1)"
@@ -106,6 +107,10 @@ else
   bad "vis-compare battery — failing assertions:"
   printf '%s\n' "$VB" | awk '/FAIL/ {print "       " $0}'
 fi
+
+echo "── findings-gate: mechanical review-findings gate ──"
+FG="$(./.venv/bin/python lib/findings-gate.py --self-test 2>&1)" \
+  && ok "$FG" || bad "$FG"
 
 echo "── ax: accessibility lane present (ui-verify --app dependency) ──"
 if command -v ax >/dev/null 2>&1; then
