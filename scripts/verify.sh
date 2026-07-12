@@ -112,6 +112,29 @@ echo "── findings-gate: mechanical review-findings gate ──"
 FG="$(./.venv/bin/python lib/findings-gate.py --self-test 2>&1)" \
   && ok "$FG" || bad "$FG"
 
+echo "── imagine: model cache complete (liveness, no generation) ──"
+# The suite skips imagegen (GPU, minutes), which let a HALF-DOWNLOADED schnell sit
+# broken and silent: every run re-entered a 24GB HuggingFace fetch and hung at 2%
+# CPU. Checking cache SIZE is ~0s and catches exactly that failure.
+IMG_ANY=0
+# repo:min_gb:alias — alias is what `imagine -m` actually takes, so the fix hint
+# is a command that runs (agent-first-tools: an error proposes its own fix)
+for m in "black-forest-labs--FLUX.1-schnell:20:schnell" "Qwen--Qwen-Image:40:qwen"; do
+  repo="${m%%:*}"; rest="${m#*:}"; min_gb="${rest%%:*}"; alias="${rest##*:}"
+  d="$HOME/.cache/huggingface/hub/models--$repo"
+  if [ -d "$d" ]; then
+    gb=$(du -sg "$d" 2>/dev/null | awk '{print $1}')
+    if [ "${gb:-0}" -ge "$min_gb" ]; then
+      ok "imagine model cached: $alias (${gb}GB)"; IMG_ANY=1
+    else
+      bad "imagine model PARTIAL: $alias is ${gb}GB (< ${min_gb}GB) — a run will hang re-downloading. Fix: imagine -m $alias \"test\"  # let the fetch finish once"
+    fi
+  else
+    skip "imagine model not pulled: $alias"
+  fi
+done
+[ "$IMG_ANY" -eq 1 ] || bad "no complete imagine model — imagegen is dead until one is pulled"
+
 echo "── ax: accessibility lane present (ui-verify --app dependency) ──"
 if command -v ax >/dev/null 2>&1; then
   [ -n "$(ax list 2>/dev/null | head -2)" ] && ok "ax list (Accessibility perm live)" || bad "ax installed but list empty — check Accessibility permission"
