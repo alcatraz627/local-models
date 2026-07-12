@@ -389,6 +389,83 @@ check("F11 asset-verify: identical copy passes; any flag → nonzero exit",
       "rc=%s same=%s" % (_out.returncode, _rungs.get("same.png")))
 shutil.rmtree(_ad, ignore_errors=True)
 
+# F12 · E8 DOM computed-styles lane — exact values from a browser, so the judge
+# never estimates a color or a spacing on a live web surface. Model-free: feeds
+# synthesized style captures (the shape any browser driver emits).
+E8 = [os.path.join(ROOT, ".venv/bin/python"), os.path.join(ROOT, "lib/e8-dom.py")]
+
+
+def _cap(path, cta_bg, body_color, card_pad):
+    json.dump({"url": "file://x", "elements": [
+        {"selector": "#title", "styles": {"color": "rgb(34, 34, 34)", "font-size": "20px",
+                                          "font-weight": "700"}},
+        {"selector": "#body", "styles": {"color": body_color, "font-size": "14px"}},
+        {"selector": "#cta", "styles": {"background-color": cta_bg, "color": "rgb(255, 255, 255)",
+                                        "padding": "8px 16px"}},
+        {"selector": ".card", "styles": {"padding": card_pad, "border-radius": "8px"}},
+    ]}, open(path, "w"))
+
+
+_ed = tempfile.mkdtemp()
+_ca, _cb = os.path.join(_ed, "a.json"), os.path.join(_ed, "b.json")
+_cap(_ca, "rgb(37, 99, 235)", "rgb(85, 85, 85)", "16px")
+_cap(_cb, "rgb(29, 78, 216)", "rgb(153, 153, 153)", "10px")
+
+
+def _e8(a, b):
+    o = subprocess.run(E8 + [a, b], capture_output=True, text=True)
+    try:
+        return o.returncode, json.loads(o.stdout)
+    except Exception:
+        return o.returncode, {"_raw": (o.stdout + o.stderr)[:200]}
+
+
+rc, d = _e8(_ca, _cb)
+_by = {(x.get("selector"), x.get("prop")): x for x in d.get("diffs", [])}
+check("F12 E8: catches the 3 planted divergences, nothing else",
+      rc == 0 and len(d.get("diffs", [])) == 3
+      and ("#cta", "background-color") in _by and ("#body", "color") in _by
+      and (".card", "padding") in _by, "diffs=%s" % d.get("diffs"))
+check("F12 E8: color diffs carry a measured deltaE (exact, never estimated)",
+      isinstance(_by.get(("#cta", "background-color"), {}).get("dE"), float)
+      and _by[("#cta", "background-color")]["dE"] > 2,
+      "cta=%s" % _by.get(("#cta", "background-color")))
+rc, same = _e8(_ca, _ca)
+check("F12 E8 fabrication guard: identical captures → zero diffs, elements counted",
+      rc == 0 and same.get("diffs") == [] and same.get("elements_compared") == 4,
+      "same=%s" % same)
+rc, d2 = _e8(_ca, os.path.join(_ed, "nope.json"))
+check("F12 E8: missing capture → structured fix-proposing error, exit 2",
+      rc == 2 and d2.get("ok") is False and bool(d2.get("fix")), "d2=%s" % d2)
+
+# F12b · the two defects the LIVE browser run exposed (2026-07-13) and the
+# synthetic fixture could not: an INVISIBLE derived property must not fabricate a
+# divergence (computed border-color follows currentColor even with border-width:0,
+# so a recolor drags a phantom border diff along), and coverage must be HONEST
+# (only marked elements are captured — an unmarked element's divergence is
+# invisible, and the pack has to say so rather than look complete).
+def _cap2(path, color, extra=None):
+    el = {"selector": "#body", "styles": {"color": color, "border-color": color,
+                                          "border-width": "0px", "border-style": "none"}}
+    cap = {"url": "file://x", "elements": [el], "dom_elements": 7}
+    if extra:
+        cap["elements"].append(extra)
+    json.dump(cap, open(path, "w"))
+
+
+_cap2(_ca, "rgb(85, 85, 85)")
+_cap2(_cb, "rgb(153, 153, 153)")
+rc, d3 = _e8(_ca, _cb)
+_props = [x["prop"] for x in d3.get("diffs", [])]
+check("F12b E8: invisible derived property (border-color, border-width 0) is not "
+      "a divergence; the real color change still is",
+      rc == 0 and _props == ["color"], "diffs=%s" % d3.get("diffs"))
+check("F12b E8: coverage is honest — captured vs DOM total, uncaptured surfaced",
+      d3.get("coverage", {}).get("captured") == 1
+      and d3.get("coverage", {}).get("dom_elements") == 7
+      and d3.get("coverage", {}).get("uncaptured") == 6, "cov=%s" % d3.get("coverage"))
+shutil.rmtree(_ed, ignore_errors=True)
+
 fails = [c for c in CHECKS if not c[1]]
 for name, ok, detail in CHECKS:
     tail = ("  [%s]" % detail) if (detail and not ok) else ""
