@@ -37,10 +37,13 @@ def die(msg, fix):
 
 def load_image(path, what):
     try:
-        return Image.open(path)
-    except Exception as e:
+        img = Image.open(path)
+        img.load()  # PIL is lazy: without this the decode of a TRUNCATED file
+        return img  # (interrupted build, disk-full write) escapes this guard and
+    except Exception as e:  # tracebacks later inside flatten()
         die("%s unreadable as an image: %s" % (what, e),
-            "check the path — %s must be a raster image PIL can open" % path)
+            "check the path — %s must be a complete raster image PIL can open "
+            "(a truncated/partial write fails here)" % path)
 
 
 def flatten(img, size=None):

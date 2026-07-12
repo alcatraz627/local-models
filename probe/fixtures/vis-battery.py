@@ -354,9 +354,14 @@ from PIL import ImageDraw
 
 AV = [os.path.join(ROOT, ".venv/bin/python"), os.path.join(ROOT, "lib/asset-verify.py")]
 _ad = tempfile.mkdtemp()
-_im = Image.new("RGBA", (256, 256), (71, 112, 76, 255))
+# The source MUST carry real alpha variation (transparent field, opaque mark):
+# a fully-opaque fixture makes composite-on-white and bare-alpha-drop produce
+# byte-identical RGB, so the compositing step — the tool's central honesty claim
+# — is structurally untestable. (Adversarial validation deleted compositing
+# entirely against an alpha=255 fixture and the battery stayed green.)
+_im = Image.new("RGBA", (256, 256), (71, 112, 76, 0))
 _dr = ImageDraw.Draw(_im)
-_dr.ellipse([40, 40, 216, 216], outline=(38, 193, 208, 255), width=8)
+_dr.ellipse([40, 40, 216, 216], fill=(71, 112, 76, 255), outline=(38, 193, 208, 255), width=8)
 _dr.ellipse([80, 80, 176, 176], outline=(241, 187, 52, 255), width=8)
 _src = os.path.join(_ad, "src.png")
 _im.save(_src)
@@ -387,6 +392,33 @@ check("F11 asset-verify: double-resampled rung flagged, fix proposed",
 check("F11 asset-verify: identical copy passes; any flag → nonzero exit",
       _rungs.get("same.png", {}).get("verdict") == "ok" and _out.returncode != 0,
       "rc=%s same=%s" % (_out.returncode, _rungs.get("same.png")))
+
+# F11b · the compositing step must be load-bearing (a rung faded under alpha is a
+# real visible defect), and a TRUNCATED file must die structured — PIL decodes
+# lazily, so an unguarded open() lets the crash surface deep inside the resize.
+_faded = _g.copy()
+_faded.putalpha(_faded.getchannel("A").point(lambda a: int(a * 0.5)))
+_faded.save(os.path.join(_ad, "faded-32.png"))
+_out = subprocess.run(AV + [_src, os.path.join(_ad, "faded-32.png"), "--json"],
+                      capture_output=True, text=True)
+try:
+    _fv = json.loads(_out.stdout)["rungs"][0]["verdict"]
+except Exception:
+    _fv = "(unparseable)"
+check("F11b asset-verify: alpha-faded rung is flagged (compositing is load-bearing)",
+      _fv == "soft", "verdict=%s" % _fv)
+
+_trunc = os.path.join(_ad, "truncated.png")
+_raw = open(_src, "rb").read()
+open(_trunc, "wb").write(_raw[:len(_raw) // 2])
+_out = subprocess.run(AV + [_src, _trunc, "--json"], capture_output=True, text=True)
+try:
+    _te = json.loads(_out.stdout)
+except Exception:
+    _te = {}
+check("F11b asset-verify: truncated image → structured exit-2 error, no traceback",
+      _out.returncode == 2 and _te.get("ok") is False and bool(_te.get("fix")),
+      "rc=%s out=%s err=%s" % (_out.returncode, _out.stdout[:80], _out.stderr[-80:]))
 shutil.rmtree(_ad, ignore_errors=True)
 
 # F12 · E8 DOM computed-styles lane — exact values from a browser, so the judge
