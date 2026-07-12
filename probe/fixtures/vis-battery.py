@@ -496,6 +496,79 @@ check("F12b E8: coverage is honest — captured vs DOM total, uncaptured surface
       d3.get("coverage", {}).get("captured") == 1
       and d3.get("coverage", {}).get("dom_elements") == 7
       and d3.get("coverage", {}).get("uncaptured") == 6, "cov=%s" % d3.get("coverage"))
+
+
+# F12c · every remaining fabrication/false-negative route the adversarial gate
+# found (2026-07-13). Each is a property the browser reports as CHANGED while the
+# user sees nothing — or, worse, a real change the tool called negligible.
+def _pair(path, els, dom=9):
+    json.dump({"url": "file://x", "dom_elements": dom, "elements": els}, open(path, "w"))
+
+
+def _one(sel, **styles):
+    return {"selector": sel, "styles": styles}
+
+
+# (a) an element with opacity 0 is INVISIBLE — nothing about it can be a divergence
+_pair(_ca, [_one("#ghost", opacity="0", color="rgb(85, 85, 85)",
+                 **{"background-color": "rgb(255, 0, 0)"})])
+_pair(_cb, [_one("#ghost", opacity="0", color="rgb(153, 153, 153)",
+                 **{"background-color": "rgb(0, 255, 0)"})])
+rc, f1 = _e8(_ca, _cb)
+check("F12c E8: opacity:0 element fabricates nothing (it cannot be seen)",
+      rc == 0 and f1.get("diffs") == [], "diffs=%s" % f1.get("diffs"))
+
+# (b) a zero-geometry box-shadow renders nothing; its color follows currentColor,
+# so a recolor would otherwise report the same change twice
+_pair(_ca, [_one("#t", color="rgb(85, 85, 85)",
+                 **{"box-shadow": "rgb(85, 85, 85) 0px 0px 0px 0px"})])
+_pair(_cb, [_one("#t", color="rgb(153, 153, 153)",
+                 **{"box-shadow": "rgb(153, 153, 153) 0px 0px 0px 0px"})])
+rc, f2 = _e8(_ca, _cb)
+check("F12c E8: zero-geometry box-shadow is not a second divergence",
+      rc == 0 and [x["prop"] for x in f2.get("diffs", [])] == ["color"],
+      "diffs=%s" % f2.get("diffs"))
+
+# (c) letter-spacing 'normal' and '0px' render identically — a reset must not
+# fabricate a typography divergence
+_pair(_ca, [_one("#t", **{"letter-spacing": "normal"})])
+_pair(_cb, [_one("#t", **{"letter-spacing": "0px"})])
+rc, f3 = _e8(_ca, _cb)
+check("F12c E8: letter-spacing normal == 0px (same rendering, no divergence)",
+      rc == 0 and f3.get("diffs") == [], "diffs=%s" % f3.get("diffs"))
+
+# (d) FALSE NEGATIVE, the worst class: alpha was dropped, so transparent →
+# opaque black (the most dramatic change possible) measured dE 0.0 "negligible"
+_pair(_ca, [_one("#t", **{"background-color": "rgba(0, 0, 0, 0)"})])
+_pair(_cb, [_one("#t", **{"background-color": "rgba(0, 0, 0, 1)"})])
+rc, f4 = _e8(_ca, _cb)
+_d4 = (f4.get("diffs") or [{}])[0]
+check("F12c E8: alpha is measured — transparent→opaque is NOT 'negligible'",
+      rc == 0 and _d4.get("dE", 0) > 20 and _d4.get("word") == "different",
+      "diff=%s" % _d4)
+
+# (e) malformed styles must die structured, never traceback
+_pair(_ca, [{"selector": "#t", "styles": ["not", "a", "dict"]}])
+_pair(_cb, [{"selector": "#t", "styles": {"color": "rgb(1, 2, 3)"}}])
+rc, f5 = _e8(_ca, _cb)
+check("F12c E8: malformed styles → structured exit-2 error, no traceback",
+      rc == 2 and f5.get("ok") is False and bool(f5.get("fix")), "f5=%s" % f5)
+
+# (f) duplicate selectors silently collided (dict comprehension, last wins) —
+# an element vanished from the comparison with no warning
+_pair(_ca, [_one("#dup", color="rgb(1, 1, 1)"), _one("#dup", color="rgb(2, 2, 2)")])
+_pair(_cb, [_one("#dup", color="rgb(1, 1, 1)")])
+rc, f6 = _e8(_ca, _cb)
+check("F12c E8: duplicate selectors are surfaced, not silently dropped",
+      rc == 2 and f6.get("ok") is False and "dup" in json.dumps(f6), "f6=%s" % f6)
+
+# (g) coverage that contradicts itself (dom < captured) must be flagged, not
+# clamped into a clean-looking 'fully covered'
+_pair(_ca, [_one("#a", color="rgb(1, 1, 1)"), _one("#b", color="rgb(2, 2, 2)")], dom=1)
+_pair(_cb, [_one("#a", color="rgb(1, 1, 1)"), _one("#b", color="rgb(2, 2, 2)")], dom=1)
+rc, f7 = _e8(_ca, _cb)
+check("F12c E8: impossible coverage (dom < captured) is flagged, not clamped",
+      rc == 0 and f7.get("coverage", {}).get("warning"), "cov=%s" % f7.get("coverage"))
 shutil.rmtree(_ed, ignore_errors=True)
 
 fails = [c for c in CHECKS if not c[1]]
