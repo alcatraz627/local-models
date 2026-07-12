@@ -168,9 +168,13 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   feedback memory, and `--revisit`. Then the `--loop`/ledger convergence mode (Phase C) after one
   manual round-trip. First: draft `policy.md` v1 from `docs/10 §4`, then the user edits it.
   Calibration gate (Phase D): the user's real login pair + a real icon pair, user-graded.
-- **Fleet over a real code task** — the one fleet leg still unexercised: a genuine Claude-called
-  sweep over real files. First command: `lm fleet review src/*.ts --judge 'npx tsc --noEmit'`
-  (or any intent × file-set with a mechanical judge). Measures the cloud-dispatch offset.
+- **Fleet over a real code task — EXERCISED 2026-07-13** (`.claude/output/20260713-fleet-code-task/experiment.md`).
+  The on-disk 35b coder re-implemented the real E1 numeric-deltas change in a pre-E1 worktree
+  under the battery judge: **33/33 green round 1, 35s, 1383 tok**, incl. a spec-only (untested)
+  requirement. VERDICT: the scoped-worker-under-a-mechanical-judge seat CLEARS the efficacy bar;
+  the autonomous tier (decomposition/design/fixture-authoring) is NOT evidenced — the cloud
+  orchestrator supplied all of that. Routing rule proposed in the report. Open: the 80B candidate
+  (not on disk; user call to pull); `lm probe` stays the complementary breadth gate.
 - **Governor policy table** — codify when work routes local/gemini/cloud (user notes 2026-07-07;
   pairs with the gcc model-tier harness + the Jul-28 telemetry review).
 - **MTP speculative decode measurement** — the July research claims +74% throughput on the MLX
