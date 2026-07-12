@@ -481,8 +481,19 @@ and the ledger's convergence semantics become meaningless. Seed-locked refinemen
 what makes `fixed`/`persisting` say something true about an imagegen loop. Re-roll
 only when abandoning the roll entirely (and start a new loop dir when you do).
 
-Practical notes: use `schnell` for loop rounds (~20–40s/gen) and reserve `qwen` (~7
-min at 30 steps) for the final render; `--strength` is the freedom dial (lower =
-closer to A); the `imagine critique` local-vision seat is a cheap pre-read but never
-a substitute for the policy judge. Live round-trip record:
+**Read progress from the LEDGER, never from the scores.** Proven on the live round-trip
+(2026-07-13): a seed-locked refine fixed 3 of 5 divergences — the cat came back the right
+cat, the right pose, the right render style — while the L1 scores went *sideways*
+(dhash 28→24, grid 93.8%→**100.0%**, palette 25.7→24.5). Region/pixel ΔE saturates on any
+composition change, so it cannot see identity converging. In this lane L1's job is the one
+it always had — **fabrication-proofing**, no claim the pixels don't support — while
+progress lives in the ledger's `fixed`/`persisting`/`regressed` transitions. A loop that
+stopped on "scores stopped improving" would have quit exactly when it was working.
+
+Practical notes: `qwen` is the working model here (~3 min at 8 steps); `--strength` is the
+freedom dial on `--from` (lower = closer to A); the `imagine critique` local-vision seat is
+a cheap pre-read but never a substitute for the policy judge. **Check the model cache
+first** — `verify.sh` now fails on a partial one, because a half-downloaded model makes
+`imagine` hang re-fetching instead of generating (that is what a "slow" generation at 2%
+CPU actually is). Live round-trip record + the environment finding:
 `.claude/output/20260713-imagine-loop/round-trip.md`.
