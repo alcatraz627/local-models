@@ -424,18 +424,65 @@ F10c (a mid-write crash can't tear the ledger). Adversarial validation:
 shape-validation gap + a status-fabricates-empty-loop inconsistency, both fixed
 with mechanisms.
 
-### E7/E8 lanes (documented, NOT built — do not assume they exist)
+### E8 · DOM computed styles — BUILT 2026-07-13 (live-web lane)
 
-For pairs of **live surfaces** (not static frames), two additional evidence lanes
-slot into the same pack shape when a real loop needs them:
+`lib/e8-extract.js` + `lib/e8-dom.py`. The tool owns the **diff, not the browser**:
+the capture script runs in any driver that can evaluate JS (Playwright/CDP MCP, a CI
+harness) and its JSON feeds the diff — exactly as `bin/see` owns OCR while
+`vis-compare.py` owns the text diff. Elements opt in via `id`/`data-e8`; color props
+carry the same CIE76 ΔE as E3, so a number means the same thing in both lanes.
 
-- **E7 · AX geometry** — `ax` CLI element frames when both sides are running
-  native apps (the accessibility lane verify.sh already checks). Element-level
-  positions/sizes, so `moved` gains true element identity instead of OCR keys.
-- **E8 · DOM computed styles** — computed color/spacing/typography via the
-  browser tooling (chrome-devtools/playwright evaluate) when both sides are web
-  surfaces. Exact values, no palette estimation.
+Two rules the **live** browser run taught (a synthetic fixture could not):
 
-Both are thin glue (emit extractor-shaped JSON into the pack, honest
-`skipped_extractors` otherwise) and stay unbuilt until a live-surface loop
-actually demands them — the static-frame loop above is complete without them.
+- **An invisible property is not a divergence.** Computed `border-color` follows
+  `currentColor`, so recoloring text fabricates a phantom border diff even at
+  `border-width: 0`. Suppressed when the border can't be seen on either side — the
+  same fabricated-difference class E3's population-weighting kills.
+- **Coverage is stated, never implied.** Only marked elements are captured, so the
+  output reports `captured` / `dom_elements` / `uncaptured` with a nudge. A silent
+  "3 elements compared" reads as complete when it isn't.
+
+Guards F12/F12b (model-free). Live-proven on `probe/fixtures/e8-{a,b}.html`: 3/3
+planted divergences, 0 phantoms, 4/4 coverage (captures kept as fixtures).
+
+### E7 · AX geometry (documented, NOT built)
+
+`ax` CLI element frames when both sides are running native apps — element-level
+positions/sizes, so `moved` gains true element identity instead of OCR keys. Thin
+glue into the same pack shape; stays unbuilt until a native-app loop demands it.
+
+## 11 · The imagegen convergence lane (`imagine` × the L3 loop)
+
+The same loop drives **local image generation** toward a reference: `imagine`
+proposes, the L1 extractors measure, the judge rules, the ledger tracks, `imagine
+refine` applies the correction. Every round is $0 (local GPU + local extractors);
+only the judge moments cost the expensive seat.
+
+```
+reference A ──▶ imagine --from A --strength S "<prompt>"  ──▶ candidate B
+                                                               │
+   ┌───────────────────────────────────────────────────────────┘
+   ▼
+see diff A B --no-read --json   ($0, ~1s — machine evidence)
+   │
+   ├─ scores under floor / stall / explicit ask ─▶ /vis-compare A B  ──▶ verdict.json
+   │                                                                       │
+   ▼                                                                       ▼
+vis-ledger.py add <loop-dir> verdict.json --pack evidence.json  ──▶ signals
+   │                                                            (stop | stall | continue)
+   ▼
+imagine refine <N> "<delta from the verdict's fix_hints>"   ──▶ next candidate
+```
+
+**The load-bearing constraint: refine, don't re-roll.** `imagine refine N "delta"` is
+**seed-locked** — it changes only what you name and holds the roll. `vary`/a fresh
+prompt re-rolls the whole image, so every divergence would read as `new`/`regressed`
+and the ledger's convergence semantics become meaningless. Seed-locked refinement is
+what makes `fixed`/`persisting` say something true about an imagegen loop. Re-roll
+only when abandoning the roll entirely (and start a new loop dir when you do).
+
+Practical notes: use `schnell` for loop rounds (~20–40s/gen) and reserve `qwen` (~7
+min at 30 steps) for the final render; `--strength` is the freedom dial (lower =
+closer to A); the `imagine critique` local-vision seat is a cheap pre-read but never
+a substitute for the policy judge. Live round-trip record:
+`.claude/output/20260713-imagine-loop/round-trip.md`.
