@@ -346,6 +346,49 @@ check("F10c atomic write: crash mid-dump leaves the ledger byte-identical",
       "crashed=%s content=%r" % (_crashed, open(_at).read()[:40]))
 shutil.rmtree(_bd, ignore_errors=True)
 
+# F11 · asset-derivation verify — each derived rung is judged against a freshly
+# synthesized best-achievable resample at its own size: a competent rung passes,
+# a double-resampled (visibly soft) rung is flagged with a regeneration hint, and
+# any flag makes the exit code nonzero (grep-able gate for scripts).
+from PIL import ImageDraw
+
+AV = [os.path.join(ROOT, ".venv/bin/python"), os.path.join(ROOT, "lib/asset-verify.py")]
+_ad = tempfile.mkdtemp()
+_im = Image.new("RGBA", (256, 256), (71, 112, 76, 255))
+_dr = ImageDraw.Draw(_im)
+_dr.ellipse([40, 40, 216, 216], outline=(38, 193, 208, 255), width=8)
+_dr.ellipse([80, 80, 176, 176], outline=(241, 187, 52, 255), width=8)
+_src = os.path.join(_ad, "src.png")
+_im.save(_src)
+
+_rgb = _im.convert("RGB").resize((32, 32), Image.LANCZOS)
+_a = _im.getchannel("A").resize((32, 32), Image.LANCZOS)
+_g = _rgb.convert("RGBA")
+_g.putalpha(_a)
+_g.save(os.path.join(_ad, "good-32.png"))
+_im.convert("RGB").resize((12, 12), Image.LANCZOS).resize((32, 32), Image.LANCZOS) \
+   .save(os.path.join(_ad, "bad-32.png"))
+_im.save(os.path.join(_ad, "same.png"))
+
+_out = subprocess.run(AV + [_src, os.path.join(_ad, "good-32.png"),
+                            os.path.join(_ad, "bad-32.png"),
+                            os.path.join(_ad, "same.png"), "--json"],
+                      capture_output=True, text=True)
+try:
+    _av = json.loads(_out.stdout)
+except Exception:
+    _av = {"_raw": (_out.stdout + _out.stderr)[:200]}
+_rungs = {os.path.basename(r.get("path", "")): r for r in _av.get("rungs", [])}
+check("F11 asset-verify: best-achievable rung passes",
+      _rungs.get("good-32.png", {}).get("verdict") == "ok", "av=%s" % _av)
+check("F11 asset-verify: double-resampled rung flagged, fix proposed",
+      _rungs.get("bad-32.png", {}).get("verdict") == "soft"
+      and bool(_rungs.get("bad-32.png", {}).get("fix")), "rung=%s" % _rungs.get("bad-32.png"))
+check("F11 asset-verify: identical copy passes; any flag → nonzero exit",
+      _rungs.get("same.png", {}).get("verdict") == "ok" and _out.returncode != 0,
+      "rc=%s same=%s" % (_out.returncode, _rungs.get("same.png")))
+shutil.rmtree(_ad, ignore_errors=True)
+
 fails = [c for c in CHECKS if not c[1]]
 for name, ok, detail in CHECKS:
     tail = ("  [%s]" % detail) if (detail and not ok) else ""
