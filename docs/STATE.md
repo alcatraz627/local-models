@@ -80,6 +80,68 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-07-13 · capability wave (5, each through `/bloop`):** **asset-verify**
+  (`lib/asset-verify.py` — derived rungs judged against a best-achievable resample at
+  their own size; found data-forge's icon set already optimal) · **findings-gate**
+  (`lib/findings-gate.py` — the $0 local-review pre-gate's trust layer: fail-CLOSED
+  containment, so a fabricated file:line never reaches a human as evidence; wired as
+  /bloop Phase 4.0) · **fleet-over-real-code-task** (the routing experiment: the 35b
+  coder re-implemented the real E1 change under the battery judge, 33/33 round 1 — the
+  scoped-worker-under-a-judge seat CLEARS; the autonomous tier does not) · **E8 live-web
+  lane** (`lib/e8-{dom.py,extract.js}` — exact computed styles; the tool owns the diff,
+  not the browser) · **imagegen convergence lane** (docs/10 §11 — seed-locked `refine`,
+  or the ledger's fixed/persisting semantics are meaningless). Battery 25 → 48. Every
+  gate found real defects self-review missed (8/8 /bloop runs): a lazy-decode traceback,
+  a fixture structurally blind to compositing, a root-containment bypass, and E8's
+  alpha-dropping FALSE NEGATIVE (transparent→opaque black read as "negligible").
+  Reports: `.claude/output/20260713-*`.
+
+- **2026-07-12 · visual-compare Phase C (loop) — capability COMPLETE:** L3 mechanical
+  half shipped: `lib/vis-ledger.py` (status transitions as set comparisons, stall/
+  policy-pass signals, shape-validated fix-proposing errors, atomic writes) +
+  `see diff --no-read` (loop-round default, ~1s, skip ≠ failure in telemetry) +
+  `/vis-compare --loop` protocol (gcc). Battery 25→30 (F10 transitions/stall/stop ·
+  F10b malformed shapes · F10c torn-write). Gate caught a real BLOCKER again (shape
+  gap + status fabricating an empty loop on a corrupt ledger) — 4/4 /bloop runs now.
+  E7/E8 stay documented lanes (docs/10 §10). Report:
+  `.claude/output/20260712-loop-ledger-validation/report.md`.
+- **2026-07-12 · visual-compare Phase D CLOSED (acceptance signed):** two real pairs
+  run end-to-end and user-graded — run 1 login pair (verdict re-graded
+  faithful-with-notes; policy v2: `[info-add]` class + live-data rule) and run 2
+  data-forge tray icon pair, source vs 30px rung (pass-with-notes confirmed; policy
+  v3: `[render-fidelity]` class + derived-size leniency, hue exempt). Calibration
+  records sit next to each verdict.json under `outputs/see/`; policy lives at
+  `~/.claude/skills/vis-compare/policy.md`. Phase C (loop) un-gated, not started.
+- **2026-07-11 · E1 numeric position deltas (first `/bloop` run):** `moved` entries
+  in the L1 pack carry `from_xy`/`to_xy` normalized centers; `delta_xy` only for
+  unambiguous 1-vs-1 pairings (duplicate averaging would fabricate motion);
+  malformed/non-finite geometry skipped whole. Battery grew to 19 (F9 synthesized-OCR
+  contract — E1 finally guarded model-free — + F9b malformed-geometry/strict-JSON).
+  Built via the gcc `/bloop` loop as its first live test; the adversarial gate again
+  caught a real fabrication (bb.get defaults → confident (0,0) motion) that
+  self-review missed — 3/3 runs now. Report:
+  `.claude/output/20260711-e1-coords-validation/report.md`.
+- **2026-07-10 · visual-compare L1 (evidence half):** **`see diff` evidence pack** —
+  deterministic `$0` extractors (`lib/vis-compare.py`, pure PIL, no numpy/opencv): E1 text/pos ·
+  E3 palette/ΔE (CIE76) · E4 dHash+aHash · E5 grid-ΔE heatmap · E6 edge/shape grid;
+  modality-adaptive (icons skip the text lanes) + comparability gate. `--json` returns the full
+  pack in `.evidence`; the artifact gains `evidence.json` + `contact.png` (A│B│ΔE-heat);
+  `--only`/`--grid` slice reruns diff a content-addressed cache and return just the delta
+  (~0.06s, no model); every run journals to `logs/compare-history.jsonl`. Fixtures-first:
+  `probe/fixtures/make-fixtures.py` (F2-F6) + `vis-battery.py` F1-F8 in verify.sh — the
+  fabrication guard (identical pair → all zero) runs on every change. Both L1 and the L2
+  judge were adversarially validated + hardened (L1: E3 population-weighting killed a
+  JPEG-re-encode fabrication; L2: a self-check that every measured claim trace to a cited
+  evidence path, after a dry-run judge fabricated grid coords). Design + built-vs-deferred:
+  `docs/10-visual-compare-design.md`.
+- **2026-07-10 · visual-compare L2 (judge):** **`/vis-compare` gcc skill** at
+  `~/.claude/skills/vis-compare/` — native-vision judgment over the L1 pack + contact
+  sheet, classifying each divergence against a user-editable `policy.md` (imitation
+  doctrine + 8-rung divergence ladder with canonical slugs + weight-aware floor) into
+  looks-worse / neutral / improvement / not-worth-chasing, never a raw score. `verdict.json`
+  contract, `--revisit` + `suppressions.jsonl` feedback (stable content-anchor fingerprints),
+  announce-before-spend. `policy.md` v1 is a DRAFT awaiting the user's taste edit. Phase
+  C (loop) / D (calibration) pending.
 - **2026-07-10 · compare + placement:** **`see diff A B`** — two-layer image compare for
   recreate-with-a-freer-hand workflows (deterministic OCR text/position diff both sides +
   one big-tier two-image judged report: TEXT CHANGES/LAYOUT SHIFTS/ADDED-REMOVED/STYLE/
@@ -116,9 +178,19 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## PENDING — what can be done next (with the first command to run)
 
-- **Fleet over a real code task** — the one fleet leg still unexercised: a genuine Claude-called
-  sweep over real files. First command: `lm fleet review src/*.ts --judge 'npx tsc --noEmit'`
-  (or any intent × file-set with a mechanical judge). Measures the cloud-dispatch offset.
+- **Visual-compare L2/L3 (judge + loop)** — Phase A (the evidence pack, above) is done and
+  battery-green; next is the gcc `/vis-compare` skill: a native-vision judge over the evidence
+  pack + contact sheet, a user-editable `policy.md` (divergence-class ladder), `suppressions.jsonl`
+  feedback memory, and `--revisit`. Then the `--loop`/ledger convergence mode (Phase C) after one
+  manual round-trip. First: draft `policy.md` v1 from `docs/10 §4`, then the user edits it.
+  Calibration gate (Phase D): the user's real login pair + a real icon pair, user-graded.
+- **Fleet over a real code task — EXERCISED 2026-07-13** (`.claude/output/20260713-fleet-code-task/experiment.md`).
+  The on-disk 35b coder re-implemented the real E1 numeric-deltas change in a pre-E1 worktree
+  under the battery judge: **33/33 green round 1, 35s, 1383 tok**, incl. a spec-only (untested)
+  requirement. VERDICT: the scoped-worker-under-a-mechanical-judge seat CLEARS the efficacy bar;
+  the autonomous tier (decomposition/design/fixture-authoring) is NOT evidenced — the cloud
+  orchestrator supplied all of that. Routing rule proposed in the report. Open: the 80B candidate
+  (not on disk; user call to pull); `lm probe` stays the complementary breadth gate.
 - **Governor policy table** — codify when work routes local/gemini/cloud (user notes 2026-07-07;
   pairs with the gcc model-tier harness + the Jul-28 telemetry review).
 - **MTP speculative decode measurement** — the July research claims +74% throughput on the MLX

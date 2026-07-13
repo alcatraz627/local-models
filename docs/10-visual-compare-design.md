@@ -1,6 +1,6 @@
 # Visual Compare — a full-stack capability for "does B faithfully imitate A?"
 
-<!-- sessions: local-next-a4@2026-07-10 · STATUS: PLAN, awaiting user approval -->
+<!-- sessions: vis-ab-3c@2026-07-12 · STATUS: ALL PHASES DONE — A (L1 evidence: lib/vis-compare.py + see diff, F1-F9b), B (L2 judge: /vis-compare + policy.md v3), D (calibration: acceptance signed 2026-07-12, 2 real pairs user-graded), C (loop: lib/vis-ledger.py + see diff --no-read + /vis-compare --loop protocol, F10/F10b/F10c). Every phase adversarially validated; E7/E8 remain documented lanes (§10) -->
 
 The independent vision capability the recreate-with-a-freer-hand workflow needs:
 compare two images (or an image against a live surface), produce machine-measured
@@ -143,6 +143,14 @@ in the skill docs, not new binaries.
 
 ## 4 · L2 — the judge (gcc skill: `/vis-compare`)
 
+> **BUILT** at `~/.claude/skills/vis-compare/` (`SKILL.md` + `policy.md` v1 +
+> `runtime-notes.md`). Adversarially validated; the key hardening was an anti-fabrication
+> **self-check** (every `gestalt:false` value must trace to a cited evidence path) after a
+> dry-run judge fabricated grid coords for text divergences — prose rules don't bind a
+> model, a checkable step does. Canonical class slugs are pinned in `policy.md`;
+> suppression fingerprints key on stable content anchors (text string / palette hex), not
+> drift-prone grid coords. `policy.md` v1 is a DRAFT awaiting the user's taste edit.
+
 A sibling of `/ui-gripe` (same skeleton: fork, evidence-first, report contract).
 
 Inputs: A, B, evidence pack, contact sheet, `policy.md`, `suppressions.jsonl`.
@@ -178,18 +186,24 @@ diverges, judged against policy, never against a numeric threshold alone.
 ## 5 · Output schema (the contract both repos build against)
 
 ```json
-// evidence-pack.json  (L1, lm)
-{ "meta": {"a": "...", "b": "...", "normalized": [800,600], "modality": "iconlike",
-           "comparable": "good|poor", "skipped_extractors": ["E1","E2"]},
+// evidence-pack.json  (L1, lm) — as shipped
+{ "meta": {"a": "...", "b": "...", "dims_a": [256,256], "dims_b": [256,256],
+           "letterboxed": false, "modality": "iconlike", "comparable": "good|poor",
+           "comparable_why": null, "grid_n": 8, "skipped_extractors": ["E1","E2"]},
   "scores": {"dhash": 12, "ahash": 9, "similarity": "close",
              "grid_delta_pct": 14.2, "palette_delta_avg": 6.1},
-  "text_diff":   {"removed": [...], "added": [...], "moved": [...]},        // texty
-  "spacing":     {"pairs": [{"text": "...", "dx_pct": 1.2, "dy_pct": -3.0}],
-                  "rhythm": {"a": [24,24,32], "b": [24,31,31], "drift": "..."}},
+  "text_diff":   {"removed": [...], "added": [...], "moved": [...]},        // when OCR fed
+  "text_summary": "REMOVED ...",                                           // human string for the VLM
   "color":       {"palette_pairs": [{"a": "#2563eb", "b": "#1d4ed8", "dE": 9.1,
-                  "word": "noticeable"}], "element_samples": [...]},
-  "grid_heat":   {"n": 16, "top_cells": [{"cell": [12,3], "dE": 31.5}]},
-  "edge_shape":  {"top_cells": [{"cell": [3,3], "density_a": 0.42, "density_b": 0.18}]},
+                  "word": "noticeable", "weight": 0.31}],                  // weight = A-side area share
+                  "unmatched_a": [...], "unmatched_b": [...], "avg_dE": 6.1},
+  "grid_heat":   {"n": 16, "top_cells": [{"cell": [12,3], "dE": 31.5}], "hot_cell_pct": 14.2, "mean_dE": 8.0},
+  "heatmap_ascii": "...",
+  "edge_shape":  {"n": 16, "top_cells": [{"cell": [3,3], "density_a": 0.42, "density_b": 0.18, "delta": 0.24}], "hot_cell_pct": 6.0},
+  "cost":        {"wall_ms": 8280, "extractors_ms": 9, "model_calls": [{"seat":"local-read","model":"...","ms":8271}]},
+  "failures":    [{"stage":"vlm","code":"vlm_unavailable","retriable":true,"fix":"..."}],
+  "next":        [{"reason":"...","cmd":"see diff a b --grid 32"}],         // paste-ready nudges
+  "params_hash": "2fa50a1b980f5c89",
   "artifact": ".../outputs/see/<ts>-diff-.../" }
 
 // verdict.json  (L2, gcc)
@@ -338,3 +352,148 @@ shaped by one manual round-trip, not guessed).
 - The judge is as good as native vision + policy: it will catch what's worth
   fixing, not everything a trained human eye feels. That gap is accepted by the
   imitation doctrine, and F-pair calibration keeps it visible.
+
+## 9 · L1 as shipped — built vs deferred (honest inventory)
+
+Surfaced by an adversarial validation pass; recorded so nobody mistakes the
+design's ambition for the current code. Built and battery-green: E0 (modality
+probe + comparability gate), E1 (text/pos diff from OCR; moved entries carry
+numeric `from_xy`/`to_xy`/`delta_xy`), E3 (palette/ΔE,
+**population-weighted** so a re-encode can't fabricate a divergence — the F3b
+guard), E4, E5, E6, contact sheet, slice-rerun cache, `next:` nudges, the
+compare-history journal, and soft-failure handling (a down/failed VLM or absent
+mac-ocr still ships the pack with an honest `failures` entry).
+
+Deliberately **deferred** (the design describes them; the code does not yet do
+them — do not assume they exist):
+
+- **E0 letterboxing.** No shared normalized canvas; each extractor stretch-resizes
+  A and B to its own grid, so cell coords are grid-relative, not original-space.
+  Fine for same-aspect pairs; the comparability gate catches >2× aspect mismatch.
+  `meta.letterboxed:false` and `dims_a`/`dims_b` say so. Reflow (U7) fidelity waits
+  on real letterboxing.
+- **E2 spacing/alignment deltas** — unbuilt (texty-only lane).
+- **E3 texty per-element fg/bg sampling** (`element_samples`) — only the iconlike
+  grid-cell-mean path exists; the per-text-fragment color sampling that U1 wants is
+  not built. E3 currently reports the global palette match, not per-element color.
+- **E1 within-bucket motion.** `moved` entries carry numeric centers since
+  2026-07-11 (`from_xy`/`to_xy` always; `delta_xy` only for an unambiguous
+  1-vs-1 pairing — averaging duplicates would fabricate a motion; observations
+  with absent/non-finite geometry are skipped whole, F9/F9b guards, validation:
+  `.claude/output/20260711-e1-coords-validation/report.md`). Still deferred:
+  *detection* is label-gated (`A[k]["pos"] != B[k]["pos"]`), so text moving
+  within its 3×3 bucket produces no `moved` entry — and no delta — at all.
+  A numeric detection threshold is a Phase-D calibration question.
+- **Telemetry (§5.5) — partial.** `failures` emits `vlm_unavailable` + `ocr_missing`
+  and `cost.model_calls` records the VLM seat, but token counts are not captured and
+  there is no auto-retry (extractor or VLM). The taxonomy's other codes are defined,
+  not yet wired.
+
+These are Phase-B-onward or calibration-time items; the fabrication guard, the
+modality adaptivity, and the $0/model-independent contract — the load-bearing
+claims — are the ones that hold today.
+
+## 10 · L3 loop as shipped (Phase C, 2026-07-12)
+
+The loop's **mechanical half** is `lib/vis-ledger.py` (bare python3, no model, no
+PIL) plus `see diff --no-read` (the loop-round default — skips the VLM prose seat:
+no model call, no ollama probe, no failure entry, ~1s/round). The **driving half**
+is the `/vis-compare` skill's `--loop` mode (gcc side): apply fixes → re-render →
+`see diff A B --no-read --json` → `vis-ledger.py add <loop-dir> <verdict|pack>` →
+obey the signals. Loop dirs live at `outputs/see/loops/<slug>/`.
+
+**Status words** — set comparisons over divergence ids; the judge never assigns
+them (role discipline, §2):
+
+| status | meaning |
+|---|---|
+| `new` | never seen in any prior round |
+| `persisting` | present in the previous round, still present |
+| `regressed` | absent in the previous round but seen earlier — it came back |
+| `fixed` | present in the previous round, absent now (transitions-only) |
+
+**Convergence signals**: `stop: "policy-pass"` on judge overall `pass` only
+(`pass-with-notes` nudges "converged is the user's call" instead); `stall: true`
+after 2 consecutive rounds with zero `fixed` (streak resets on any fix) → nudge
+escalates to the native judge. The §5.6 hard block holds here: an `add --pack`
+whose meta says `comparable: poor` is rejected before the ledger is touched.
+Adds are sequential by design (one controlling agent per loop) — no file lock.
+Guards: F10 (transitions/stall/stop), F10b (malformed shapes die structured),
+F10c (a mid-write crash can't tear the ledger). Adversarial validation:
+`.claude/output/20260712-loop-ledger-validation/report.md` — the gate found the
+shape-validation gap + a status-fabricates-empty-loop inconsistency, both fixed
+with mechanisms.
+
+### E8 · DOM computed styles — BUILT 2026-07-13 (live-web lane)
+
+`lib/e8-extract.js` + `lib/e8-dom.py`. The tool owns the **diff, not the browser**:
+the capture script runs in any driver that can evaluate JS (Playwright/CDP MCP, a CI
+harness) and its JSON feeds the diff — exactly as `bin/see` owns OCR while
+`vis-compare.py` owns the text diff. Elements opt in via `id`/`data-e8`; color props
+carry the same CIE76 ΔE as E3, so a number means the same thing in both lanes.
+
+Two rules the **live** browser run taught (a synthetic fixture could not):
+
+- **An invisible property is not a divergence.** Computed `border-color` follows
+  `currentColor`, so recoloring text fabricates a phantom border diff even at
+  `border-width: 0`. Suppressed when the border can't be seen on either side — the
+  same fabricated-difference class E3's population-weighting kills.
+- **Coverage is stated, never implied.** Only marked elements are captured, so the
+  output reports `captured` / `dom_elements` / `uncaptured` with a nudge. A silent
+  "3 elements compared" reads as complete when it isn't.
+
+Guards F12/F12b (model-free). Live-proven on `probe/fixtures/e8-{a,b}.html`: 3/3
+planted divergences, 0 phantoms, 4/4 coverage (captures kept as fixtures).
+
+### E7 · AX geometry (documented, NOT built)
+
+`ax` CLI element frames when both sides are running native apps — element-level
+positions/sizes, so `moved` gains true element identity instead of OCR keys. Thin
+glue into the same pack shape; stays unbuilt until a native-app loop demands it.
+
+## 11 · The imagegen convergence lane (`imagine` × the L3 loop)
+
+The same loop drives **local image generation** toward a reference: `imagine`
+proposes, the L1 extractors measure, the judge rules, the ledger tracks, `imagine
+refine` applies the correction. Every round is $0 (local GPU + local extractors);
+only the judge moments cost the expensive seat.
+
+```
+reference A ──▶ imagine --from A --strength S "<prompt>"  ──▶ candidate B
+                                                               │
+   ┌───────────────────────────────────────────────────────────┘
+   ▼
+see diff A B --no-read --json   ($0, ~1s — machine evidence)
+   │
+   ├─ scores under floor / stall / explicit ask ─▶ /vis-compare A B  ──▶ verdict.json
+   │                                                                       │
+   ▼                                                                       ▼
+vis-ledger.py add <loop-dir> verdict.json --pack evidence.json  ──▶ signals
+   │                                                            (stop | stall | continue)
+   ▼
+imagine refine <N> "<delta from the verdict's fix_hints>"   ──▶ next candidate
+```
+
+**The load-bearing constraint: refine, don't re-roll.** `imagine refine N "delta"` is
+**seed-locked** — it changes only what you name and holds the roll. `vary`/a fresh
+prompt re-rolls the whole image, so every divergence would read as `new`/`regressed`
+and the ledger's convergence semantics become meaningless. Seed-locked refinement is
+what makes `fixed`/`persisting` say something true about an imagegen loop. Re-roll
+only when abandoning the roll entirely (and start a new loop dir when you do).
+
+**Read progress from the LEDGER, never from the scores.** Proven on the live round-trip
+(2026-07-13): a seed-locked refine fixed 3 of 5 divergences — the cat came back the right
+cat, the right pose, the right render style — while the L1 scores went *sideways*
+(dhash 28→24, grid 93.8%→**100.0%**, palette 25.7→24.5). Region/pixel ΔE saturates on any
+composition change, so it cannot see identity converging. In this lane L1's job is the one
+it always had — **fabrication-proofing**, no claim the pixels don't support — while
+progress lives in the ledger's `fixed`/`persisting`/`regressed` transitions. A loop that
+stopped on "scores stopped improving" would have quit exactly when it was working.
+
+Practical notes: `qwen` is the working model here (~3 min at 8 steps); `--strength` is the
+freedom dial on `--from` (lower = closer to A); the `imagine critique` local-vision seat is
+a cheap pre-read but never a substitute for the policy judge. **Check the model cache
+first** — `verify.sh` now fails on a partial one, because a half-downloaded model makes
+`imagine` hang re-fetching instead of generating (that is what a "slow" generation at 2%
+CPU actually is). Live round-trip record + the environment finding:
+`.claude/output/20260713-imagine-loop/round-trip.md`.

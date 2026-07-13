@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>E8 fixture B — recreation with planted divergences</title>
+<style>
+  /* Planted, exactly three: the CTA hue drifted, the body copy lost contrast,
+     and the card's padding tightened. Everything else must measure identical. */
+  body { margin: 0; font-family: system-ui, sans-serif; background: #ffffff; }
+  .card { width: 320px; margin: 24px; padding: 10px; border-radius: 8px;
+          background: #f5f5f5; border: 1px solid #dddddd; }
+  h1 { font-size: 20px; font-weight: 700; color: #222222; margin: 0 0 8px; }
+  p  { font-size: 14px; color: #999999; margin: 0 0 16px; }
+  button { background: #1d4ed8; color: #ffffff; font-size: 14px; font-weight: 600;
+           padding: 8px 16px; border: 0; border-radius: 6px; }
+</style>
+<div class="card" id="card">
+  <h1 id="title">Open orders</h1>
+  <p id="body">12 orders are awaiting review.</p>
+  <button id="cta">Refresh</button>
+</div>

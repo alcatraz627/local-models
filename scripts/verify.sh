@@ -96,6 +96,69 @@ if command -v mac-ocr >/dev/null 2>&1; then
     && ok "see --ocr --json → positioned words (VERIFY FIXTURE @ top-left)" || bad "see --ocr positions wrong/missing"
 else skip "mac-ocr not installed (npm install -g mac-ocr)"; fi
 
+echo "── vis-compare: evidence battery (fixtures F1-F12, model-free) ──"
+# The fabrication guard (F3 identical → all zero) + every extractor's
+# detect-F2 / stay-silent-on-F3 contract + loop ledger (F10*) + asset-verify
+# (F11*) + the E8 live-web lane (F12*). No model runs; ~3s.
+VB="$(./.venv/bin/python probe/fixtures/vis-battery.py 2>&1)"; vbrc=$?
+if [ "$vbrc" -eq 0 ]; then
+  ok "$(printf '%s' "$VB" | tail -1)"
+else
+  bad "vis-compare battery — failing assertions:"
+  printf '%s\n' "$VB" | awk '/FAIL/ {print "       " $0}'
+fi
+
+echo "── findings-gate: mechanical review-findings gate ──"
+FG="$(./.venv/bin/python lib/findings-gate.py --self-test 2>&1)" \
+  && ok "$FG" || bad "$FG"
+
+echo "── imagine: preflight refuses a half-downloaded model (fail-fast, no generation) ──"
+# The guard itself must not rot: on a partial cache `imagine` MUST exit non-zero in
+# ~0s with a runnable fix, never enter the fetch. Simulated with a fake HOME so the
+# check runs regardless of what is really cached.
+_fakehf="$(mktemp -d)"
+# TWO cases, because they took different code paths and only one used to work: a cache
+# WITH interrupted partials, and a clean-but-incomplete one. The latter silently killed
+# the script (`ls` on a non-matching glob under `set -eo pipefail` → rc=1, no output),
+# so the guard fired only when partials existed — exactly when it wasn't needed.
+for _case in with-partials no-partials; do
+  _d="$_fakehf/$_case/hub/models--black-forest-labs--FLUX.1-schnell/blobs"
+  mkdir -p "$_d"
+  [ "$_case" = "with-partials" ] && : > "$_d/x.incomplete"
+  PF="$(HF_HOME="$_fakehf/$_case" ./bin/imagine -m schnell "guard probe" 2>&1)"; pfrc=$?
+  if [ "$pfrc" -eq 12 ] && printf '%s' "$PF" | grep -q -- "--include \"transformer/\*\""; then
+    ok "imagine preflight ($_case): refuses + prints a WORKING download command"
+  else
+    bad "imagine preflight ($_case) did NOT refuse (rc=$pfrc) — a run would hang in a fetch"
+  fi
+done
+rm -rf "$_fakehf"
+
+echo "── imagine: model cache complete (liveness, no generation) ──"
+# The suite skips imagegen (GPU, minutes), which let a HALF-DOWNLOADED schnell sit
+# broken and silent: every run re-entered a 24GB HuggingFace fetch and hung at 2%
+# CPU. Checking cache SIZE is ~0s and catches exactly that failure.
+IMG_ANY=0
+# repo:min_gb:alias — alias is what `imagine -m` actually takes, so the fix hint
+# is a command that runs (agent-first-tools: an error proposes its own fix)
+for m in "black-forest-labs--FLUX.1-schnell:20:schnell" "Qwen--Qwen-Image:40:qwen"; do
+  repo="${m%%:*}"; rest="${m#*:}"; min_gb="${rest%%:*}"; alias="${rest##*:}"
+  d="${HF_HOME:-$HOME/.cache/huggingface}/hub/models--$repo"
+  if [ -d "$d" ]; then
+    gb=$(du -sg "$d" 2>/dev/null | awk '{print $1}')
+    if [ "${gb:-0}" -ge "$min_gb" ]; then
+      ok "imagine model cached: $alias (${gb}GB)"; IMG_ANY=1
+    else
+      # one --include per pattern: extras after a single --include are read as explicit
+      # FILENAMES and override the filter (that is how the 22GB transformer got skipped)
+      bad "imagine model PARTIAL: $alias is ${gb}GB (< ${min_gb}GB) — imagine will REFUSE to run (preflight). Fix, in your own shell: .venv/bin/hf download ${repo//--//} --include \"transformer/*\" --include \"text_encoder*/*\" --include \"vae/*\" --include \"tokenizer*/*\" --include \"scheduler/*\" --include \"model_index.json\""
+    fi
+  else
+    skip "imagine model not pulled: $alias"
+  fi
+done
+[ "$IMG_ANY" -eq 1 ] || bad "no complete imagine model — imagegen is dead until one is pulled"
+
 echo "── ax: accessibility lane present (ui-verify --app dependency) ──"
 if command -v ax >/dev/null 2>&1; then
   [ -n "$(ax list 2>/dev/null | head -2)" ] && ok "ax list (Accessibility perm live)" || bad "ax installed but list empty — check Accessibility permission"

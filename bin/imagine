@@ -24,17 +24,63 @@ source "$DIR/config.sh" 2>/dev/null || true     # for WARM_MODEL (prompt-enhance
 source "$DIR/bin/_lib.sh"                       # colors, help/_kv helpers, jsonl_*, ollama_*
 
 # Model registry — friendly name → mflux binary + variant args + sane step/guidance
-# defaults. ADD A MODEL = add one case line (no repo manager needed). First use of a
-# model downloads its weights to the HF cache.
+# defaults + the HF repo its weights live in (for the cache preflight below).
+# ADD A MODEL = add one case line (no repo manager needed).
 resolve_model() {
-  MODEL_ARGS=(); DEF_GUIDANCE=""
+  MODEL_ARGS=(); DEF_GUIDANCE=""; HF_REPO=""; MIN_GB=0
   case "$1" in
-    schnell)                 BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model schnell); DEF_STEPS=4 ;;
-    dev)                     BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model dev);     DEF_STEPS=20; DEF_GUIDANCE=3.5 ;;
-    qwen)                    BIN="$VENV/mflux-generate-qwen";  DEF_STEPS=20; DEF_GUIDANCE=4 ;;
+    schnell)                 BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model schnell); DEF_STEPS=4
+                             HF_REPO="black-forest-labs--FLUX.1-schnell"; MIN_GB=28 ;;
+    dev)                     BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model dev);     DEF_STEPS=20; DEF_GUIDANCE=3.5
+                             HF_REPO="black-forest-labs--FLUX.1-dev"; MIN_GB=28 ;;
+    qwen)                    BIN="$VENV/mflux-generate-qwen";  DEF_STEPS=20; DEF_GUIDANCE=4
+                             HF_REPO="Qwen--Qwen-Image"; MIN_GB=40 ;;
     flux2|klein|flux2-klein) BIN="$VENV/mflux-generate-flux2"; MODEL_ARGS=(--base-model flux2-klein-4b); DEF_STEPS=8 ;;
     *)                       BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model "$1");    DEF_STEPS=4 ;;
   esac
+}
+
+# Preflight: REFUSE to start on a half-downloaded model instead of silently
+# re-entering a multi-GB HuggingFace fetch. That failure mode is indistinguishable
+# from a slow generation — it burned 38 minutes at 2% CPU on 2026-07-13, and each
+# killed attempt orphaned ANOTHER partial blob (15 of them, 9.4GB of duplicates)
+# because an interrupted fetch never resumes. A known limitation must fail fast and
+# say exactly how to fix it, not produce chaos.
+#
+# Deliberately advisory-free of network calls: this is a local `du` + a glob, ~0s.
+# IMAGINE_SKIP_CACHE_CHECK=1 bypasses it (the download itself must be able to run).
+preflight_cache() {
+  [ -n "${HF_REPO:-}" ] || return 0
+  [ "${IMAGINE_SKIP_CACHE_CHECK:-0}" = "1" ] && return 0
+  # HF_HOME is what HuggingFace itself honors — hardcoding ~/.cache would check a
+  # different cache than the one mflux actually loads from
+  local dir="${HF_HOME:-$HOME/.cache/huggingface}/hub/models--$HF_REPO"
+  local repo_slug="${HF_REPO//--//}"
+  local gb=0 partials=0
+  [ -d "$dir" ] && gb=$(du -sg "$dir" 2>/dev/null | awk '{print $1}')
+  # `ls glob` exits non-zero when nothing matches, and under `set -eo pipefail`
+  # that killed this script SILENTLY (rc=1, no output) — the guard only fired when
+  # partials existed, i.e. exactly when it wasn't needed. find never fails on no-match.
+  partials=$(find "$dir/blobs" -maxdepth 1 -name '*.incomplete' 2>/dev/null | wc -l | tr -d ' ')
+
+  if [ ! -d "$dir" ] || [ "${gb:-0}" -lt "$MIN_GB" ]; then
+    printf '\033[31mimagine: %s is not fully downloaded\033[0m (%sGB cached, needs ~%sGB%s)\n' \
+      "$MODEL" "${gb:-0}" "$MIN_GB" \
+      "$([ "$partials" -gt 0 ] && printf '; %s interrupted partial(s)' "$partials")" >&2
+    printf '\n  A generation now would NOT generate — it would silently re-enter a\n' >&2
+    printf '  multi-GB fetch and look like a very slow render. Download it once,\n' >&2
+    printf '  in your own shell, and let it finish:\n\n' >&2
+    # NOTE: `hf --include` takes ONE pattern per flag. Passing several after a single
+    # --include makes hf read the extras as explicit FILENAMES, which override the
+    # filter — that silently skipped the 22GB transformer on 2026-07-13 and left a
+    # cache that looked populated but could not render. One flag per pattern.
+    [ "$partials" -gt 0 ] && printf '    trash %s\n' "$dir" >&2
+    printf '    %s/hf download %s \\\n' "$VENV" "$repo_slug" >&2
+    printf '      --include "transformer/*" --include "text_encoder*/*" --include "vae/*" \\\n' >&2
+    printf '      --include "tokenizer*/*" --include "scheduler/*" --include "model_index.json"\n\n' >&2
+    printf '  Then re-run this command. (Override: IMAGINE_SKIP_CACHE_CHECK=1)\n' >&2
+    exit 12
+  fi
 }
 
 # Named style presets (bash 3.2 — case, not an assoc array).
@@ -337,6 +383,7 @@ else
 fi
 
 resolve_model "$MODEL"
+preflight_cache          # fail fast on a half-downloaded model — never hang in a fetch
 [ -n "$STEPS" ]    || STEPS="$DEF_STEPS"
 [ -n "$GUIDANCE" ] || GUIDANCE="$DEF_GUIDANCE"
 

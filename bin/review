@@ -49,7 +49,7 @@ while [ $# -gt 0 ]; do
     -m|--model) MODEL="$2"; shift 2 ;;
     --repo)     REPO="$2"; shift 2 ;;
     --full)     FULL=1; shift ;;
-    --json)     JSON=(--json); shift ;;
+    --json)     [ ${#JSON[@]} -eq 0 ] && JSON=(--json); shift ;;   # never clobber --findings' schema
     --findings) JSON=(--json --format "$DIR/intents/review-findings.schema.json"); shift ;;
     --glow)     GLOW=(--glow); shift ;;
     -h|--help)  show_help; exit 0 ;;
