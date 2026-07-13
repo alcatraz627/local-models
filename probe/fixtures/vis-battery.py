@@ -279,6 +279,38 @@ check("F10 ledger: comparable-poor round rejected, ledger untouched, error expla
       rc6 != 0 and _before != "" and _before == _ledger_raw(_ld) and bool(r6),
       "rc=%s r6=%s" % (rc6, r6))
 
+# F10d · scores are NOT a progress signal. The live imagegen loop fixed 3 of 5
+# divergences while every score went sideways/backwards (grid 93.8% -> 100.0%) —
+# region metrics saturate the moment composition moves. A round that fixes things
+# while its scores WORSEN must still read as progress and must NOT stall.
+_pd = os.path.join(tempfile.mkdtemp(), "loop")
+_pv = os.path.join(_bdir := tempfile.mkdtemp(), "v.json")
+_pp2 = os.path.join(_bdir, "p.json")
+
+
+def _packscores(path, grid, dhash):
+    json.dump({"meta": {"a": "A.png", "b": "B.png", "comparable": "good"},
+               "scores": {"grid_delta_pct": grid, "dhash": dhash}}, open(path, "w"))
+
+
+_verdict(_pv, "diverges", [("d-a", "looks-worse"), ("d-b", "looks-worse"),
+                           ("d-c", "looks-worse")], 1)
+_packscores(_pp2, 93.8, 28)
+_ladd(_pd, _pv, "--pack", _pp2)
+# round 2: two divergences FIXED, but every score got WORSE
+_verdict(_pv, "diverges", [("d-c", "looks-worse")], 2)
+_packscores(_pp2, 100.0, 24)
+rc, pr = _ladd(_pd, _pv, "--pack", _pp2)
+_sig = pr.get("signals", {})
+check("F10d ledger: scores worsening while divergences are fixed = PROGRESS, no stall",
+      rc == 0 and sorted(pr["transitions"]["fixed"]) == ["d-a", "d-b"]
+      and _sig.get("stall") is False and _sig.get("progress", {}).get("fixed_this_round") == 2,
+      "signals=%s" % _sig)
+check("F10d ledger: output states in-band that scores are not a convergence signal",
+      "not a convergence signal" in json.dumps(_sig).lower(), "progress=%s" % _sig.get("progress"))
+shutil.rmtree(_pd, ignore_errors=True)
+shutil.rmtree(_bdir, ignore_errors=True)
+
 # F10b · malformed SHAPES (valid JSON, wrong structure) — every case must produce
 # the structured fix-proposing error (exit 2, parseable ok:false), never a
 # traceback, and add/status must agree on a corrupted ledger instead of status

@@ -76,13 +76,29 @@ def round_ids(rnd):
 
 def signals_for(rounds):
     """Recompute the convergence signals from the recorded rounds — `status`
-    reads them the same way `add` produced them, so the two never disagree."""
+    reads them the same way `add` produced them, so the two never disagree.
+
+    Progress is stated IN-BAND, and only from transitions. The scores in each
+    round are recorded but are NOT a convergence signal: region/pixel metrics
+    saturate the moment composition moves, so they go sideways (or backwards)
+    while the candidate is genuinely converging — measured live on the imagegen
+    loop, where a round fixed 3 of 5 divergences as grid-delta rose 93.8% ->
+    100.0%. A loop that stopped on 'scores plateaued' would quit exactly when it
+    was working, so the tool says so rather than leaving it to be misread."""
     if not rounds:
-        return {"stop": None, "stall": False, "stall_rounds": 0, "next": []}
+        return {"stop": None, "stall": False, "stall_rounds": 0, "next": [],
+                "progress": None}
     last = rounds[-1]
     streak = last.get("stall_streak", 0)
     stall = streak >= 2
     stop = "policy-pass" if last.get("overall") == "pass" else None
+    t = last.get("transitions", {})
+    progress = {
+        "fixed_this_round": len(t.get("fixed", [])),
+        "open": len(last.get("divergences", {})),
+        "source": "ledger transitions — the round's scores are recorded but are "
+                  "NOT a convergence signal (they saturate on any composition change)",
+    }
     nudges = []
     if stop:
         nudges.append({"reason": "judge ruled pass — loop converged",
@@ -95,7 +111,8 @@ def signals_for(rounds):
         nudges.append({"reason": "loop stalled — %d consecutive rounds with zero fixed" % streak,
                        "cmd": "/vis-compare %s %s  # full native judgment, or stop and rethink the fixes"
                               % (last.get("a", "<A>"), last.get("b", "<B>"))})
-    return {"stop": stop, "stall": stall, "stall_rounds": streak, "next": nudges}
+    return {"stop": stop, "stall": stall, "stall_rounds": streak, "next": nudges,
+            "progress": progress}
 
 
 def add_round(args):

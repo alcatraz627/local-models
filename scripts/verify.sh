@@ -112,6 +112,21 @@ echo "── findings-gate: mechanical review-findings gate ──"
 FG="$(./.venv/bin/python lib/findings-gate.py --self-test 2>&1)" \
   && ok "$FG" || bad "$FG"
 
+echo "── imagine: preflight refuses a half-downloaded model (fail-fast, no generation) ──"
+# The guard itself must not rot: on a partial cache `imagine` MUST exit non-zero in
+# ~0s with a runnable fix, never enter the fetch. Simulated with a fake HOME so the
+# check runs regardless of what is really cached.
+_fakehf="$(mktemp -d)"
+mkdir -p "$_fakehf/hub/models--black-forest-labs--FLUX.1-schnell/blobs"
+: > "$_fakehf/hub/models--black-forest-labs--FLUX.1-schnell/blobs/x.incomplete"
+PF="$(HF_HOME="$_fakehf" ./bin/imagine -m schnell "guard probe" 2>&1)"; pfrc=$?
+if [ "$pfrc" -eq 12 ] && printf '%s' "$PF" | grep -q "hf download"; then
+  ok "imagine preflight: partial cache → fast refusal + download command"
+else
+  bad "imagine preflight did NOT refuse a partial cache (rc=$pfrc) — a run would hang in a fetch"
+fi
+rm -rf "$_fakehf"
+
 echo "── imagine: model cache complete (liveness, no generation) ──"
 # The suite skips imagegen (GPU, minutes), which let a HALF-DOWNLOADED schnell sit
 # broken and silent: every run re-entered a 24GB HuggingFace fetch and hung at 2%
@@ -121,13 +136,13 @@ IMG_ANY=0
 # is a command that runs (agent-first-tools: an error proposes its own fix)
 for m in "black-forest-labs--FLUX.1-schnell:20:schnell" "Qwen--Qwen-Image:40:qwen"; do
   repo="${m%%:*}"; rest="${m#*:}"; min_gb="${rest%%:*}"; alias="${rest##*:}"
-  d="$HOME/.cache/huggingface/hub/models--$repo"
+  d="${HF_HOME:-$HOME/.cache/huggingface}/hub/models--$repo"
   if [ -d "$d" ]; then
     gb=$(du -sg "$d" 2>/dev/null | awk '{print $1}')
     if [ "${gb:-0}" -ge "$min_gb" ]; then
       ok "imagine model cached: $alias (${gb}GB)"; IMG_ANY=1
     else
-      bad "imagine model PARTIAL: $alias is ${gb}GB (< ${min_gb}GB) — a run will hang re-downloading. Fix: imagine -m $alias \"test\"  # let the fetch finish once"
+      bad "imagine model PARTIAL: $alias is ${gb}GB (< ${min_gb}GB) — imagine will REFUSE to run (preflight). Fix, in your own shell: .venv/bin/hf download ${repo//--//} --include \"transformer/*\" \"text_encoder*/*\" \"vae/*\" \"tokenizer*/*\" \"scheduler/*\" \"model_index.json\""
     fi
   else
     skip "imagine model not pulled: $alias"
