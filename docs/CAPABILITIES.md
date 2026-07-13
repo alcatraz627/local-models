@@ -175,20 +175,28 @@ review history · review show -1                 # reviews live in q-history
 
 ## 5 · Image generation — `imagine`
 
-mflux (MLX Flux/Qwen) on the GPU. Models auto-download to the HF cache on first use.
+mflux (MLX Flux/Qwen) on the GPU. **A model must be FULLY downloaded before it will run** —
+`imagine` preflights the HF cache and refuses (exit 12, ~0.5s) on a partial one, printing the
+exact `hf download` command. This is deliberate: a half-downloaded model silently re-enters a
+multi-GB fetch and looks identical to a very slow render (it once burned 38 minutes at 2% CPU).
 
 ```bash
-imagine "a cozy reading nook, rainy window"     # default: qwen (best text rendering)
+imagine "a cozy reading nook, rainy window"     # default: qwen — quality-first, ~3min
 imagine --enhance "neon ramen bar"              # local prompt-engineer pass first
-imagine -m schnell "quick draft"                # fast model; -m dev / flux2 / any HF repo
+imagine -m schnell "quick draft"                # ~46s — the LOOP model (see §13)
 imagine --style watercolor --neg "text, logos" "koi pond"
 imagine --from sketch.png "same but at dusk"    # image-to-image
-imagine refine 12 "warmer light"                # iterate on generation #12
-imagine vary 12 · imagine redo 12               # variations / exact re-roll
+imagine refine 12 "warmer light"                # SEED-LOCKED iterate on #12 — the loop's engine
+imagine vary 12 · imagine redo 12               # variations / exact re-roll (fresh roll)
 imagine critique 12                             # local VLM diagnoses the result
 imagine gallery                                 # self-contained outputs/index.html
 imagine history · star 12 · prune -y            # curate the output set
 ```
+
+**Model split:** `qwen` is the default *finisher* (quality; speed was explicitly ruled not to
+matter for final images — `config.sh:25`). `schnell` is the *scratch* model for convergence
+loops, where every round is a throwaway and speed is the whole cost. `refine` is **seed-locked**
+— it changes only what you name and holds the roll; `vary` re-rolls everything.
 
 ## 6 · Judgment & evals — `lm probe`
 
@@ -324,6 +332,59 @@ q --glow --big "explain quaternions with headers and lists"
 review --glow 214
 see photo.png --glow
 ```
+
+## 13 · Imitation fidelity — `see diff` + `/vis-compare` (the compare stack)
+
+**"Does B faithfully imitate A?"** — for a rebuilt UI, a regenerated icon, a re-rendered
+image. Not a distance score: a *judgment* about whether each difference matters. Three layers,
+strict roles — **scripts measure, models judge, the ledger tracks.** Full design + the honest
+built-vs-deferred inventory: `docs/10-visual-compare-design.md`.
+
+```bash
+# L1 · evidence ($0, deterministic, CANNOT fabricate a difference)
+see diff a.png b.png --json          # full pack: text · colour/ΔE · hash · grid · edges
+see diff a.png b.png --no-read       # evidence only, ~1s, no VLM seat — the LOOP default
+see diff a.png b.png --only E5 --grid 32   # rerun ONE extractor finer; returns just the delta
+
+# L2 · judgment (a gcc skill — Claude reads the pixels + your taste policy)
+/vis-compare a.png b.png             # → looks-worse | neutral | improvement | not-worth-chasing
+/vis-compare --revisit d1 --feedback "the radius call is wrong"
+
+# L3 · loop (converge a candidate onto a reference)
+/vis-compare --loop a.png b.png
+.venv/bin/python lib/vis-ledger.py add outputs/see/loops/<slug>/ verdict.json --pack evidence.json
+.venv/bin/python lib/vis-ledger.py status outputs/see/loops/<slug>/
+```
+
+**The rule that will bite you:** in a loop, read progress from the **ledger's transitions**
+(`fixed` / `persisting` / `regressed`), *never* from the scores. Region metrics saturate the
+moment composition moves — one live round fixed 3 of 5 divergences while grid-delta ROSE
+93.8% → 100%. A loop that stops on "scores plateaued" quits exactly when it is working. The
+ledger states this in-band so it can't be misread.
+
+### Companion tools (`lib/`, all model-free)
+
+```bash
+# Are the derived rungs of an asset as good as their size allows?
+.venv/bin/python lib/asset-verify.py icon.png icons/*.png --json
+#   Judges each rung against a best-achievable resample AT ITS OWN SIZE — so "a 30px icon
+#   can't hold every edge" isn't held against it. Exit 1 if any rung is beatable.
+
+# The $0 review pre-gate's trust layer (fail-CLOSED)
+git diff | review --findings --json -m small | jq '.data' \
+  | .venv/bin/python lib/findings-gate.py --root .
+#   Drops any finding whose file:line does not exist. Survivors are OPINIONS to triage,
+#   never verdicts. (-m small: the 35b code tier ignores Ollama's format constraint.)
+
+# Exact CSS from a live web surface (so the judge never estimates a colour)
+#   1. run lib/e8-extract.js in any browser driver (Playwright/CDP MCP), save both captures
+#   2. .venv/bin/python lib/e8-dom.py cap-a.json cap-b.json
+```
+
+**Imagegen convergence** (§5 + this stack): `imagine -m schnell` → `see diff --no-read` →
+judge at nudged moments → `imagine refine N "<the verdict's fix_hints>"` (**seed-locked**, or
+every divergence reads as new and the ledger becomes meaningless) → repeat. Proven live: one
+refine fixed 3 of 5 divergences.
 
 ---
 
