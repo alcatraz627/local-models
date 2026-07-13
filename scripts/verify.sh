@@ -117,14 +117,21 @@ echo "── imagine: preflight refuses a half-downloaded model (fail-fast, no g
 # ~0s with a runnable fix, never enter the fetch. Simulated with a fake HOME so the
 # check runs regardless of what is really cached.
 _fakehf="$(mktemp -d)"
-mkdir -p "$_fakehf/hub/models--black-forest-labs--FLUX.1-schnell/blobs"
-: > "$_fakehf/hub/models--black-forest-labs--FLUX.1-schnell/blobs/x.incomplete"
-PF="$(HF_HOME="$_fakehf" ./bin/imagine -m schnell "guard probe" 2>&1)"; pfrc=$?
-if [ "$pfrc" -eq 12 ] && printf '%s' "$PF" | grep -q "hf download"; then
-  ok "imagine preflight: partial cache → fast refusal + download command"
-else
-  bad "imagine preflight did NOT refuse a partial cache (rc=$pfrc) — a run would hang in a fetch"
-fi
+# TWO cases, because they took different code paths and only one used to work: a cache
+# WITH interrupted partials, and a clean-but-incomplete one. The latter silently killed
+# the script (`ls` on a non-matching glob under `set -eo pipefail` → rc=1, no output),
+# so the guard fired only when partials existed — exactly when it wasn't needed.
+for _case in with-partials no-partials; do
+  _d="$_fakehf/$_case/hub/models--black-forest-labs--FLUX.1-schnell/blobs"
+  mkdir -p "$_d"
+  [ "$_case" = "with-partials" ] && : > "$_d/x.incomplete"
+  PF="$(HF_HOME="$_fakehf/$_case" ./bin/imagine -m schnell "guard probe" 2>&1)"; pfrc=$?
+  if [ "$pfrc" -eq 12 ] && printf '%s' "$PF" | grep -q -- "--include \"transformer/\*\""; then
+    ok "imagine preflight ($_case): refuses + prints a WORKING download command"
+  else
+    bad "imagine preflight ($_case) did NOT refuse (rc=$pfrc) — a run would hang in a fetch"
+  fi
+done
 rm -rf "$_fakehf"
 
 echo "── imagine: model cache complete (liveness, no generation) ──"
@@ -142,7 +149,9 @@ for m in "black-forest-labs--FLUX.1-schnell:20:schnell" "Qwen--Qwen-Image:40:qwe
     if [ "${gb:-0}" -ge "$min_gb" ]; then
       ok "imagine model cached: $alias (${gb}GB)"; IMG_ANY=1
     else
-      bad "imagine model PARTIAL: $alias is ${gb}GB (< ${min_gb}GB) — imagine will REFUSE to run (preflight). Fix, in your own shell: .venv/bin/hf download ${repo//--//} --include \"transformer/*\" \"text_encoder*/*\" \"vae/*\" \"tokenizer*/*\" \"scheduler/*\" \"model_index.json\""
+      # one --include per pattern: extras after a single --include are read as explicit
+      # FILENAMES and override the filter (that is how the 22GB transformer got skipped)
+      bad "imagine model PARTIAL: $alias is ${gb}GB (< ${min_gb}GB) — imagine will REFUSE to run (preflight). Fix, in your own shell: .venv/bin/hf download ${repo//--//} --include \"transformer/*\" --include \"text_encoder*/*\" --include \"vae/*\" --include \"tokenizer*/*\" --include \"scheduler/*\" --include \"model_index.json\""
     fi
   else
     skip "imagine model not pulled: $alias"

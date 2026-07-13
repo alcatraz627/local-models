@@ -58,7 +58,10 @@ preflight_cache() {
   local repo_slug="${HF_REPO//--//}"
   local gb=0 partials=0
   [ -d "$dir" ] && gb=$(du -sg "$dir" 2>/dev/null | awk '{print $1}')
-  partials=$(ls "$dir"/blobs/*.incomplete 2>/dev/null | wc -l | tr -d ' ')
+  # `ls glob` exits non-zero when nothing matches, and under `set -eo pipefail`
+  # that killed this script SILENTLY (rc=1, no output) — the guard only fired when
+  # partials existed, i.e. exactly when it wasn't needed. find never fails on no-match.
+  partials=$(find "$dir/blobs" -maxdepth 1 -name '*.incomplete' 2>/dev/null | wc -l | tr -d ' ')
 
   if [ ! -d "$dir" ] || [ "${gb:-0}" -lt "$MIN_GB" ]; then
     printf '\033[31mimagine: %s is not fully downloaded\033[0m (%sGB cached, needs ~%sGB%s)\n' \
@@ -67,9 +70,14 @@ preflight_cache() {
     printf '\n  A generation now would NOT generate — it would silently re-enter a\n' >&2
     printf '  multi-GB fetch and look like a very slow render. Download it once,\n' >&2
     printf '  in your own shell, and let it finish:\n\n' >&2
+    # NOTE: `hf --include` takes ONE pattern per flag. Passing several after a single
+    # --include makes hf read the extras as explicit FILENAMES, which override the
+    # filter — that silently skipped the 22GB transformer on 2026-07-13 and left a
+    # cache that looked populated but could not render. One flag per pattern.
     [ "$partials" -gt 0 ] && printf '    trash %s\n' "$dir" >&2
     printf '    %s/hf download %s \\\n' "$VENV" "$repo_slug" >&2
-    printf '      --include "transformer/*" "text_encoder*/*" "vae/*" "tokenizer*/*" "scheduler/*" "model_index.json"\n\n' >&2
+    printf '      --include "transformer/*" --include "text_encoder*/*" --include "vae/*" \\\n' >&2
+    printf '      --include "tokenizer*/*" --include "scheduler/*" --include "model_index.json"\n\n' >&2
     printf '  Then re-run this command. (Override: IMAGINE_SKIP_CACHE_CHECK=1)\n' >&2
     exit 12
   fi
