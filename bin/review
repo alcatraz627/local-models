@@ -21,7 +21,7 @@ source "$DIR/config.sh"
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"
 
-MODEL=code; JSON=(); GLOW=(); CAP=240000; args=(); REPO=""; FULL=""
+MODEL=code; JSON=(); GLOW=(); CAP=240000; args=(); REPO=""; FULL=""; FINDINGS=0
 
 show_help() {
   printf '%s%sreview%s %s— hand code / PRs / folders to the local reviewer%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
@@ -50,7 +50,7 @@ while [ $# -gt 0 ]; do
     --repo)     REPO="$2"; shift 2 ;;
     --full)     FULL=1; shift ;;
     --json)     [ ${#JSON[@]} -eq 0 ] && JSON=(--json); shift ;;   # never clobber --findings' schema
-    --findings) JSON=(--json --format "$DIR/intents/review-findings.schema.json"); shift ;;
+    --findings) JSON=(--json --format "$DIR/intents/review-findings.schema.json"); FINDINGS=1; shift ;;
     --glow)     GLOW=(--glow); shift ;;
     -h|--help)  show_help; exit 0 ;;
     *)          args+=("$1"); shift ;;
@@ -129,8 +129,8 @@ if [ "$maxctx" -gt "$CAP" ]; then
   maxctx=$CAP
 fi
 printf '%sreviewing%s %s  %s(model=%s · %s chars)%s\n' "$C" "$Rs" "$src" "$Dm" "$MODEL" "${#content}" "$Rs" >&2
-if [ ${#JSON[@]} -gt 0 ]; then
-  # Structured mode is an agent contract: a degenerate generation (a token
+if [ "$FINDINGS" = 1 ]; then
+  # Schema mode (--findings) is an agent contract: a degenerate generation (a token
   # or two, data:null) must not exit 0 with an envelope no pipe can use.
   # One retry absorbs a warm-state hiccup; after that, fail with the raw
   # envelope and a next step (seen live 2026-07-17: tokens_out=1, data:null).
