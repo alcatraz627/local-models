@@ -129,4 +129,23 @@ if [ "$maxctx" -gt "$CAP" ]; then
   maxctx=$CAP
 fi
 printf '%sreviewing%s %s  %s(model=%s · %s chars)%s\n' "$C" "$Rs" "$src" "$Dm" "$MODEL" "${#content}" "$Rs" >&2
-printf '%s' "$content" | q review --ctx - -m "$MODEL" --max-ctx "$maxctx" "${JSON[@]}" "${GLOW[@]}"
+if [ ${#JSON[@]} -gt 0 ]; then
+  # Structured mode is an agent contract: a degenerate generation (a token
+  # or two, data:null) must not exit 0 with an envelope no pipe can use.
+  # One retry absorbs a warm-state hiccup; after that, fail with the raw
+  # envelope and a next step (seen live 2026-07-17: tokens_out=1, data:null).
+  run_q() { printf '%s' "$content" | q review --ctx - -m "$MODEL" --max-ctx "$maxctx" "${JSON[@]}" "${GLOW[@]}"; }
+  out="$(run_q)" || exit $?
+  if ! printf '%s' "$out" | jq -e '.data != null' >/dev/null 2>&1; then
+    printf '%sreview:%s structured output came back empty (data:null — degenerate generation?) — retrying once\n' "$Y" "$Rs" >&2
+    out="$(run_q)" || exit $?
+    if ! printf '%s' "$out" | jq -e '.data != null' >/dev/null 2>&1; then
+      printf '%sreview:%s no structured findings after retry. Raw envelope on stdout; try %swarm off all%s and rerun, or another -m tier.\n' "$Y" "$Rs" "$C" "$Rs" >&2
+      printf '%s\n' "$out"
+      exit 3
+    fi
+  fi
+  printf '%s\n' "$out"
+else
+  printf '%s' "$content" | q review --ctx - -m "$MODEL" --max-ctx "$maxctx" "${JSON[@]}" "${GLOW[@]}"
+fi
