@@ -21,7 +21,7 @@ source "$DIR/config.sh"
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"
 
-MODEL=code; JSON=(); GLOW=(); CAP=240000; args=(); REPO=""; FULL=""; FINDINGS=0
+MODEL=code; MODEL_SET=0; JSON=(); GLOW=(); CAP=240000; args=(); REPO=""; FULL=""; FINDINGS=0
 
 show_help() {
   printf '%s%sreview%s %s— hand code / PRs / folders to the local reviewer%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
@@ -46,7 +46,7 @@ show_help() {
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    -m|--model) MODEL="$2"; shift 2 ;;
+    -m|--model) MODEL="$2"; MODEL_SET=1; shift 2 ;;
     --repo)     REPO="$2"; shift 2 ;;
     --full)     FULL=1; shift ;;
     --json)     [ ${#JSON[@]} -eq 0 ] && JSON=(--json); shift ;;   # never clobber --findings' schema
@@ -56,6 +56,12 @@ while [ $# -gt 0 ]; do
     *)          args+=("$1"); shift ;;
   esac
 done
+
+# --findings is an agent contract, and the code tier (35b) persistently
+# ignores Ollama format constraints (schema failures 2-for-2, 2026-07-13;
+# owner routing 2026-07-24): findings mode defaults to the small tier unless
+# a model was named explicitly.
+if [ "$FINDINGS" = 1 ] && [ "$MODEL_SET" = 0 ]; then MODEL=small; fi
 
 # Reviews are logged to q-history (review is a q intent). Thin history aliases:
 if [ "${args[0]:-}" = "history" ]; then
