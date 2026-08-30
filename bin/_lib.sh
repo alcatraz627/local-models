@@ -6,6 +6,11 @@
 OLLAMA_HOST="${OLLAMA_HOST:-http://127.0.0.1:11434}"
 LM_LAUNCHD_LABEL="com.alcatraz.local-models-ollama"
 
+# launchd hands scheduled jobs a bare PATH (/usr/bin:/bin:/usr/sbin:/sbin), so a
+# bare `ollama`/`hf` dies with exit 127 there. Sourcing this file is the fix:
+# every bin/* script sources _lib.sh before its first tool call.
+case ":$PATH:" in *:/opt/homebrew/bin:*) ;; *) PATH="/opt/homebrew/bin:$PATH" ;; esac
+
 # ── Terminal colors (TTY / NO_COLOR / TERM=dumb aware) ──
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
   Y=$'\033[1;33m'; C=$'\033[36m'; G=$'\033[32m'; Dm=$'\033[2m'; Rs=$'\033[0m'; Bd=$'\033[1m'

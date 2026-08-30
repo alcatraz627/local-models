@@ -55,6 +55,17 @@ count() { [ -n "$1" ] && printf '%s\n' "$1" | wc -l | tr -d ' ' || echo 0; }
   echo "## fleet pass rates"
   printf '%s\n' "$FLEET" | jq -rs 'map("- \(.ts[0:10]) \(.intent) ×\(.items) → \(.pass)✓/\(.fail)✗ (\(.model), \(.wall_s)s)") | .[]' 2>/dev/null || echo "- none"
   echo
+  # A scheduled job that fails does so silently (the warm jobs sat on exit 127 for
+  # 8 weeks unnoticed); surface each job's last exit code in the digest.
+  echo "## launchd"
+  for job in com.alcatraz.warm-morning com.alcatraz.warm-evening-off com.alcatraz.local-models-ollama; do
+    info=$(launchctl print "gui/$(id -u)/$job" 2>/dev/null) || { echo "- $job: NOT LOADED"; continue; }
+    case "$info" in *"state = running"*) echo "- $job: ok (running)"; continue ;; esac
+    case "$info" in *"last exit code = (never exited)"*) echo "- $job: ok (loaded, not yet fired)"; continue ;; esac
+    code=$(printf '%s' "$info" | sed -n 's/.*last exit code = \([0-9-]*\).*/\1/p' | head -1)
+    if [ "$code" != 0 ]; then echo "- $job: FAILING (last exit ${code:-unknown})"; else echo "- $job: ok"; fi
+  done
+  echo
   echo "_Streams: logs/q-history.jsonl · logs/see-history.jsonl · logs/fleet-history.jsonl · outputs/imagine-history.jsonl_"
 } > "$DIGEST"
 

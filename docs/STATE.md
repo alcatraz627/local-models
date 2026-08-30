@@ -35,8 +35,11 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - **Two-tier model lifecycle:** one small **warm** companion (`gemma4-e4b-warm`, ~5.6 GB,
   `warm on` = forever-pin) + on-demand big models. **Leases** (`warm on code [ttl]`) pin a big
   model with a bounded TTL that self-heals — used by `lm fleet` and `lm opencode` automatically.
-  Scheduled warmth: `warm-morning` (weekdays 09:30) + `warm-evening-off` (daily 19:00 `off all`,
-  the shutdown backstop) via gcc-schedule + calendar companions.
+  Scheduled warmth: `warm-morning` (daily 09:30, re-registered 2026-08-30 after the original
+  died on launchd's PATH and was removed ~08-05) + `warm-evening-off` (daily 19:00 `off all`,
+  the shutdown backstop; exit-127-dead for its first 8 weeks, fixed 2026-08-30) via
+  gcc-schedule. The fix lives in `bin/_lib.sh` (prepends /opt/homebrew/bin for launchd jobs);
+  the weekly self-audit now checks both jobs' last exit codes.
 - **Tiers (config.sh):** small=`gemma4-e4b-warm` · big=`gemma4:26b` · code=`qwen3.6:35b-a3b`
   (probe-gated 9/9) · vision=`minicpm-v`. MoE-first on this 307 GB/s machine.
 - **Intents are data:** `intents/<name>.toml` (ask/cmd/title/commit/summarize/explain-code/
