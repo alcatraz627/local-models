@@ -58,6 +58,7 @@ show_help() {
   _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
   _cmd 'see open [N]'             'print (and reveal, if TTY) the artifact folder of read N (default -1)'
   _cmd 'see note [N] "text"'      'append a note to read N'\''s artifact folder (default -1 = latest)'
+  _cmd 'see reshoot <loop-dir>'   'replay the loop recipe (web: playwright capture; static: candidate file) into a new round image'
   _sec EXAMPLES
   _ex 'see ~/Desktop/shot.png'                 '# verbatim text + UI + layout'
   _ex 'see chart.png "is it trending up?"'     '# grounded answer'
@@ -132,6 +133,44 @@ case "${1:-}" in
            [ -f "$ART/notes.md" ] || printf '# notes\n\n' > "$ART/notes.md"
            printf -- '- %s — %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >> "$ART/notes.md"
            echo "noted → $ART/notes.md"
+           exit 0 ;;
+  # Re-capture a loop's candidate image from the recipe recorded at loop-open
+  # time, so a fix round is one command instead of hand-composed capture shell.
+  # The recipe pins what "the same shot" means; a capture that comes back a
+  # different size is refused before it can feed the ledger noise.
+  reshoot) shift
+           LOOPDIR="${1:-}"
+           [ -n "$LOOPDIR" ] && [ -d "$LOOPDIR" ] \
+             || { jq -cn '{ok:false, code:"item_missing", message:"usage: see reshoot <loop-dir> (a directory holding recipe.json)"}'; exit 12; }
+           RECIPE="$LOOPDIR/recipe.json"
+           [ -f "$RECIPE" ] \
+             || { jq -cn --arg d "$LOOPDIR" '{ok:false, code:"recipe_missing", message:("no recipe.json in " + $d), fix:"write one at loop-open: {kind: web|static, url?, b?, viewport?, wait_ms?}"}'; exit 12; }
+           RKIND="$(jq -r '.kind // empty' "$RECIPE")"
+           OUT="$LOOPDIR/round-$(date -u +%Y%m%dT%H%M%SZ).png"
+           case "$RKIND" in
+             web)
+               URL="$(jq -r '.url // empty' "$RECIPE")"
+               [ -n "$URL" ] || { jq -cn '{ok:false, code:"recipe_invalid", message:"kind=web needs a url"}'; exit 12; }
+               VP="$(jq -r '.viewport // "1280x720"' "$RECIPE")"
+               WAIT="$(jq -r '.wait_ms // 1500' "$RECIPE")"
+               npx --no-install playwright screenshot \
+                 --viewport-size "${VP/x/,}" --wait-for-timeout "$WAIT" \
+                 "$URL" "$OUT" >/dev/null 2>&1 \
+                 || { jq -cn --arg u "$URL" '{ok:false, code:"capture_failed", message:("playwright screenshot failed for " + $u), fix:"npm i -g playwright && npx playwright install chromium; or capture by hand and pass the file"}'; exit 10; }
+               GOT="$(sips -g pixelWidth -g pixelHeight "$OUT" 2>/dev/null | awk '/pixel/ {printf "%s%s", sep, $2; sep="x"}')"
+               WANT_W="${VP%x*}"
+               [ "${GOT%x*}" = "$WANT_W" ] \
+                 || { jq -cn --arg got "$GOT" --arg want "$VP" '{ok:false, code:"not_comparable", message:("recapture is " + $got + " but the recipe pins " + $want + "; refusing to feed the ledger"), fix:"fix the viewport (or the page zoom) and re-run see reshoot"}'; exit 10; }
+               ;;
+             static)
+               B="$(jq -r '.b // empty' "$RECIPE")"
+               [ -f "$B" ] || { jq -cn --arg b "$B" '{ok:false, code:"item_missing", message:("recipe kind=static: candidate " + $b + " does not exist")}'; exit 12; }
+               cp -f "$B" "$OUT"
+               ;;
+             *)
+               jq -cn --arg k "$RKIND" '{ok:false, code:"recipe_invalid", message:("unsupported recipe kind: " + $k), fix:"supported: web (playwright capture), static (candidate re-rendered in place); app capture is not built yet"}'; exit 12 ;;
+           esac
+           jq -cn --arg out "$OUT" --arg k "$RKIND" '{ok:true, kind:$k, round_img:$out}'
            exit 0 ;;
 esac
 
@@ -595,10 +634,11 @@ fi
 mkdir -p "$DIR/logs"
 jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg img2 "${IMG_B:-}" --arg p "$QUERY" \
    --arg m "$HMODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
-   --arg crop "$CROP_DESC" --arg art "$ART" \
+   --arg crop "$CROP_DESC" --arg art "$ART" --arg caller "$PWD" \
    '{ts:$ts, img:$img, img2:(if $img2 == "" then null else $img2 end),
      prompt:(if $p == "" then null else $p end), mode:$rm,
      crop:(if $crop == "" then null else $crop end), model:$m, ms:$ms,
+     caller:$caller,
      artifact:(if $art == "" then null else $art end), response:$r}' \
    >> "$LOG" 2>/dev/null || true
 

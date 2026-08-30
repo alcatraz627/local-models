@@ -132,10 +132,13 @@ def add_round(args):
                 % (meta.get("comparable_why") or "see pack meta"),
                 "crop both sides to a shared region first: see diff <cropped-A> <cropped-B> --json")
 
-    divs = verdict.get("divergences", [])
+    # Two producer shapes, one ledger: `divergences` (the vis-compare judge) or
+    # `items` (generic {id, class, judgment}, so ui-verify claims and ui-gripe
+    # findings can loop). The transitions math only keys on ids.
+    divs = verdict.get("divergences", verdict.get("items", []))
     expect(isinstance(divs, list) and all(isinstance(d, dict) for d in divs),
-           "verdict.divergences must be a list of objects (got %s)" % type(divs).__name__,
-           "re-run the judge — each divergence is an object with an id (docs/10 §5)")
+           "verdict.divergences (or .items) must be a list of objects (got %s)" % type(divs).__name__,
+           "re-run the judge; each entry is an object with an id (docs/10 §5)")
     ids = [d.get("id") for d in divs]
     if any(not i for i in ids):
         die("a divergence has no id — the ledger keys every status on stable ids",

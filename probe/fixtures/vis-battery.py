@@ -279,6 +279,35 @@ check("F10 ledger: comparable-poor round rejected, ledger untouched, error expla
       rc6 != 0 and _before != "" and _before == _ledger_raw(_ld) and bool(r6),
       "rc=%s r6=%s" % (rc6, r6))
 
+# F13 · generic ingest: any judge whose findings carry stable ids can loop.
+# `items` [{id, class, judgment}] must behave exactly like `divergences` —
+# same transitions math, same id contract, same rejects.
+_gd = os.path.join(tempfile.mkdtemp(), "loop-generic")
+_gv = os.path.join(tempfile.mkdtemp(), "v.json")
+
+
+def _items_verdict(path, overall, ids, iteration):
+    json.dump({"overall": overall, "iteration": iteration,
+               "items": [{"id": i, "class": "claim-fail", "judgment": "fail"}
+                         for i in ids]}, open(path, "w"))
+
+
+_items_verdict(_gv, "diverges", ["c-1", "c-2"], 1)
+grc1, gr1 = _ladd(_gd, _gv)
+check("F13 items ingest r1: ui-verify-shaped round enters as new",
+      grc1 == 0 and sorted(gr1.get("transitions", {}).get("new", [])) == ["c-1", "c-2"],
+      "gr1=%s" % gr1)
+_items_verdict(_gv, "diverges", ["c-2"], 2)
+grc2, gr2 = _ladd(_gd, _gv)
+gt2 = gr2.get("transitions", {})
+check("F13 items ingest r2: c-1 fixed, c-2 persisting (same math as divergences)",
+      grc2 == 0 and gt2.get("fixed") == ["c-1"] and gt2.get("persisting") == ["c-2"],
+      "gr2=%s" % gr2)
+json.dump({"overall": "diverges", "items": [{"class": "claim-fail"}]}, open(_gv, "w"))
+grc3, gr3 = _ladd(_gd, _gv)
+check("F13 items ingest: an id-less item is rejected structured, ledger untouched",
+      grc3 != 0 and gr3.get("ok") is False, "gr3=%s" % gr3)
+
 # F10d · scores are NOT a progress signal. The live imagegen loop fixed 3 of 5
 # divergences while every score went sideways/backwards (grid 93.8% -> 100.0%) —
 # region metrics saturate the moment composition moves. A round that fixes things

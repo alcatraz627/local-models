@@ -140,13 +140,27 @@ Return one result per claim, in order.
 Claims:
 $CLAIMS_BLOCK"
 
-q_args=(--json --format "$SCHEMA" --ctx - --ctx-name "ui-inventory.json" --max-ctx 32000)
-$BIG && q_args+=(--big)
+run_judge() { # sets RESULTS; $1 = extra q flag or empty
+  local extra=("$@")
+  Q_ENV="$(printf '%s' "$INV" | "$DIR/bin/q" --json --format "$SCHEMA" --ctx - \
+           --ctx-name "ui-inventory.json" --max-ctx 32000 "${extra[@]}" "$JUDGE_PROMPT")" \
+    || emit_error judge_failed "q judge call failed: $(printf '%s' "$Q_ENV" | jq -r '.message // "unknown"' 2>/dev/null)" 10
+  RESULTS="$(printf '%s' "$Q_ENV" | jq -c '.data.results // empty')"
+  [ -n "$RESULTS" ] || emit_error judge_failed "judge returned no schema-valid results" 10
+}
 t0=$(date +%s)
-Q_ENV="$(printf '%s' "$INV" | "$DIR/bin/q" "${q_args[@]}" "$JUDGE_PROMPT")" \
-  || emit_error judge_failed "q judge call failed: $(printf '%s' "$Q_ENV" | jq -r '.message // "unknown"' 2>/dev/null)" 10
-RESULTS="$(printf '%s' "$Q_ENV" | jq -c '.data.results // empty')"
-[ -n "$RESULTS" ] || emit_error judge_failed "judge returned no schema-valid results" 10
+if $BIG; then run_judge --big; else run_judge; fi
+# A dropped claim must never read as a pass: the result count is asserted
+# against the claim count (a truncated judge once returned 1 of 5 and the
+# gate said pass). One escalation retry on the big tier, then fail loud.
+N_CLAIMS="${#CLAIM_ARGS[@]}"
+N_RES="$(printf '%s' "$RESULTS" | jq 'length')"
+if [ "$N_RES" -ne "$N_CLAIMS" ] && ! $BIG; then
+  run_judge --big
+  N_RES="$(printf '%s' "$RESULTS" | jq 'length')"
+fi
+[ "$N_RES" -eq "$N_CLAIMS" ] \
+  || emit_error judge_incomplete "judge ruled on $N_RES of $N_CLAIMS claims (after a big-tier retry); refusing a partial verdict" 10
 ms=$(( ($(date +%s) - t0) * 1000 ))
 
 PASS=$(printf '%s' "$RESULTS" | jq '[.[] | select(.verdict == "pass")] | length')

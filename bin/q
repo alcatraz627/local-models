@@ -671,6 +671,10 @@ try:  # history is best-effort — never break the answer on a log failure
         "intent": intent, "model": model, "think": think == "true",
         "prompt": query, "response": text,
         "ms": ms,
+        # keep==-1 is set iff the model was resident before this call, so the
+        # cold-load rate is derivable from the history (lm doctor reads this).
+        "resident": keep == "-1",
+        "caller": __import__("os").getcwd(),
     }
     if diyjson:  # --diy routing rides into history so `q show N` can explain it
         try:

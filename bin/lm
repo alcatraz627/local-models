@@ -189,7 +189,14 @@ case "${1:-}" in
     command -v opencode >/dev/null 2>&1 || { echo "lm: opencode not installed (brew install opencode)"; exit 1; }
     "$BIN/warm" on code "${LM_OPENCODE_LEASE:-4h}" >&2
     trap '"$BIN/warm" off code >/dev/null 2>&1 || true' EXIT INT TERM
-    opencode "$@"
+    # Sessions log like everything else here (histories are the API) — this was
+    # the one tool in the suite whose usage was invisible to the self-audit.
+    _oc_t0=$(date +%s)
+    set +e; opencode "$@"; _oc_rc=$?; set -e
+    jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg caller "$PWD" \
+      --argjson secs "$(( $(date +%s) - _oc_t0 ))" --argjson rc "$_oc_rc" \
+      '{ts:$ts, caller:$caller, secs:$secs, rc:$rc}' >> "$DIR/logs/opencode-history.jsonl" 2>/dev/null || true
+    exit "$_oc_rc"
     ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
   status)   shift; if [ "${1:-}" = "--json" ]; then lm_status_json; else lm_status; fi ;;

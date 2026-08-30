@@ -6,9 +6,16 @@
 # the deprecated Homebrew gemini-cli (EOL 2026-12-18); swapping to Antigravity/ACP
 # later changes this file only, no caller anywhere. Front door: `lm gemini …`.
 #
+# Auth is a paid API key (~/.gemini/.env), NOT consumer OAuth — load-bearing:
+# Google shut down the hosted consumer-OAuth CLI service on 2026-06-18; the
+# open-source CLI on an API key is the surviving path (switched here 2026-07-07).
+# Do not "simplify" auth back to OAuth.
+#
 #   lm gemini "prompt"                one-shot (stdin becomes context: cat doc | lm gemini "sum it")
 #   lm gemini ingest <files...>       feed a corpus into this project's session
 #   lm gemini ask "question"          query the session (project-scoped by default)
+#   lm gemini digest <dir|files...>   one-shot corpus digest → JSON claims, each grep-verified
+#   lm gemini research "question"     web-shaped lookup → JSON, null-when-unsure, long timeout
 #   lm gemini history [N] · show N    past calls (gem-history.jsonl, q-style numbering)
 #
 # Contract: model pinned to gemini-3.5-flash (user decision — other gemini models
@@ -25,7 +32,10 @@ source "$DIR/bin/_lib.sh"
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash}"
 LOG="$DIR/logs/gem-history.jsonl"
 SESS_DIR="$DIR/logs/gemini-sessions"
-MODE=text; TIMEOUT=180; SESSION=""
+# Timeout is workload-aware and set AFTER the verb is known (agentic web lookups
+# and corpus digests run minutes; the old flat 180s killed 8 of the first 13
+# real-workload calls). --timeout still wins over everything.
+MODE=text; TIMEOUT=""; SESSION=""; FALLBACK_LOCAL=false
 
 # The API key lives OUT of the global shell env: ~/.gemini/.env (chmod 600),
 # loaded here per-call so only this wrapper's process tree ever sees it. A key
@@ -43,11 +53,14 @@ show_help() {
   _cmd 'lm gemini ingest <files...>' "feed files into this project's persistent session"
   _cmd 'lm gemini ingest-repo [dir]' 'pack a whole repo (repomix, gitignore-aware, compressed) and ingest it'
   _cmd 'lm gemini ask "question"'    'query the session (cross-project: --session NAME)'
+  _cmd 'lm gemini digest <dir|files...>' 'one-shot corpus digest -> JSON {claims[],summary}, each claim grep-verified against the corpus'
+  _cmd 'lm gemini research "question"'   'web-shaped lookup -> JSON with null-when-unsure; long default timeout'
   _cmd 'lm gemini history [N] · show N' 'past calls, numbered (-1 = latest)'
   _sec OPTIONS
   _opt '--json'         'machine mode: {ok, text, model, ms, session} on stdout'
   _opt '--session NAME' 'explicit session (default: the project dir name; sessions are per-project)'
-  _opt '--timeout N'    "wall-clock cap in seconds (default $TIMEOUT)"
+  _opt '--timeout N'    'wall-clock cap in seconds (defaults: oneshot/ask 300 · ingest/digest/research 420; one auto-retry at 1.5x on timeout)'
+  _opt '--fallback-local' 'if gemini is unavailable, answer via the local big tier (q -m big) instead of failing; reply is marked local'
   _sec NOTES
   printf '  %smodel pinned %s · read-only (--approval-mode plan) · never call the gemini binary directly%s\n' "$Dm" "$GEMINI_MODEL" "$Rs"
   printf '  %sif unavailable (auth/tier): structured gemini_unavailable — FLAG to the user, fall back to claude/lm%s\n' "$Dm" "$Rs"
@@ -61,12 +74,16 @@ emit_error() { # CODE MESSAGE EXIT
 }
 
 # History is the API (mirrors q): successes AND failures, one JSONL line each.
+# bytes_in/bytes_out make quota burn derivable from the history alone (tokens
+# are roughly bytes/4 for this workload) — the routing rule's budget question
+# was previously unanswerable without Google's console.
 log_line() { # KIND TEXT_OR_CODE MS
   mkdir -p "$DIR/logs"
   jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg kind "$1" --arg sess "${SESSION:-}" \
     --arg model "$GEMINI_MODEL" --arg prompt "${PROMPT:-}" --arg r "$2" --argjson ms "${3:-0}" \
+    --argjson bin "$(( ${#PROMPT} + ${#CTX} ))" --argjson bout "${#2}" \
     '{ts:$ts, kind:$kind, session:(if $sess == "" then null else $sess end),
-      model:$model, prompt:$prompt, response:$r, ms:$ms}' >> "$LOG" 2>/dev/null
+      model:$model, prompt:$prompt, response:$r, ms:$ms, bytes_in:$bin, bytes_out:$bout}' >> "$LOG" 2>/dev/null
 }
 
 # Run the backend with a hard wall-clock cap (kills the whole process group —
@@ -89,10 +106,11 @@ while [ $# -gt 0 ]; do
     --json)      MODE=json; shift ;;
     --session)   SESSION="$2"; shift 2 ;;
     --timeout)   TIMEOUT="$2"; shift 2 ;;
+    --fallback-local) FALLBACK_LOCAL=true; shift ;;
     *)           positionals+=("$1"); shift ;;
   esac
 done
-[[ "$TIMEOUT" =~ ^[0-9]+$ ]] || emit_error invalid_args "--timeout must be seconds, got '$TIMEOUT'" 2
+[ -z "$TIMEOUT" ] || [[ "$TIMEOUT" =~ ^[0-9]+$ ]] || emit_error invalid_args "--timeout must be seconds, got '$TIMEOUT'" 2
 
 CMD="${positionals[0]:-}"
 case "$CMD" in
@@ -148,13 +166,51 @@ case "$CMD" in
     [ -n "$PROMPT" ] || emit_error invalid_args 'ask needs a question: lm gemini ask "..."' 2
     CTX=""; KIND=ask
     ;;
+  digest)
+    # One-shot corpus digest with a machine contract: JSON claims, each carrying
+    # a short verbatim quote. The quotes are what make the output checkable —
+    # after the reply, every quote is grepped back against the corpus and the
+    # verdict ships WITH the digest ("the wrapper guarantees structure, not
+    # truth" gets a mechanism instead of a comment).
+    targets=("${positionals[@]:1}")
+    [ "${#targets[@]}" -gt 0 ] || emit_error invalid_args "digest needs a dir or files: lm gemini digest <dir|files...>" 2
+    DIGEST_CORPUS="$(mktemp "${TMPDIR:-/tmp}/gem-digest.XXXXXX.md")"
+    if [ -d "${targets[0]}" ] && [ "${#targets[@]}" -eq 1 ]; then
+      command -v repomix >/dev/null 2>&1 || emit_error repomix_missing "repomix not installed — npm install -g repomix" 12
+      repomix --output "$DIGEST_CORPUS" --style markdown --compress --quiet \
+        --ignore ".claude/output/**,outputs/**,**/*.html,**/*.png,**/*.jpg,**/*.svg,repomix-output.*" \
+        "${targets[0]}" >/dev/null 2>&1 || emit_error repomix_failed "repomix could not pack ${targets[0]}" 10
+    else
+      for f in "${targets[@]}"; do [ -f "$f" ] || emit_error item_missing "no such file: $f" 12; done
+      for f in "${targets[@]}"; do printf '=== %s ===\n' "$f"; cat "$f"; printf '\n'; done > "$DIGEST_CORPUS"
+    fi
+    [ -s "$DIGEST_CORPUS" ] || emit_error item_missing "corpus is empty" 12
+    PROMPT='Digest the corpus provided inline. Do NOT read files or use tools. Reply ONLY with JSON, no prose, no code fence: {"claims":[{"claim":"one factual statement about the corpus","quote":"a SHORT verbatim quote (5-15 words) from the corpus that supports it"}],"summary":"3 sentences max"}. At most 12 claims. Every quote must be copied exactly from the corpus.'
+    CTX="$(cat "$DIGEST_CORPUS")"
+    KIND=digest; SESS_ARGS=()
+    ;;
+  research)
+    # Web-shaped lookup: inherently slow and variable (agentic browsing), so it
+    # gets the long default timeout, and the null-when-unsure contract that the
+    # studio-search prompts used to carry by hand.
+    PROMPT_Q="${positionals[*]:1}"
+    [ -n "$PROMPT_Q" ] || emit_error invalid_args 'research needs a question: lm gemini research "..."' 2
+    PROMPT="Research this question, using web search where available: $PROMPT_Q
+Reply ONLY with JSON, no prose, no code fence: {\"answers\":[{\"item\":\"...\",\"value\":\"... or null\",\"source\":\"URL or null\"}],\"unsure\":\"anything you could not establish\"}. Use null for anything not verified — never guess."
+    CTX=""; KIND=research; SESS_ARGS=()
+    ;;
   *)
     PROMPT="${positionals[*]}"
     CTX=""; [ -t 0 ] || CTX="$(cat)"
     KIND=oneshot; SESS_ARGS=()
     ;;
 esac
-if [ "$KIND" != oneshot ]; then
+# Workload-aware default caps (explicit --timeout always wins).
+if [ -z "$TIMEOUT" ]; then
+  case "$KIND" in ingest|digest|research) TIMEOUT=420 ;; *) TIMEOUT=300 ;; esac
+fi
+case "$KIND" in oneshot|digest|research) SESSIONLESS=true ;; *) SESSIONLESS=false ;; esac
+if [ "$SESSIONLESS" = false ]; then
   if [ -f "$ID_FILE" ]; then
     SESS_ARGS=(-r "$(cat "$ID_FILE")")
   else
@@ -183,12 +239,22 @@ run_once
 # fresh session and retry once. Continuity is lost (ingested context is gone),
 # so the reset is surfaced, never silent.
 SESSION_RESET=false
-if [ "$rc" -ne 0 ] && [ "$KIND" != oneshot ] \
+if [ "$rc" -ne 0 ] && [ "$SESSIONLESS" = false ] \
    && printf '%s' "$OUT" | grep -qi 'Searched for sessions\|--list-sessions'; then
   NEW_ID="$(uuidgen | tr 'A-Z' 'a-z')"
   printf '%s\n' "$NEW_ID" > "$ID_FILE"
   SESS_ARGS=(--session-id "$NEW_ID")
   SESSION_RESET=true
+  run_once
+fi
+# One retry with headroom on a wall-clock kill. The recorded timeout clusters
+# were all transient (the same prompt succeeded on a plain re-run minutes
+# later), so the wrapper does the re-run instead of the human.
+RETRIED=false
+if [ "$rc" -eq 124 ]; then
+  RETRIED=true
+  sleep 5
+  TIMEOUT=$(( TIMEOUT * 3 / 2 ))
   run_once
 fi
 ms=$(( ($(date +%s) - t0) * 1000 ))
@@ -197,9 +263,25 @@ if [ "$rc" -ne 0 ]; then
   # Auth/tier/login failures are the "unavailable" class the routing rule names;
   # everything else (incl. the 124 timeout kill) is a plain structured error.
   if printf '%s' "$OUT" | grep -qiE 'IneligibleTier|not eligible|auth|login|credential|quota|permission denied'; then
-    emit_error gemini_unavailable "gemini backend unavailable ($(printf '%s' "$OUT" | rg -io 'IneligibleTierError|not eligible[^.]*' | head -1 | cut -c1-80)) — FLAG this to the user; fall back to claude/lm. Fix: re-auth (gemini → /auth) or set GEMINI_API_KEY." 11
+    # Opt-in degrade: answer on the local big tier rather than failing, for
+    # callers that prefer a $0 offline answer over an error. The reply is
+    # MARKED local — a silent swap would launder the trust posture.
+    if [ "$FALLBACK_LOCAL" = true ] && command -v q >/dev/null 2>&1; then
+      LTEXT="$( { [ -n "$CTX" ] && printf '%s' "$CTX"; } | q -m big --raw "$PROMPT" 2>/dev/null || true)"
+      if [ -n "$LTEXT" ]; then
+        log_line "fallback-local" "$LTEXT" "$(( ($(date +%s) - t0) * 1000 ))"
+        if [ "$MODE" = json ]; then
+          jq -cn --arg t "$LTEXT" '{ok:true, text:$t, model:"gemma4:26b", fallback:"local", note:"gemini unavailable — answered by the local big tier; treat as a weaker seat"}'
+        else
+          printf 'lm gemini: note — gemini unavailable; answered by the LOCAL big tier (weaker seat)\n' >&2
+          printf '%s\n' "$LTEXT"
+        fi
+        exit 0
+      fi
+    fi
+    emit_error gemini_unavailable "gemini backend unavailable ($(printf '%s' "$OUT" | rg -io 'IneligibleTierError|not eligible[^.]*' | head -1 | cut -c1-80)) — FLAG this to the user; fall back to claude/lm (or re-run with --fallback-local). Fix: re-auth (gemini → /auth) or set GEMINI_API_KEY." 11
   fi
-  [ "$rc" -eq 124 ] && emit_error timeout "exceeded ${TIMEOUT}s wall clock" 13
+  [ "$rc" -eq 124 ] && emit_error timeout "exceeded ${TIMEOUT}s wall clock (after one auto-retry at 1.5x)" 13
   emit_error gemini_error "$(printf '%s' "$OUT" | tail -2 | tr '\n' ' ' | cut -c1-200)" 10
 fi
 
@@ -216,10 +298,29 @@ TEXT="$(printf '%s' "$OUT" | sed -E '/^Ripgrep is not available/d; /^\[STARTUP\]
 if [ "$KIND" = ingest ]; then
   TEXT="$(printf '%s' "$TEXT" | awk '/^1\. /{n=NR} {l[NR]=$0} END{if(!n)n=1; for(i=n;i<=NR;i++) print l[i]}')"
 fi
-log_line "$([ "$SESSION_RESET" = true ] && echo "$KIND+reset" || echo "$KIND")" "$TEXT" "$ms"
+# Digest verification: grep every claimed quote back against the corpus. The
+# verdict rides with the output; a digest where NO quote is findable is refused
+# outright (fail closed, findings-gate style) — structure without truth.
+if [ "$KIND" = digest ]; then
+  JSONTEXT="$(printf '%s' "$TEXT" | sed -E 's/^```(json)?//; s/```$//' | jq -c . 2>/dev/null || true)"
+  [ -n "$JSONTEXT" ] || { rm -f "$DIGEST_CORPUS"; emit_error digest_malformed "digest reply was not parseable JSON (lm gemini show -1 for the raw text)" 10; }
+  hits=0; misses=0
+  while IFS= read -r quote; do
+    probe="$(printf '%s' "$quote" | tr -s '[:space:]' ' ' | cut -c1-60)"
+    [ -n "$probe" ] || continue
+    if tr -s '[:space:]' ' ' < "$DIGEST_CORPUS" | rg -qF "$probe"; then hits=$((hits+1)); else misses=$((misses+1)); fi
+  done < <(printf '%s' "$JSONTEXT" | jq -r '.claims[].quote // empty')
+  rm -f "$DIGEST_CORPUS" 2>/dev/null || true
+  if [ "$hits" -eq 0 ] && [ "$misses" -gt 0 ]; then
+    emit_error digest_unverified "none of the $misses claimed quotes exist in the corpus — digest refused" 10
+  fi
+  TEXT="$(printf '%s' "$JSONTEXT" | jq -c --argjson h "$hits" --argjson m "$misses" '. + {verified:{quotes_found:$h, quotes_missing:$m}}')"
+fi
+KSUF=""; [ "$SESSION_RESET" = true ] && KSUF="+reset"; [ "$RETRIED" = true ] && KSUF="$KSUF+retry"
+log_line "$KIND$KSUF" "$TEXT" "$ms"
 if [ "$MODE" = json ]; then
   jq -cn --arg t "$TEXT" --arg m "$GEMINI_MODEL" --argjson ms "$ms" \
-    --arg s "$([ "$KIND" = oneshot ] && echo "" || echo "$SESSION")" \
+    --arg s "$([ "$SESSIONLESS" = true ] && echo "" || echo "$SESSION")" \
     --argjson reset "$SESSION_RESET" \
     '{ok:true, text:$t, model:$m, ms:$ms, session:(if $s == "" then null else $s end)}
      + (if $reset then {session_reset:true, note:"session store was cleaned externally — a fresh session was created; previously ingested context is gone (re-run ingest)"} else {} end)'

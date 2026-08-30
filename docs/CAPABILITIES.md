@@ -89,6 +89,7 @@ see photo.png --glow                            # rendered read
 see ui.png -m gemma4:26b                        # the stronger general-scene reasoner
 see history · see show -1                       # every read is logged, replayable
 see open -1 · see note "obs…"                   # the read's artifact folder · append a note to it
+see reshoot <loop-dir>                          # replay the loop recipe (web: playwright · static: candidate file); wrong-size captures refused
 ```
 
 Every read lands one discoverable **artifact folder** — `outputs/see/<ts>-<mode>-<img>/`
@@ -276,9 +277,15 @@ cat big-spec.md | lm gemini "list the risks"     # piped stdin becomes context
 lm gemini ingest src/*.py docs/*.md              # feed a corpus into THIS project's session
 lm gemini ingest-repo [dir]                      # pack a whole repo (repomix, gitignore-aware, ~70% compressed) and ingest it
 lm gemini ask "where is auth handled?"           # query the session (--session NAME = cross-project)
+lm gemini digest <dir|files...>                  # one-shot corpus digest -> JSON claims, each quote grep-verified (fail-closed)
+lm gemini research "official site of X?"         # web-shaped lookup -> JSON, null-when-unsure, 420s default cap
 lm gemini --json "..."                           # {ok, text, model, ms, session} for agents
-lm gemini history · show -1                      # every call logged (gem-history.jsonl)
+lm gemini history · show -1                      # every call logged (gem-history.jsonl, incl. bytes_in/bytes_out)
 ```
+
+Robustness (2026-08-30): workload-aware timeouts (oneshot/ask 300s, ingest/digest/research
+420s, `--timeout` wins), one auto-retry at 1.5x on a wall-clock kill, and `--fallback-local`
+to answer on `gemma4:26b` (marked local, weaker seat) when gemini is unavailable.
 
 If gemini is unavailable (auth/tier/not installed) you get a structured
 `gemini_unavailable` error (exit 11) — the calling agent flags it to the human and falls

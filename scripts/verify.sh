@@ -175,7 +175,9 @@ bash scripts/self-audit.sh >/dev/null 2>&1 && [ -f "logs/self-audit/$(date +%Y%m
 
 echo "── gcc hooks (pipe-tests) ──"
 H=~/.claude/scripts/hooks/guard-model-tier.sh
-if [ -f "$HOME/.claude/.fable-subagent-promo" ]; then
+if [ -f "$HOME/.claude/.allow-fable-subagents" ]; then
+  skip "guard-model-tier fable block — LIFTED by ~/.claude/.allow-fable-subagents (owner ruling 2026-07-23; trash the file to re-arm the block)"
+elif [ -f "$HOME/.claude/.fable-subagent-promo" ]; then
   skip "guard-model-tier fable block — BYPASSED by ~/.claude/.fable-subagent-promo (promo window, self-expires 2026-07-17). Every fable sub-agent dispatch currently passes. Delete the file to restore the hard block."
 else
   [ "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"fable","prompt":"x"}}' | "$H" | jq -r .decision 2>/dev/null)" = "block" ] && ok "guard-model-tier: fable → block" || bad "guard-model-tier block path"
@@ -191,8 +193,34 @@ echo '{"session_id":"verify","tool_name":"Read","tool_input":{"file_path":"'"$DI
 echo "── gcc schedules (labels present) ──"
 # gcc-schedule is an interactive zsh alias — scripts must use the real path.
 S=$(bash ~/.claude/scripts/schedule/schedule.sh list --all 2>/dev/null)
-for name in warm-morning warm-evening-off lm-self-audit image-tools-review tier-telemetry-review; do
+# image-tools-review and tier-telemetry-review were retired with their gcc
+# schedules (complements-only ruling 2026-08-30; plan §12 flagged the choice).
+for name in warm-morning warm-evening-off lm-self-audit; do
   printf '%s' "$S" | grep -q "$name" && ok "scheduled: $name" || bad "schedule missing: $name"
+done
+
+echo "── loop machinery (reshoot + launchd health) ──"
+_rd="$(mktemp -d)"; mkdir -p "$_rd/loop"
+_fx="$(ls "$DIR"/probe/fixtures/*.png 2>/dev/null | head -1)"
+if [ -n "$_fx" ]; then
+  jq -n --arg b "$_fx" '{kind:"static", b:$b}' > "$_rd/loop/recipe.json"
+  ./bin/see reshoot "$_rd/loop" 2>/dev/null | jq -e '.ok == true' >/dev/null \
+    && ok "see reshoot: static recipe replays" || bad "see reshoot static"
+else
+  skip "see reshoot — no fixture png found"
+fi
+# capture first: under pipefail, see's deliberate exit 12 would out-vote jq
+_re="$(./bin/see reshoot "$_rd/nope" 2>/dev/null || true)"
+printf '%s' "$_re" | jq -e '.code == "item_missing"' >/dev/null \
+  && ok "see reshoot: missing loop-dir dies structured" || bad "see reshoot error path"
+rm -rf "$_rd"
+for _job in com.alcatraz.warm-evening-off com.alcatraz.local-models-ollama; do
+  _info="$(launchctl print "gui/$(id -u)/$_job" 2>/dev/null)" \
+    || { bad "launchd: $_job not loaded"; continue; }
+  case "$_info" in
+    *"state = running"*|*"last exit code = (never exited)"*|*"last exit code = 0"*) ok "launchd: $_job healthy" ;;
+    *) bad "launchd: $_job failing ($(printf '%s' "$_info" | sed -n 's/.*last exit code = \(.*\)/\1/p' | head -1))" ;;
+  esac
 done
 
 echo "── residency (informational) ──"
