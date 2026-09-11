@@ -8,13 +8,28 @@ tool runs **on this machine, $0, offline**, alongside cloud Claude. You are usua
 `docs/CAPABILITIES.md` (the full menu with copy-paste examples) → the design doc for
 whatever you're touching (`docs/03`–`docs/10`).
 
-## The two hard rules
+## The three hard rules
 
 1. **No idle penalty.** Nothing stays resident unless explicitly pinned or leased
    (`warm`). A tool that silently keeps 23 GB warm is a bug.
 2. **Trust = a passing gate, never model confidence.** Every local-model output crosses a
    mechanical gate (a schema, a judge, a test) before anyone believes it. "The model said
    so" is not evidence anywhere in this repo.
+3. **Disk budget, reasoned not enforced.** Local-model storage stays under 150 GB in
+   steady state, 200 GB absolute. The two stores that count are `~/.ollama/models` and
+   `~/.cache/huggingface`; the repo itself is ~1 GB and does not. This is a policy you
+   reason about before every pull, deliberately NOT a blocking code check: a guard that
+   hard-fails a pull produces hard-to-trace output, so the ladder lives here as doctrine
+   instead. Read it before pulling a model, and act on the band you land in:
+   - **≤150 GB** target. Pull within it freely.
+   - **150–180 GB** fine transiently (157 does not hurt); steady state should trend back under 150.
+   - **180 GB** name what you delete before adding anything new.
+   - **195 GB** prune existing models before any new work; treat pruning as the task.
+   - **200 GB** hard stop. No new pulls until something is deleted.
+
+   The way you stay under it is the pull-probe-prune loop: pull a candidate, probe it,
+   delete the loser, never accumulate. Measure the current footprint with
+   `du -sh ~/.ollama/models ~/.cache/huggingface` before a pull that would add real GB.
 
 ## Layout
 

@@ -71,8 +71,10 @@ when you ask one. Text is good-but-verify (don't trust exact strings blindly).
 ```bash
 see ~/Desktop/shot.png                          # verbatim text + UI + layout + anomalies
 see chart.png "is the trend up or down?"        # grounded answer
-see dashboard.png --ui                          # UI inventory: KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE
+see dashboard.png --ui                          # UI inventory (Qwen3-VL-8B via mlx by default): KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE
 see menu.png --ui "which item is enabled?"      # UI inventory + a focused answer
+see dashboard.png --mlx                         # high-accuracy UI-structure read via Qwen3-VL-8B (mlx-vlm, outside ollama; UI_DEFAULT_MLX=0 reverts --ui to gemma4:26b)
+see ui.png -m mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit  # any mlx-vlm model through see
 see --menubar "which app is focused?"           # capture the live macOS top strip, then --ui it
 see panel.png --ui --json | jq .data            # schema-constrained {kind,theme,regions[].elements[],icons,palette}
 see mockup.png --json                           # {ok,text,model,ms,artifact} for an agent
@@ -220,6 +222,7 @@ Turns cloud sub-agent fan-outs (audit/reconcile/verify) into free local ones.
 
 ```bash
 lm fleet review src/*.sh                        # audit every script
+lm fleet summarize docs/*.md -m sweep           # the fast grunt tier (granite4:tiny-h, ~1.5x) for volume classify/summarize/extract
 lm fleet qa --prompt "who owns this?" docs/*.md # same question across N docs
 git diff --name-only | lm fleet review --items-from - -m code
 lm fleet summarize notes/*.md --judge 'jq -e ".text|length>100"'   # custom gate:

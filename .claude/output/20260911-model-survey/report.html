@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local-model survey and testing</title>
+<style>
+  :root{
+    --bg:#f7f7f5; --surface:#ffffff; --surface2:#f0f0ee; --text:#1a1a19;
+    --dim:#6b6b66; --border:#e2e2dd; --accent:#7c3aed;
+    --ok:#16a34a; --hold:#d97706; --no:#dc2626; --info:#0ea5e9;
+  }
+  :root[data-theme="dark"]{
+    --bg:#15151a; --surface:#1e1e25; --surface2:#26262f; --text:#e8e8ea;
+    --dim:#9a9aa5; --border:#33333d; --accent:#a78bfa;
+    --ok:#4ade80; --hold:#fbbf24; --no:#f87171; --info:#38bdf8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+  .wrap{max-width:920px;margin:0 auto;padding:24px 20px 80px}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;
+    border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:24px}
+  h1{font-size:24px;margin:0 0 4px}
+  h2{font-size:18px;margin:34px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .sub{color:var(--dim);font-size:14px}
+  .toggle{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    border-radius:8px;padding:7px 12px;cursor:pointer;font-size:13px;white-space:nowrap}
+  .lead{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
+    border-radius:8px;padding:14px 16px;margin:0 0 8px}
+  table{width:100%;border-collapse:collapse;margin:8px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;white-space:nowrap}
+  .t-ok{background:color-mix(in oklab,var(--ok) 18%,transparent);color:var(--ok)}
+  .t-hold{background:color-mix(in oklab,var(--hold) 18%,transparent);color:var(--hold)}
+  .t-no{background:color-mix(in oklab,var(--no) 18%,transparent);color:var(--no)}
+  .cards{display:grid;gap:12px;grid-template-columns:1fr}
+  @media(min-width:620px){.cards{grid-template-columns:1fr 1fr}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .card h3{margin:0 0 2px;font-size:15px}
+  .card .role{color:var(--dim);font-size:12px;margin-bottom:8px}
+  .card p{margin:8px 0 0;font-size:13.5px;color:var(--text)}
+  .metrics{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 2px;font-size:13px}
+  .metrics b{color:var(--accent)}
+  code{background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:12.5px}
+  ul{margin:8px 0;padding-left:20px}
+  li{margin:4px 0}
+  .foot{color:var(--dim);font-size:12.5px;margin-top:40px;border-top:1px solid var(--border);padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Local-model survey &amp; testing</h1>
+      <div class="sub">M5 Pro / 64 GB &middot; 2026-09-11 &middot; 5 candidates, real gates, one applied change</div>
+    </div>
+    <button class="toggle" onclick="var r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark')">theme</button>
+  </header>
+
+  <p class="lead">The wins landed exactly where the complements-only doctrine says they should: vision and sweep. The candidate that looked strongest on paper, GLM-4.7-Flash, failed the trust gate hardest. Nothing beyond the doctrine earned adoption. Suite green after all of it (verify 38/0, battery 53/53); footprint 115 GB, inside the 150 GB budget.</p>
+
+  <h2>Decisions per config.sh tier</h2>
+  <table>
+    <thead><tr><th>Tier</th><th>Incumbent</th><th>Decision</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>VISION_MODEL</code></td><td>minicpm-v (5.5 GB)</td><td><span class="tag t-ok">SWAPPED</span></td><td>minicpm-v4.6 beats it on UI structure, hallucinates nothing, a third the disk. Applied &amp; verified.</td></tr>
+      <tr><td><code>UI_VISION_MODEL</code></td><td>gemma4:26b (17 GB)</td><td><span class="tag t-hold">HOLD</span></td><td>Qwen3-VL-8B ties it perfectly at 6 GB, but needs MLX-VLM wired into <code>see</code> and harder fixtures first.</td></tr>
+      <tr><td>sweep lane</td><td>none</td><td><span class="tag t-ok">ADD</span></td><td>granite4:tiny-h, 1.5x faster, viable behind the fleet's Judge gate. Not a warm-companion swap.</td></tr>
+      <tr><td><code>WARM_MODEL</code></td><td>gemma4-e4b</td><td><span class="tag t-hold">KEEP</span></td><td>Granite is a worse general assistant; its speed only pays in the gated sweep lane.</td></tr>
+      <tr><td><code>BIG_MODEL</code></td><td>gemma4:26b</td><td><span class="tag t-hold">KEEP</span></td><td>The only beyond-doctrine candidate probed (GLM) failed.</td></tr>
+      <tr><td>judge seat</td><td>none</td><td><span class="tag t-ok">reuse gemma4:26b</span></td><td>8/8 on the judgment gate. Zero new model.</td></tr>
+      <tr><td><code>CODE_MODEL</code></td><td>qwen3.6:35b-a3b</td><td><span class="tag t-hold">KEEP</span></td><td>The coding-sibling test is D11-gated, not run this session.</td></tr>
+      <tr><td><code>IMAGINE_MODEL</code></td><td>qwen (mflux)</td><td><span class="tag t-hold">KEEP</span></td><td>No candidate has a confirmed better Apple-Silicon path.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>The five stages</h2>
+  <div class="cards">
+    <div class="card">
+      <h3>Stage 0 &middot; gemma4:26b as judge <span class="tag t-ok">accept</span></h3>
+      <div class="role">judgment probe, resident, free</div>
+      <div class="metrics"><span><b>8/8</b> meaningful items</span></div>
+      <p>Asked before assuming, abstained cleanly, resisted the over-engineering trap, kept the hot path at two yq reads. The judge seat costs no new model.</p>
+    </div>
+    <div class="card">
+      <h3>Stage 1a &middot; MiniCPM-V 4.6 <span class="tag t-ok">accept</span></h3>
+      <div class="role">vision default, 1.6 GB vs 5.5 GB</div>
+      <div class="metrics"><span>kanban <b>4.5/5</b></span><span>badges <b>3/4</b></span><span>0 hallucinations</span></div>
+      <p>Won decisively where the old model missed the ACTIVE column and invented two badges. Strict upgrade at a third the size.</p>
+    </div>
+    <div class="card">
+      <h3>Stage 1b &middot; Granite 4.0 H Tiny <span class="tag t-hold">conditional</span></h3>
+      <div class="role">sweep lane, 4.2 GB</div>
+      <div class="metrics"><span><b>93.5</b> tok/s vs 62</span></div>
+      <p>1.5x faster, but chatty and over-eager (wrong tool call, essay-length answers). Fine only behind constrained decoding + the fleet Judge.</p>
+    </div>
+    <div class="card">
+      <h3>Stage 2 &middot; Qwen3-VL-8B <span class="tag t-hold">tie</span></h3>
+      <div class="role">see --ui, MLX-VLM, ~6 GB</div>
+      <div class="metrics"><span>kanban <b>5/5</b></span><span>badges <b>4/4</b></span></div>
+      <p>Matched gemma4:26b perfectly at a third the memory. A memory win, not an accuracy win on these fixtures. Needs MLX-VLM integration before a swap.</p>
+    </div>
+    <div class="card">
+      <h3>Stage 3 &middot; GLM-4.7-Flash <span class="tag t-no">rejected</span></h3>
+      <div class="role">reasoning/judge, 19 GB, beyond doctrine</div>
+      <div class="metrics"><span><b>3/9</b> fails</span><span>reliability <b>1/5</b> @ temp 0.7</span></div>
+      <p>Best benchmarks in the survey, least trustworthy here: fabricated a default, coded before asking, gave 5 different answers to one shell prompt. Evicted.</p>
+    </div>
+    <div class="card" style="border-left:3px solid var(--accent)">
+      <h3>What the method proved</h3>
+      <div class="role">trust = a passing gate, never a spec sheet</div>
+      <p>GLM has the top leaderboard numbers and is the least reliable candidate on this suite's own gate. The temp-0 probe hid it; the supplementary temp-0.7 check caught it. The gate did real work.</p>
+    </div>
+  </div>
+
+  <h2>The crash, and the guard</h2>
+  <p>An earlier turn ran the MLX vision model and gemma4:26b at once; unified memory ran out and the kernel's jetsam killer took down every agent on the machine. Fix: <code>scripts/mem-guard.py</code>, a watchdog that kills the largest model process before jetsam fires, never touches agent processes, and logs every action. Plus a strict one-heavy-model-at-a-time rule. It never had to fire; every run after it was clean. It has since self-expired.</p>
+
+  <h2>What changed on the machine</h2>
+  <ul>
+    <li>Installed: minicpm-v4.6 (1.6 GB), granite4:tiny-h (4.2 GB), mlx-vlm 0.7.0 in the venv (Qwen3-VL-8B weights ~6 GB).</li>
+    <li>config.sh: <code>VISION_MODEL</code> now minicpm-v4.6, verified with a live <code>see</code> call.</li>
+    <li>Evicted: glm-4.7-flash (19 GB), the failed candidate.</li>
+    <li>Policy: disk budget is now hard rule 3 in CLAUDE.md, with a pointer in STATE.md.</li>
+    <li>New: the mem-guard watchdog and the survey output folder (this report, the verdict, five case reports, the test plan).</li>
+  </ul>
+
+  <h2>Waiting on you (none blocking)</h2>
+  <ul>
+    <li>Prune the old minicpm-v (&minus;5.5 GB) once you're happy with the vision swap.</li>
+    <li>Decide whether to wire MLX-VLM into <code>see</code> so Qwen3-VL-8B can reclaim the 17 GB vision role.</li>
+    <li>Run granite4:tiny-h on one real <code>lm fleet</code> batch before making it a sweep default.</li>
+    <li>The changes are all on disk but uncommitted. Say the word and I'll commit them.</li>
+  </ul>
+
+  <div class="foot">Full detail in the case reports beside this file: case0 through case3, plus verdict.md and test-plan.md, under .claude/output/20260911-model-survey/</div>
+</div>
+</body>
+</html>

@@ -6,6 +6,11 @@ Single source of truth for where this project is. Read this first. Last updated 
 cloud Claude. Hard rule: **no idle performance penalty** — nothing heavy resident unless invoked.
 **The full command menu with examples: `docs/CAPABILITIES.md`.**
 
+**Disk budget (reasoned, not a code check):** local-model storage (`~/.ollama/models` +
+`~/.cache/huggingface`) stays under 150 GB steady-state, 200 GB absolute. Ladder and
+per-band actions are hard rule 3 in `CLAUDE.md`. Footprint 2026-09-11 is ~115 GB after the
+model survey (added minicpm-v4.6, granite4:tiny-h, Qwen3-VL-8B via mlx-vlm; evicted glm-4.7-flash).
+
 ## Entrypoint
 
 `lm` (on PATH) is the front door — `lm` for the overview, `lm status` for server/warm/models.
@@ -82,6 +87,21 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   `com.alcatraz.warm-evening-off` · `com.alcatraz.lm-self-audit`
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
+
+- **2026-09-12 · local-model survey + integration wave (through `/bloop`):** ran 5 candidates
+  through their real gates (survey + verdict at `.claude/output/20260911-model-survey/`), then
+  built and adversarially validated the recommendations. Shipped: **VISION_MODEL → minicpm-v4.6**
+  (smaller, better UI structure, no hallucinations); **`see --mlx` / `-m mlx:<repo>`** MLX-VLM
+  backend so Qwen3-VL-8B runs through `see`, and **`see --ui` now routes to it by default**
+  (UI_DEFAULT_MLX=1) so routine UI reads no longer load the 17GB gemma4:26b (memory reclaim,
+  Qwen3-VL tied it 5/5 on UI fixtures at ~6GB); **`-m sweep` fleet tier** (granite4:tiny-h,
+  ~1.5x, judge-gated); **`scripts/mem-guard.py`** memory watchdog (kernel-pressure-triggered,
+  armed automatically by `see --mlx`) after an mlx+ollama co-load OOM'd the machine; disk-budget
+  as CLAUDE.md hard rule 3. gcc updated (model-tier-routing + local-models feature doc) to route
+  UI-verify to `see --mlx` and sweeps to `-m sweep`. GLM-4.7-Flash rejected (fabricated on the
+  probe). Adversarial gate found 8 issues (all fixed, incl. a pressure-metric flaw and a pid-reuse
+  bug caught on re-test): `.claude/output/20260912-bloop-validation/report.md`. Suite green
+  (verify 38/0, battery 53/53).
 
 - **2026-07-13 · capability wave (5, each through `/bloop`):** **asset-verify**
   (`lib/asset-verify.py` — derived rungs judged against a best-achievable resample at

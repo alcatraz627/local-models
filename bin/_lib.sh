@@ -45,14 +45,16 @@ jsonl_entry() { # LOG N ENTRY_JQ ($i bound to N in jq). N>0 = stable line no; N<
 }
 
 # ── Size-tier aliases → real model names ──
-# `-m small|big|code` resolves via config.sh; any other value passes through
-# literally, so `-m llama3.2` still works. The words small/big/code are
+# `-m small|big|code|sweep` resolves via config.sh; any other value passes
+# through literally, so `-m llama3.2` still works. Those four words are
 # reserved — a model literally named one of them needs its full name:tag.
+# sweep = the high-throughput grunt tier (granite4:tiny-h), for lm fleet.
 resolve_tier() {
   case "$1" in
     small) echo "${WARM_MODEL:-gemma4-e4b-warm}" ;;
     big)   echo "${BIG_MODEL:-gemma4:26b}" ;;
     code)  echo "${CODE_MODEL:-qwen3.6:35b-a3b}" ;;
+    sweep) echo "${SWEEP_MODEL:-granite4:tiny-h}" ;;
     *)     echo "$1" ;;
   esac
 }

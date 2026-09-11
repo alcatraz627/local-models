@@ -29,6 +29,8 @@ MODE=text
 UI=false
 OCR=false
 MENUBAR=false
+MLX=false          # backend switch: mlx-vlm (outside ollama) instead of the ollama API
+MLX_MODEL=""       # the HF repo id when MLX is on (e.g. mlx-community/Qwen3-VL-8B-Instruct-4bit)
 GLOW=false
 CROP=""
 REGION=""
@@ -81,7 +83,8 @@ show_help() {
   _opt '--grid N'      'diff only: grid resolution 4-64 for E5/E6 (default 8 icons / 16 UIs)'
   _opt '--json'        'one JSON object on stdout, no ANSI; with --ui adds parsed .data (schema-constrained)'
   _opt '--glow'        'render the read through glow (TTY-only, no-op without glow)'
-  _opt '-m, --model M' "vision model (default: \$VISION_MODEL = $MODEL)"
+  _opt '-m, --model M' "vision model (default: \$VISION_MODEL = $MODEL); -m mlx:<hf-repo> uses the mlx-vlm backend"
+  _opt '--mlx'         "route to the mlx-vlm backend outside ollama (Qwen3-VL, higher UI-structure accuracy) = \$UI_VISION_MLX"
   _opt '-h, --help'    'this help'
   _sec NOTES
   printf '  %slocal-only · the image is never uploaded · model loads on demand, unloads after%s\n' "$Dm" "$Rs"
@@ -181,6 +184,7 @@ while [ $# -gt 0 ]; do
     --ocr)      OCR=true; shift ;;
     --no-read)  NO_READ=true; shift ;;
     --menubar)  MENUBAR=true; UI=true; shift ;;
+    --mlx)      MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MODEL_SET=true; shift ;;
     --crop)     CROP="$2"; shift 2 ;;
     --region)   REGION="$2"; shift 2 ;;
     --only)     ONLY="$2"; shift 2 ;;
@@ -191,6 +195,26 @@ while [ $# -gt 0 ]; do
     *)          positionals+=("$1"); shift ;;
   esac
 done
+
+# `see --ui` with no explicit -m routes to the MLX Qwen3-VL model by default, so the
+# routine UI-read path does not load the 17GB gemma4:26b tier (memory reclaim). Runs
+# BEFORE the mlx: detection so the detection picks it up. Toggle: UI_DEFAULT_MLX=0.
+if $UI && ! $MODEL_SET && [ "${UI_DEFAULT_MLX:-1}" = 1 ]; then
+  MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MODEL_SET=true
+fi
+
+# --mlx / -m mlx:<repo>: route to the mlx-vlm backend instead of ollama. The image
+# never leaves the box either way; mlx-vlm runs in .venv and loads fresh per call
+# (no keep_alive). This is the higher-accuracy UI path (Qwen3-VL); it is required
+# for Qwen3-VL because ollama's Qwen3-VL path is broken on Apple Silicon (#16264).
+case "$MODEL" in
+  mlx:*) MLX=true; MLX_MODEL="${MODEL#mlx:}" ;;
+esac
+if $MLX; then
+  $OCR && emit_error invalid_args "--ocr is model-free Apple Vision; --mlx is a model read — pick one" 2
+  command -v "$DIR/.venv/bin/python" >/dev/null 2>&1 || [ -x "$DIR/.venv/bin/python" ] \
+    || emit_error mlx_venv_missing "the .venv python is missing; mlx-vlm needs it (uv venv + uv pip install mlx-vlm)" 12
+fi
 
 # --menubar: the "image" is a fresh capture of the main display's top strip, so
 # every positional is the (optional) question. Grab the whole display then crop
@@ -230,7 +254,7 @@ if [ "${positionals[0]}" = "diff" ]; then
   DIFF=true
   IMG="${positionals[1]:-}"; IMG_B="${positionals[2]:-}"; QUERY="${positionals[*]:3}"
   { [ -n "$IMG" ] && [ -n "$IMG_B" ]; } || emit_error invalid_args 'diff needs two images: see diff <ref> <candidate> ["focus"]' 2
-  { $UI || $OCR || $MENUBAR; } && emit_error invalid_args "diff is its own read — drop --ui/--ocr/--menubar" 2
+  { $UI || $OCR || $MENUBAR || $MLX; } && emit_error invalid_args "diff runs on the ollama evidence pipeline — drop --ui/--ocr/--menubar/--mlx" 2
   [ -n "$CROP$REGION" ] && emit_error invalid_args "diff compares whole frames — crop the inputs first if needed" 2
   for f in "$IMG" "$IMG_B"; do
     [ -f "$f" ] || emit_error img_unreadable "no such file: $f" 12
@@ -355,7 +379,7 @@ else
 if $NO_READ && ! $DIFF; then
   emit_error invalid_args "--no-read only applies to diff (other modes ARE the read) — drop the flag, or use: see diff <A> <B> --no-read" 2
 fi
-if ! $NO_READ && ! ollama_up; then
+if ! $NO_READ && ! $MLX && ! ollama_up; then
   $DIFF || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
   VLM_FAILED=true
 fi
@@ -509,6 +533,39 @@ elif $VLM_FAILED; then
   # ollama was unreachable at the gate — skip the read, keep the pack (diff only)
   TEXT="(visual read skipped: ollama unreachable — the deterministic evidence pack below is complete)"
   rc=0
+elif $MLX; then
+  # mlx-vlm backend: runs in .venv, outside ollama. The CLI takes ONE --prompt, so
+  # system + rubric are concatenated; stdout is the clean response (progress/stats
+  # go to stderr). Loads fresh each call. It must not share memory with a big ollama
+  # model — that co-load OOM'd the machine once — so this path arms the guard itself.
+  [ -n "$SEE_TMP" ] || SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
+  # safety preflight (adversarial-review fix 2026-09-12): the risky path must not
+  # depend on a human having pre-launched the watchdog. Warn on a big-model co-load,
+  # then ensure the mem-guard backstop is up (idempotent; it is single-instance-locked).
+  if ollama_up; then
+    _big="$(ollama ps 2>/dev/null | awk 'NR>1 && $4=="GB" && $3+0>=8 {print $1}')"
+    [ -n "$_big" ] && echo "see: WARNING — a large ollama model is resident ($_big); running mlx-vlm alongside it can OOM the machine. Free it first: ollama stop $_big" >&2
+  fi
+  if ! pgrep -f "scripts/mem-guard.py" >/dev/null 2>&1; then
+    nohup "$DIR/.venv/bin/python" "$DIR/scripts/mem-guard.py" --threshold-gb 8 --max-runtime 3600 >/dev/null 2>&1 &
+    disown 2>/dev/null || true
+  fi
+  [ -n "$FMT" ] && echo "see: note — the mlx backend does not enforce the JSON schema; .data is best-effort and may be null if the model breaks format" >&2
+  _mlx_max=768; $UI && _mlx_max=1400
+  set +e
+  TEXT="$("$DIR/.venv/bin/python" -m mlx_vlm.generate --model "$MLX_MODEL" \
+      --image "$IMG" --prompt "$SYS
+
+$USER" --max-tokens "$_mlx_max" 2>"$SEE_TMP/mlx.err")"
+  rc=$?
+  set -e
+  # defensive: if a version wraps the answer in ===== separators, keep the last block
+  case "$TEXT" in *"=========="*) TEXT="${TEXT##*==========}" ;; esac
+  TEXT="$(printf '%s' "$TEXT" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  if [ "$rc" -ne 0 ] || [ -z "$TEXT" ]; then
+    emit_error mlx_failed "mlx-vlm read failed: $(head -c 200 "$SEE_TMP/mlx.err" 2>/dev/null)" 10
+  fi
+  MODEL="mlx:$MLX_MODEL"
 else
 set +e
 TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" "$FMT" "${IMG_B:-}" 2>&1 <<'PY'

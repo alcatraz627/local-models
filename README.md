@@ -13,7 +13,7 @@
   <img alt="platform" src="https://img.shields.io/badge/platform-macOS%20·%20Apple%20Silicon-black?logo=apple">
   <img alt="backend" src="https://img.shields.io/badge/backend-Ollama-7c3aed">
   <img alt="privacy" src="https://img.shields.io/badge/privacy-100%25%20local%20·%20zero%20cloud-16a34a">
-  <img alt="verify" src="https://img.shields.io/badge/verify.sh-29%20checks-0ea5e9">
+  <img alt="verify" src="https://img.shields.io/badge/verify.sh-38%20checks-0ea5e9">
 </p>
 
 ---
@@ -24,7 +24,9 @@ This is a set of bare commands (`q`, `see`, `imagine`, `review`, `warm`, `lm …
 local models to work next to a cloud agent. The design bets are simple: **zero idle
 penalty** (nothing stays in RAM unless you pin or lease it), **trust comes from gates,
 not model confidence** (constrained decoding, judges, and verify batteries everywhere),
-and **histories are the API** (every call logs a JSONL line another tool can read).
+**a reasoned disk budget** (local-model storage stays under 150 GB by policy, not by a
+brittle code check), and **histories are the API** (every call logs a JSONL line another
+tool can read).
 
 It grew out of daily agent work, so the tools favor the things agents actually need:
 exact text from screenshots, pass/fail verification of UI claims, judged batch fan-out,
@@ -45,7 +47,7 @@ brew services start ollama        # or: bin/lm-serve installs a tuned LaunchAgen
 # 3. Models (the tiers config.sh expects; ~40 GB total, pull what you need)
 ollama pull gemma4:26b            # big tier: reasoning, UI reads
 ollama pull qwen3.6:35b-a3b       # code tier: review, fleet work
-ollama pull minicpm-v             # vision tier: see
+ollama pull minicpm-v4.6          # vision tier: see (smaller and better at UI structure than minicpm-v)
 ollama create gemma4-e4b-warm -f modelfiles/gemma4-e4b-warm.Modelfile   # the warm companion
 
 # 4. Put the commands on PATH
@@ -53,7 +55,7 @@ echo 'export PATH="$PATH:$HOME/Code/local-models/bin"' >> ~/.zshrc && exec zsh
 
 # 5. Check it works
 lm doctor                         # dependency + server + model health
-./scripts/verify.sh               # the 29-check smoke battery (~1 min)
+./scripts/verify.sh               # the 38-check smoke battery (~1 min)
 ```
 
 Optional extras, each unlocking one capability:
