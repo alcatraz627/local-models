@@ -99,9 +99,11 @@ MODEL="$(resolve_tier "$TIER")"
 WARM_WAS_RESIDENT=false; LEASED=false
 ollama_resident "${WARM_MODEL:-gemma4-e4b-warm}" && WARM_WAS_RESIDENT=true
 if ! ollama_resident "$MODEL"; then
+  lm_step fleet "leasing $MODEL (cold load, may take a while)…"
   "$DIR/bin/warm" on "$MODEL" "$LEASE_TTL" >/dev/null 2>&1 \
     || emit_error load_failed "could not load $MODEL" 11
   LEASED=true
+  lm_step fleet "$MODEL resident · running $INTENT × ${#items[@]}"
 fi
 
 release_lease() {

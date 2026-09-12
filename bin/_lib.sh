@@ -59,6 +59,28 @@ resolve_tier() {
   esac
 }
 
+# Expand a leading ~ / ~/ in a path arg. The shell only expands ~ when it is
+# UNQUOTED, so a quoted "~/shot.png" reaches the tool literal and fails "no such
+# file" — the backslash-escape workaround exists only because quotes suppress the
+# expansion. Every path-taking command runs its file args through this.
+expand_tilde() {
+  case "$1" in
+    "~")   printf '%s\n' "$HOME" ;;
+    "~/"*) printf '%s\n' "$HOME/${1#\~/}" ;;
+    *)     printf '%s\n' "$1" ;;
+  esac
+}
+
+# Terse tagged progress to stderr: "[HH:MM:SS tag] msg". For a human watching a slow
+# call (a cold model load shows nothing for seconds otherwise) and for an agent that
+# opts in. On when stderr is a TTY, or LM_PROGRESS=1 for captured callers (Claude);
+# LM_QUIET=1 forces off. stderr only, so it never pollutes a --json stdout.
+lm_step() {
+  { [ -t 2 ] || [ -n "${LM_PROGRESS:-}" ]; } || return 0
+  [ -n "${LM_QUIET:-}" ] && return 0
+  printf '%s[%s %s]%s %s\n' "${Dm:-}" "$(date +%H:%M:%S)" "$1" "${Rs:-}" "$2" >&2
+}
+
 # ── Ollama server + residency ──
 ollama_up() { curl -s -m 3 "$OLLAMA_HOST/api/version" >/dev/null 2>&1; }
 

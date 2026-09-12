@@ -252,7 +252,7 @@ fi
 DIFF=false; IMG_B=""
 if [ "${positionals[0]}" = "diff" ]; then
   DIFF=true
-  IMG="${positionals[1]:-}"; IMG_B="${positionals[2]:-}"; QUERY="${positionals[*]:3}"
+  IMG="$(expand_tilde "${positionals[1]:-}")"; IMG_B="$(expand_tilde "${positionals[2]:-}")"; QUERY="${positionals[*]:3}"
   { [ -n "$IMG" ] && [ -n "$IMG_B" ]; } || emit_error invalid_args 'diff needs two images: see diff <ref> <candidate> ["focus"]' 2
   { $UI || $OCR || $MENUBAR || $MLX; } && emit_error invalid_args "diff runs on the ollama evidence pipeline — drop --ui/--ocr/--menubar/--mlx" 2
   [ -n "$CROP$REGION" ] && emit_error invalid_args "diff compares whole frames — crop the inputs first if needed" 2
@@ -282,7 +282,7 @@ if [ "${positionals[0]}" = "diff" ]; then
     exit 0
   fi
 else
-  IMG="${positionals[0]}"; QUERY="${positionals[*]:1}"
+  IMG="$(expand_tilde "${positionals[0]}")"; QUERY="${positionals[*]:1}"
 fi
 ORIG_IMG="$IMG"   # what the caller named — meta/history cite this, not the crop temp
 
@@ -552,6 +552,7 @@ elif $MLX; then
   fi
   [ -n "$FMT" ] && echo "see: note — the mlx backend does not enforce the JSON schema; .data is best-effort and may be null if the model breaks format" >&2
   _mlx_max=768; $UI && _mlx_max=1400
+  lm_step mlx "load $MLX_MODEL + read $(basename "$ORIG_IMG") ($($UI && echo ui || echo read), fresh mlx load ~4-8s)"
   set +e
   TEXT="$("$DIR/.venv/bin/python" -m mlx_vlm.generate --model "$MLX_MODEL" \
       --image "$IMG" --prompt "$SYS
@@ -567,6 +568,7 @@ $USER" --max-tokens "$_mlx_max" 2>"$SEE_TMP/mlx.err")"
   fi
   MODEL="mlx:$MLX_MODEL"
 else
+lm_step model "$MODEL · $([ "$KEEP" = "-1" ] && echo resident || echo 'cold load') · read $(basename "$ORIG_IMG")"
 set +e
 TEXT="$(python3 - "$MODEL" "$SYS" "$USER" "$IMG" "$OLLAMA_HOST" "$KEEP" "$FMT" "${IMG_B:-}" 2>&1 <<'PY'
 import sys, json, base64, urllib.request, urllib.error
