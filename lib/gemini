@@ -30,6 +30,8 @@ source "$DIR/config.sh" 2>/dev/null || true
 source "$DIR/bin/_lib.sh"
 
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash}"
+GEMINI_MODELS="${GEMINI_MODELS:-gemini-3.8-flash gemini-3.8-pro gemini-3.5-flash gemini-3.5-pro}"
+GEMINI_DEFAULT="$GEMINI_MODEL"   # the config/env default, before any -m override — shown in the bad-model error
 LOG="$DIR/logs/gem-history.jsonl"
 SESS_DIR="$DIR/logs/gemini-sessions"
 # Timeout is workload-aware and set AFTER the verb is known (agentic web lookups
@@ -56,13 +58,15 @@ show_help() {
   _cmd 'lm gemini digest <dir|files...>' 'one-shot corpus digest -> JSON {claims[],summary}, each claim grep-verified against the corpus'
   _cmd 'lm gemini research "question"'   'web-shaped lookup -> JSON with null-when-unsure; long default timeout'
   _cmd 'lm gemini history [N] · show N' 'past calls, numbered (-1 = latest)'
+  _cmd 'lm gemini models'            'list the model pick-list and which is the default'
   _sec OPTIONS
+  _opt '-m, --model M'  'gemini model for this call (default: $GEMINI_MODEL; run `lm gemini models` to list, set the default in config.sh)'
   _opt '--json'         'machine mode: {ok, text, model, ms, session} on stdout'
   _opt '--session NAME' 'explicit session (default: the project dir name; sessions are per-project)'
   _opt '--timeout N'    'wall-clock cap in seconds (defaults: oneshot/ask 300 · ingest/digest/research 420; one auto-retry at 1.5x on timeout)'
   _opt '--fallback-local' 'if gemini is unavailable, answer via the local big tier (q -m big) instead of failing; reply is marked local'
   _sec NOTES
-  printf '  %smodel pinned %s · read-only (--approval-mode plan) · never call the gemini binary directly%s\n' "$Dm" "$GEMINI_MODEL" "$Rs"
+  printf '  %smodel %s (override -m, list: lm gemini models) · read-only (--approval-mode plan) · never call the gemini binary directly%s\n' "$Dm" "$GEMINI_MODEL" "$Rs"
   printf '  %sif unavailable (auth/tier): structured gemini_unavailable — FLAG to the user, fall back to claude/lm%s\n' "$Dm" "$Rs"
 }
 
@@ -107,6 +111,7 @@ while [ $# -gt 0 ]; do
     --session)   SESSION="$2"; shift 2 ;;
     --timeout)   TIMEOUT="$2"; shift 2 ;;
     --fallback-local) FALLBACK_LOCAL=true; shift ;;
+    -m|--model)  GEMINI_MODEL="$2"; shift 2 ;;
     *)           positionals+=("$1"); shift ;;
   esac
 done
@@ -118,7 +123,24 @@ case "$CMD" in
              '"\(.ts[11:19])  \(.kind)  \(.ms)ms  \((.prompt // "") | gsub("\\s+"; " ") | .[0:50])"'; exit 0 ;;
   show)    jsonl_entry "$LOG" "${positionals[1]:-}" \
              '"# lm gemini \(.kind)  ·  \(.ts)  ·  \(.model)\(if .session then "  ·  session: " + .session else "" end)\n\n\(.response)"'; exit $? ;;
+  models)  if [ "$MODE" = json ]; then
+             jq -cn --arg d "$GEMINI_DEFAULT" --arg l "$GEMINI_MODELS" '{ok:true, default:$d, models:($l|split(" "))}'
+           else
+             printf 'gemini models (* = default):\n'
+             for _gm in $GEMINI_MODELS; do
+               [ "$_gm" = "$GEMINI_DEFAULT" ] && printf '  %s* %s%s\n' "$C" "$_gm" "$Rs" || printf '    %s\n' "$_gm"
+             done
+             printf '%spick per call: lm gemini -m <model> · set the default: GEMINI_MODEL in config.sh · extend the list: GEMINI_MODELS%s\n' "$Dm" "$Rs"
+           fi
+           exit 0 ;;
   "")      show_help; exit 0 ;;
+esac
+
+# Validate the model against the pick-list EARLY — a typo errors here instead of
+# burning a gemini call. Extend GEMINI_MODELS in config.sh for a model your install has.
+case " $GEMINI_MODELS " in
+  *" $GEMINI_MODEL "*) : ;;
+  *) emit_error bad_model "unknown gemini model '$GEMINI_MODEL' — pick one of: $GEMINI_MODELS (default: $GEMINI_DEFAULT). Add it to GEMINI_MODELS in config.sh if your gemini-cli supports it." 2 ;;
 esac
 
 command -v gemini >/dev/null 2>&1 \
