@@ -84,7 +84,7 @@ show_help() {
   _sec DEFAULTS
   printf '  %smacOS/Apple-Silicon assumed; Linux only if you say "linux server/container".%s\n' "$Dm" "$Rs"
   printf '  %sthinking off · deterministic (temp 0) · never asks · logged to logs/q-history.jsonl%s\n' "$Dm" "$Rs"
-  printf '  %s--ctx/--file extracts text locally: PDF (poppler), Word/RTF/HTML (textutil),%s\n' "$Dm" "$Rs"
+  printf '  %s--ctx/--file extracts text locally: PDF (poppler), Word/RTF/HTML (textutil), xlsx/xls (zconvert→csv),%s\n' "$Dm" "$Rs"
   printf '  %stext/csv/json/code as-is; binaries refused. Truncated at --max-ctx chars.%s\n' "$Dm" "$Rs"
   _sec CONFIGURATION
   printf '  %s%s/config.sh%s %s(WARM_MODEL, keep-alive)%s\n' "$C" "$DIR" "$Rs" "$Dm" "$Rs"
@@ -388,6 +388,19 @@ elif [ -n "$CTX_FILE" ]; then
     doc|docx|rtf|odt|html|htm)
       CTX="$(textutil -convert txt -stdout "$CTX_FILE" 2>/dev/null)" \
         || emit_error ctx_unsupported "could not extract text from .$ext file" 12 ;;
+    xlsx|xls|xlsm)
+      # A spreadsheet is a zip, so the raw bytes read as binary and used to be
+      # refused. Convert to CSV locally (zconvert) so the model sees real rows.
+      command -v zconvert >/dev/null \
+        || emit_error ctx_unsupported "reading a spreadsheet needs zconvert (the tabular converter)" 12
+      _xdir="$(mktemp -d "${TMPDIR:-/tmp}/q-xlsx-XXXXXX")"
+      if zconvert "$CTX_FILE" "$_xdir/sheet.csv" >/dev/null 2>&1; then
+        CTX="$(cat "$_xdir/sheet.csv" 2>/dev/null)"
+      else
+        rm -rf "$_xdir" 2>/dev/null
+        emit_error ctx_unsupported "zconvert could not read $CTX_FILE to CSV (a multi-sheet book may need one sheet exported)" 12
+      fi
+      rm -rf "$_xdir" 2>/dev/null ;;
     *)
       # Refuse binaries rather than feed garbage. `file --mime-encoding` is the
       # right tool — a NUL-only sniff misses NUL-free binaries (200 random bytes
