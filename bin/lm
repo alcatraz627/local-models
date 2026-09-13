@@ -32,6 +32,7 @@ overview() {
   printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %ssmoke-check the whole toolkit (server, models, venv, PATH)%s\n' "$C" 'lm doctor' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %smerged q + imagine history, one timeline%s\n' "$C" 'lm timeline [N]' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %scolored, comprehensive showcase of the whole suite%s\n' "$C" 'lm examples' "$Rs" "$Dm" "$Rs"
   printf '\n%sEXAMPLES%s\n' "$Y" "$Rs"
   printf '  %s$%s lm q cmd "free up port 3001"            %s# one macOS command%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
   printf '  %s$%s lm q summarize --file report.pdf        %s# read a local file (no cloud)%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
@@ -45,6 +46,82 @@ overview() {
   printf '  per-command help (every flag + examples):  %sq -h%s · %simagine -h%s · %swarm -h%s\n' "$C" "$Rs" "$C" "$Rs" "$C" "$Rs"
   printf '  the full menu with examples:  %sglow ~/Code/local-models/docs/CAPABILITIES.md%s\n' "$C" "$Rs"
   printf '  %sdocs: ~/Code/local-models/docs/  (STATE · CAPABILITIES · q-spec · 03-tool-orchestration-decision · research)%s\n' "$Dm" "$Rs"
+}
+
+# lm examples — a colored, comprehensive showcase of the suite, grouped by task.
+# Everything here is a real command you can paste; all local, $0, offline.
+examples_table() {
+  _r() { printf '  %s%-53s%s %s%s%s\n' "$C" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
+  _s() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
+  printf '%s%slm examples%s %s— showcase across the suite · all on this machine · $0 · offline%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+
+  _s 'ASK & FILE Q&A — q'
+  _r 'q "explain this stack trace: <paste>"'        'quick answer on the warm model'
+  _r 'q cmd "free up port 3001"'                    'one macOS command, no prose'
+  _r 'q --big "reason through this tradeoff"'        'heavier MoE, on demand'
+  _r 'q --code "write a retry wrapper" --ctx api.ts' 'code tier grounded in a file'
+  _r 'git diff | q commit'                          'commit message from the diff'
+  _r 'q summarize --file report.pdf'                'PDF/Word/HTML extracted locally'
+  _r 'q --ctx sales.xlsx qa "which rows are outliers?"' 'spreadsheet Q&A (xlsx→csv)'
+  _r 'q --format SCHEMA "classify: …"'              'constrained decoding → parsed .data'
+
+  _s 'INPUTS & PIPING — get data in (stdin · clipboard · files · screen · web · tools)'
+  _r 'git diff | q commit'                          'pipe stdin straight into an intent'
+  _r 'pbpaste | q "tighten this copy"'              'clipboard text as input (macOS)'
+  _r 'q --ctx - qa "who signs off?" < contract.md'  'a file as context via stdin'
+  _r 'q summarize --file report.pdf'                'a file — PDF/Word/HTML/xlsx auto-extracted'
+  _r 'cat run.log | lm gemini "what failed and why?"' 'piped stdin becomes gemini context'
+  _r 'kubectl get pods -o json | q --ctx - qa "any crashloops?"' 'a tool'\''s JSON output as context'
+  _r 'screencapture -i /tmp/s.png && see /tmp/s.png --ui' 'grab a screen region, then read it'
+  _r 'see --menubar "which app is focused?"'        'the live macOS menu-bar strip'
+  _r 'q --web "current node LTS version?"'          'search the web, cited answer'
+  _r 'lm gemini research "state of X" --json'       'web-shaped research, null-when-unsure'
+  _r 'lm fleet review "src/**/*.ts"'                'every file matching a glob'
+  _r 'rg -l TODO | lm fleet qa --items-from - --prompt "what is left?"' 'files matching a filter (stdin list)'
+  _r 'lm gemini ingest docs/*.md src/*.py'          'many files across dirs into one session'
+  _r 'lm gemini ingest-repo .'                      'pack a whole repo (gitignore-aware)'
+
+  _s 'VISION — see (read a screenshot into text)'
+  _r 'see shot.png "what state is the toggle in?"'   'grounded read (minicpm-v4.6)'
+  _r 'see dashboard.png --ui'                        'UI inventory (Qwen3-VL by default)'
+  _r 'see modal.png --mlx "is the dropdown open?"'   'high-accuracy mlx structure read'
+  _r 'see receipt.png --ocr'                         'exact text, Apple Vision, ~300ms'
+  _r 'see shot.png --region top --ui'                'crop a region, then read it'
+  _r 'see --menubar "which app is focused?"'         'grab + read the live top strip'
+  _r 'see "~/Desktop/a shot.png" --ui'               'quoted spaced / ~ paths resolve'
+  _r 'UI_DEFAULT_MLX=0 see shot.png --ui'            'revert --ui to the ollama tier'
+
+  _s 'COMPARE — see diff (does B faithfully imitate A?)'
+  _r 'see diff before.png after.png'                 '$0 evidence pack + one judged read'
+  _r 'see diff a.png b.png --only E5 --grid 32'      'refine one extractor, no model call'
+
+  _s 'BATCH FAN-OUT — lm fleet (one intent × N files, judged)'
+  _r 'lm fleet review src/*.sh'                      'audit every script'
+  _r 'lm fleet qa --prompt "find brand names" *.xlsx -m sweep' 'sweep sheets on the grunt tier'
+  _r 'lm fleet summarize docs/*.md -m sweep -j 4'    'granite4:tiny-h, ~1.5x, judge-gated'
+
+  _s 'GEMINI LANE — lm gemini (huge context, wrapper-only)'
+  _r 'lm gemini models'                              'the model pick-list (★ = default)'
+  _r 'lm gemini -m gemini-3.8-flash "…"'             'pick a model for one call'
+  _r 'lm gemini ingest-repo . && lm gemini ask "where is retry handled?"' 'whole-repo Q&A'
+  _r 'lm gemini research "current state of X" --json' 'web-shaped, null-when-unsure'
+
+  _s 'IMAGE GEN — imagine (Flux/Qwen on the GPU)'
+  _r 'imagine --enhance "a cozy reading nook"'       'LLM-expanded prompt'
+  _r 'imagine refine 12 "warmer light"'              'seed-locked iterate on gen 12'
+
+  _s 'UI VERIFY & REPO'
+  _r 'lm ui-verify shot.png "the CTA is disabled"'   'strict pass/fail/unsure gate'
+  _r 'lm ui-verify --app Finder "there is a Trash item"' 'judge the live accessibility tree'
+  _r 'lm index find fleet_worker'                    'where is X, no model call'
+
+  _s 'STATUS, PROGRESS & OPS'
+  _r 'lm status   ·   lm models   ·   lm doctor'     'running / installed / healthy'
+  _r 'LM_PROGRESS=1 see --mlx shot.png'              'show load/step progress lines'
+  _r '.venv/bin/python scripts/mem-guard.py --once'  'memory pressure + would-kill target'
+  _r 'lm timeline 30'                                'merged history: q · see · imagine · fleet'
+
+  printf '\n%severy command has -h · full menu: glow ~/Code/local-models/docs/CAPABILITIES.md%s\n' "$Dm" "$Rs"
 }
 
 # Machine-readable status for GUI hosts (better-file-browser native host).
@@ -203,5 +280,6 @@ case "${1:-}" in
   models)   shift; lm_models "${1:-}" ;;
   doctor)   lm_doctor ;;
   timeline) shift; lm_timeline "${1:-20}" ;;
-  *) echo "lm: unknown '$1' — try: lm · lm q · lm imagine · lm warm · lm status · lm models · lm doctor · lm timeline"; exit 1 ;;
+  examples) examples_table ;;
+  *) echo "lm: unknown '$1' — try: lm · lm q · lm imagine · lm warm · lm status · lm models · lm doctor · lm timeline · lm examples"; exit 1 ;;
 esac
