@@ -13,7 +13,9 @@ model survey (added minicpm-v4.6, granite4:tiny-h, Qwen3-VL-8B via mlx-vlm; evic
 
 ## Entrypoint
 
-`lm` (on PATH) is the front door — `lm` for the overview, `lm status` for server/warm/models.
+`lm` (on PATH) is the front door. `lm` prints the overview, `lm examples` a colored
+comprehensive showcase (incl. INPUTS & PIPING: stdin/clipboard/file/screenshot/web/glob),
+`lm status` the server/warm/models view.
 All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bin/`).
 
 | Command | What | Help |

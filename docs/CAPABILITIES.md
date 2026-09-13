@@ -259,6 +259,7 @@ lm status                      # server · resident · on-disk at a glance
 lm status --json               # <150ms machine probe: warm/latency_class/models
 lm models                      # ● resident, tier labels, sizes
 lm doctor                      # 11-point smoke check of the whole toolkit
+lm examples                    # colored, comprehensive showcase: every capability, grouped, paste-ready
 ```
 
 ## 9 · Editor & agent integration
