@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lm — single entrypoint for the local-models toolkit (everything runs on your machine).
+# lm — single entrypoint for local models and the connected Gemini lane.
 #
 #   lm                 overview (this screen)
 #   lm q ...           quick local LLM   (= q)
@@ -15,14 +15,14 @@ source "$DIR/config.sh" 2>/dev/null || true   # WARM_MODEL etc — doctor checks
 source "$BIN/_lib.sh"
 
 overview() {
-  printf '%s%slm%s %s— local-models toolkit (all on your machine, no cloud)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  printf '%s%slm%s %s— local-model toolkit with an optional connected Gemini lane%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   printf '\n%sCOMMANDS%s\n' "$Y" "$Rs"
   printf '  %s%-20s%s %squick local LLM — answers, macOS cmds, titles, file Q&A; size tiers%s\n' "$C" 'lm q "..."' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %slocal image generation (Flux/Qwen on the GPU)%s\n' "$C" 'lm imagine "..."' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sread an image/screenshot into text (local VLM)%s\n' "$C" 'lm see <img>' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sreview a PR / files / folder / diff (local coder)%s\n' "$C" 'lm review <x>' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sjudge if a local model is trustworthy — reliability/judgment eval%s\n' "$C" 'lm probe <model>' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %sfan one intent across N files, judged (batch runner)%s\n' "$C" 'lm fleet <intent> …' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sfan one intent across N files (envelope gate; optional content judge)%s\n' "$C" 'lm fleet <intent> …' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sopencode on the local code model — auto pin/unpin around the session%s\n' "$C" 'lm opencode [args]' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %srepo symbol map — build once, "where is X" instantly%s\n' "$C" 'lm index [find X]' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %sthe gemini lane — huge-context ingestion, ideation (wrapper-only)%s\n' "$C" 'lm gemini "..."' "$Rs" "$Dm" "$Rs"
@@ -33,6 +33,8 @@ overview() {
   printf '  %s%-20s%s %ssmoke-check the whole toolkit (server, models, venv, PATH)%s\n' "$C" 'lm doctor' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %smerged q + imagine history, one timeline%s\n' "$C" 'lm timeline [N]' "$Rs" "$Dm" "$Rs"
   printf '  %s%-20s%s %scolored, comprehensive showcase of the whole suite%s\n' "$C" 'lm examples' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %sshort route from a job to the right command%s\n' "$C" 'lm help <job>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-20s%s %srun a fixed behavior and latency fixture set%s\n' "$C" 'lm bench <set>' "$Rs" "$Dm" "$Rs"
   printf '\n%sEXAMPLES%s\n' "$Y" "$Rs"
   printf '  %s$%s lm q cmd "free up port 3001"            %s# one macOS command%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
   printf '  %s$%s lm q summarize --file report.pdf        %s# read a local file (no cloud)%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
@@ -48,12 +50,76 @@ overview() {
   printf '  %sdocs: ~/Code/local-models/docs/  (STATE · CAPABILITIES · q-spec · 03-tool-orchestration-decision · research)%s\n' "$Dm" "$Rs"
 }
 
+help_job() {
+  help_title() { printf '%s%slm help %s%s %s— %s%s\n' "$Bd" "$C" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
+  help_section() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
+  help_example() { printf '  %s%-53s%s %s%s%s\n' "$C" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
+  help_note() { printf '\n  %s%s%s\n' "$Dm" "$1" "$Rs"; }
+  case "${1:-}" in
+    "")
+      help_title '<job>' 'pick a task and get a short route'
+      help_section 'JOBS'
+      help_example 'lm help table' 'exact CSV, TSV, JSON, or XLSX profile'
+      help_example 'lm help document' 'file extraction and grounded Q&A'
+      help_example 'lm help screenshot' 'OCR, UI inventory, and claim checks'
+      help_example 'lm help compare' 'visual difference evidence'
+      help_example 'lm help batch' 'one question across independent files'
+      help_example 'lm help retrieval' 'exact search, then local vectors'
+      help_example 'lm help research' 'connected Gemini broad sweep'
+      help_note 'For the full pasteable menu: lm examples' ;;
+    table|describe-data)
+      help_title 'table' 'exact rows, missing values, and numeric ranges'
+      help_section 'START'
+      help_example 'q describe-data --ctx data.csv --json' 'profile facts without model arithmetic'
+      help_section 'XLSX'
+      help_example 'q --preflight --ctx data.xlsx --json' 'inspect workbook sheets first'
+      help_example 'q describe-data --ctx data.xlsx --sheet Summary --json' 'name a sheet when several exist' ;;
+    document|qa)
+      help_title 'document' 'inspect extraction, then ask from the source'
+      help_section 'START'
+      help_example 'q --preflight --ctx report.pdf --json' 'check extraction and context size'
+      help_example 'q qa --ctx report.pdf "What is the decision?"' 'ask a source-grounded question'
+      help_note 'Check consequential model claims against the source.' ;;
+    screenshot|ui)
+      help_title 'screenshot' 'read text, structure, and enumerable UI state'
+      help_section 'START'
+      help_example 'see shot.png --ocr' 'exact labels through Apple Vision'
+      help_example 'see shot.png --ui --json' 'structured UI inventory'
+      help_example 'lm ui-verify shot.png "Save is disabled" --json' 'check a specific claim'
+      help_note 'Inspect the image yourself for visual judgment.' ;;
+    compare)
+      help_title 'compare' 'measure a reference pair'
+      help_section 'START'
+      help_example 'see diff before.png after.png --no-read --json' 'collect differences without a model read'
+      help_note 'Judge which visible differences matter yourself.' ;;
+    batch|fleet)
+      help_title 'batch' 'ask one question of independent files'
+      help_section 'START'
+      help_example 'lm fleet qa --prompt "who owns this?" docs/*.md' 'fan out across files'
+      help_example 'lm fleet sample <run-dir>' 'inspect a source and answer sample'
+      help_note 'A default pass checks only a nonempty response; add a task-specific --judge.' ;;
+    retrieval|rag)
+      help_title 'retrieval' 'search exact text first, then synonyms'
+      help_section 'START'
+      help_example 'rg -n "term" docs/' 'find exact names and paths'
+      help_example 'lm rag index docs/' 'build a local vector index'
+      help_example 'lm rag search "concept"' 'retrieve related passages' ;;
+    research|gemini)
+      help_title 'research' 'connected broad-context sweep'
+      help_section 'START'
+      help_example 'lm gemini ingest-repo .' 'give Gemini a bounded repo corpus'
+      help_example 'lm gemini ask "List source paths and exact evidence for each candidate"' 'request checkable leads'
+      help_note 'Gemini is an external service. Supply an output contract and sample-check its leads.' ;;
+    *) printf 'unknown job: %s\n' "$1" >&2; return 2 ;;
+  esac
+}
+
 # lm examples — a colored, comprehensive showcase of the suite, grouped by task.
-# Everything here is a real command you can paste; all local, $0, offline.
+# Everything here is a real command you can paste; connected examples are labeled.
 examples_table() {
   _r() { printf '  %s%-53s%s %s%s%s\n' "$C" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
   _s() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
-  printf '%s%slm examples%s %s— showcase across the suite · all on this machine · $0 · offline%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  printf '%s%slm examples%s %s— local/offline tools plus connected web and Gemini lanes%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
 
   _s 'ASK & FILE Q&A — q'
   _r 'q "explain this stack trace: <paste>"'        'quick answer on the warm model'
@@ -63,23 +129,25 @@ examples_table() {
   _r 'git diff | q commit'                          'commit message from the diff'
   _r 'q summarize --file report.pdf'                'PDF/Word/HTML extracted locally'
   _r 'q --ctx sales.xlsx qa "which rows are outliers?"' 'spreadsheet Q&A (xlsx→csv)'
+  _r 'q describe-data --ctx sales.xlsx --json'     'exact table counts and numeric ranges'
+  _r 'q --preflight --ctx sales.xlsx --json'       'inspect sheets and context before a call'
   _r 'q --format SCHEMA "classify: …"'              'constrained decoding → parsed .data'
 
-  _s 'INPUTS & PIPING — get data in (stdin · clipboard · files · screen · web · tools)'
+  _s 'INPUTS & PIPING — local, except labeled connected calls'
   _r 'git diff | q commit'                          'pipe stdin straight into an intent'
   _r 'pbpaste | q "tighten this copy"'              'clipboard text as input (macOS)'
   _r 'q --ctx - qa "who signs off?" < contract.md'  'a file as context via stdin'
   _r 'q summarize --file report.pdf'                'a file — PDF/Word/HTML/xlsx auto-extracted'
-  _r 'cat run.log | lm gemini "what failed and why?"' 'piped stdin becomes gemini context'
+  _r 'cat run.log | lm gemini "what failed and why?"' 'connected Gemini: piped stdin becomes context'
   _r 'kubectl get pods -o json | q --ctx - qa "any crashloops?"' 'a tool'\''s JSON output as context'
   _r 'screencapture -i /tmp/s.png && see /tmp/s.png --ui' 'grab a screen region, then read it'
   _r 'see --menubar "which app is focused?"'        'the live macOS menu-bar strip'
-  _r 'q --web "current node LTS version?"'          'search the web, cited answer'
-  _r 'lm gemini research "state of X" --json'       'web-shaped research, null-when-unsure'
+  _r 'q --web "current node LTS version?"'          'connected web search, cited answer'
+  _r 'lm gemini research "state of X" --json'       'connected Gemini research, null-when-unsure'
   _r 'lm fleet review "src/**/*.ts"'                'every file matching a glob'
   _r 'rg -l TODO | lm fleet qa --items-from - --prompt "what is left?"' 'files matching a filter (stdin list)'
-  _r 'lm gemini ingest docs/*.md src/*.py'          'many files across dirs into one session'
-  _r 'lm gemini ingest-repo .'                      'pack a whole repo (gitignore-aware)'
+  _r 'lm gemini ingest docs/*.md src/*.py'          'connected Gemini: many files into one session'
+  _r 'lm gemini ingest-repo .'                      'connected Gemini: pack repo, gitignore-aware'
 
   _s 'VISION — see (read a screenshot into text)'
   _r 'see shot.png "what state is the toggle in?"'   'grounded read (minicpm-v4.6)'
@@ -95,12 +163,14 @@ examples_table() {
   _r 'see diff before.png after.png'                 '$0 evidence pack + one judged read'
   _r 'see diff a.png b.png --only E5 --grid 32'      'refine one extractor, no model call'
 
-  _s 'BATCH FAN-OUT — lm fleet (one intent × N files, judged)'
+  _s 'BATCH FAN-OUT — lm fleet (envelope gate; --judge checks content)'
   _r 'lm fleet review src/*.sh'                      'audit every script'
   _r 'lm fleet qa --prompt "find brand names" *.xlsx -m sweep' 'sweep sheets on the grunt tier'
-  _r 'lm fleet summarize docs/*.md -m sweep -j 4'    'granite4:tiny-h, ~1.5x, judge-gated'
+  _r 'lm fleet summarize docs/*.md -m sweep -j 4'    'granite4:tiny-h; verify the summaries'
+  _r 'lm fleet sample outputs/fleet/<run> --count 5' 'human-check a source/answer sample'
+  _r 'lm fleet audit outputs/fleet/<run>'            'separate envelope, judge, and human gates'
 
-  _s 'GEMINI LANE — lm gemini (huge context, wrapper-only)'
+  _s 'CONNECTED GEMINI — external service, wrapper-only'
   _r 'lm gemini models'                              'the model pick-list (★ = default)'
   _r 'lm gemini -m gemini-3.8-flash "…"'             'pick a model for one call'
   _r 'lm gemini ingest-repo . && lm gemini ask "where is retry handled?"' 'whole-repo Q&A'
@@ -114,12 +184,14 @@ examples_table() {
   _r 'lm ui-verify shot.png "the CTA is disabled"'   'strict pass/fail/unsure gate'
   _r 'lm ui-verify --app Finder "there is a Trash item"' 'judge the live accessibility tree'
   _r 'lm index find fleet_worker'                    'where is X, no model call'
+  _r 'lm rag index docs/ && lm rag search "concept"' 'vector retrieval when exact search misses'
 
   _s 'STATUS, PROGRESS & OPS'
   _r 'lm status   ·   lm models   ·   lm doctor'     'running / installed / healthy'
   _r 'LM_PROGRESS=1 see --mlx shot.png'              'show load/step progress lines'
   _r '.venv/bin/python scripts/mem-guard.py --once'  'memory pressure + would-kill target'
   _r 'lm timeline 30'                                'merged history: q · see · imagine · fleet'
+  _r 'lm bench quick'                                'fixed correctness, latency, disk workload'
 
   printf '\n%severy command has -h · full menu: glow ~/Code/local-models/docs/CAPABILITIES.md%s\n' "$Dm" "$Rs"
 }
@@ -247,7 +319,8 @@ lm_timeline() {
 }
 
 case "${1:-}" in
-  ''|-h|--help|help) overview ;;
+  ''|-h|--help) overview ;;
+  help) shift; help_job "${1:-}" ;;
   q)        shift; exec "$BIN/q" "$@" ;;
   imagine)  shift; exec "$BIN/imagine" "$@" ;;
   see)      shift; exec "$BIN/see" "$@" ;;
@@ -258,6 +331,7 @@ case "${1:-}" in
   gemini)   shift; exec "$DIR/lib/gemini" "$@" ;;
   ui-verify) shift; exec "$DIR/lib/ui-verify" "$@" ;;
   rag)      shift; exec "$DIR/lib/rag" "$@" ;;
+  bench)    shift; exec python3 "$DIR/scripts/bench.py" "$@" ;;
   opencode)
     # Run opencode against the local code tier without paying the no-idle tax:
     # lease the model for the session (bounded — self-heals if we die hard),

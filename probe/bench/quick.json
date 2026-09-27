@@ -1,0 +1,22 @@
+{
+  "name": "quick",
+  "description": "Small, fixed smoke and latency set; process RSS excludes the Ollama server.",
+  "cases": [
+    {
+      "name": "table-profile",
+      "argv": ["bin/q", "describe-data", "--ctx", "probe/fixtures/table-audit.csv", "--json"],
+      "checks": {"ok": true, "data.rows": 3, "data.fields.quantity.min": "1", "data.fields.price.missing": 1}
+    },
+    {
+      "name": "short-answer",
+      "argv": ["bin/q", "--json", "--timeout", "60", "Reply with one word: ok"],
+      "checks": {"ok": true},
+      "text_regex": "(?i)\\s*ok[.!]?\\s*"
+    },
+    {
+      "name": "visual-evidence",
+      "argv": ["bin/see", "diff", "probe/fixtures/f2-a.png", "probe/fixtures/f2-b.png", "--no-read", "--json"],
+      "checks": {"ok": true, "evidence.meta.modality": "iconlike", "evidence.meta.comparable": "good", "evidence.scores.dhash": 6, "evidence.scores.grid_delta_pct": 56.2}
+    }
+  ]
+}

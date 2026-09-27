@@ -57,6 +57,7 @@ show_help() {
   _ex 'git diff | q commit'                  '# commit message from the diff'
   _ex 'q summarize --file report.pdf'        '# PDF/Word/etc extracted locally'
   _ex 'q describe-data --file data.csv'      '# schema + observations'
+  _ex 'q --preflight --file data.xlsx --json' '# extracted size and workbook sheets, no model call'
   _ex 'q --json --ctx - qa "who signs off?" < doc.md'  '# machine mode'
   _ex 'q --think "harder reasoning task"'    '# show the thinking trace'
   _ex 'q -m qwen2.5-coder:3b cmd "..."'      '# swap model per call'
@@ -76,6 +77,9 @@ show_help() {
   _opt '--glow'         'render the reply through glow (buffers output; TTY-only, no-op without glow)'
   _opt '--ctx, --file FILE | -' 'context document from a file or stdin (- = stdin)'
   _opt '--ctx-name S'   "the document's display name (framing hint)"
+  _opt '--sheet NAME|N' 'XLSX sheet to read (1-based number or name; required for multi-sheet describe-data)'
+  _opt '--preflight'    'inspect extracted input, context size, and sheet selection without a model call'
+  _opt '--prose'        'describe-data only: add optional model interpretation after exact profile'
   _opt '--max-ctx N'    'truncate context to N chars (default 16000)'
   _opt '--timeout S'    'wall-clock cap; structured timeout error after'
   _opt '--intent X'     'intent as a flag (same set as the positional token)'
@@ -84,8 +88,8 @@ show_help() {
   _sec DEFAULTS
   printf '  %smacOS/Apple-Silicon assumed; Linux only if you say "linux server/container".%s\n' "$Dm" "$Rs"
   printf '  %sthinking off · deterministic (temp 0) · never asks · logged to logs/q-history.jsonl%s\n' "$Dm" "$Rs"
-  printf '  %s--ctx/--file extracts text locally: PDF (poppler), Word/RTF/HTML (textutil), xlsx/xls (zconvert→csv),%s\n' "$Dm" "$Rs"
-  printf '  %stext/csv/json/code as-is; binaries refused. Truncated at --max-ctx chars.%s\n' "$Dm" "$Rs"
+  printf '  %s--ctx/--file extracts text locally: PDF (poppler), Word/RTF/HTML (textutil), xlsx (zconvert→csv),%s\n' "$Dm" "$Rs"
+  printf '  %stext/csv/json/code as-is; binaries refused. Large tables fail rather than truncate.%s\n' "$Dm" "$Rs"
   _sec CONFIGURATION
   printf '  %s%s/config.sh%s %s(WARM_MODEL, keep-alive)%s\n' "$C" "$DIR" "$Rs" "$Dm" "$Rs"
 }
@@ -124,6 +128,7 @@ INTENT_DIR="$DIR/intents"
 intent_exists()    { [ -f "$INTENT_DIR/$1.toml" ]; }
 intent_sys()       { yq -p toml -r '.system_prompt // ""' "$INTENT_DIR/$1.toml" 2>/dev/null; }
 intent_needs_ctx() { [ "$(yq -p toml -r '.needs_ctx // false' "$INTENT_DIR/$1.toml" 2>/dev/null)" = true ]; }
+intent_handler()   { yq -p toml -r '.handler // "model"' "$INTENT_DIR/$1.toml" 2>/dev/null; }
 
 MODEL="$WARM_MODEL"
 THINK=false
@@ -131,6 +136,7 @@ INTENT=ask
 RAW=false
 MODE=text          # text (human) | json (one object) | stream (NDJSON)
 CTX_FILE=""; CTX_NAME=""; MAX_CTX=16000; TIMEOUT=0; FORMAT_FILE=""; GLOW=false
+SHEET=""; PREFLIGHT=false; PROSE=false
 CONT=false; CONT_N=""; USER_MODEL=false; USER_INTENT=false
 STATS=true         # gray token line at the end (text mode); --no-stats mutes
 WEB=false          # --web: search + feed results as context (conductor fetches)
@@ -154,6 +160,9 @@ while [ $# -gt 0 ]; do
     --glow)     GLOW=true; shift ;;
     --ctx|--file) CTX_FILE="$2"; shift 2 ;;
     --ctx-name) CTX_NAME="$2"; shift 2 ;;
+    --sheet)    SHEET="$2"; shift 2 ;;
+    --preflight) PREFLIGHT=true; shift ;;
+    --prose) PROSE=true; shift ;;
     --max-ctx)  MAX_CTX="$2"; shift 2 ;;
     --timeout)  TIMEOUT="$2"; shift 2 ;;
     --intent)   INTENT="$2"; USER_INTENT=true; shift 2 ;;
@@ -248,8 +257,9 @@ if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
       set -f
       for w in $RAW_PROMPT; do
         w_c="${w%%[,.;:!?\"\')]}"
-        case "$w_c" in
-          ''|?|??|the|and|check|latest|local|online|tell|have|one|version|not|now|are|was|what|which|with|from|test|time|man|cat|find|open) continue ;;
+        w_lc="$(printf '%s' "$w_c" | tr 'A-Z' 'a-z')"
+        case "$w_lc" in
+          ''|?|??|the|and|check|latest|local|online|tell|have|one|version|not|now|are|was|what|which|with|from|test|time|man|cat|find|open|of|is|installed|on|this|mac) continue ;;
         esac
         if command -v "$w_c" >/dev/null 2>&1; then p_probe="$w_c --version"; break; fi
       done
@@ -278,7 +288,7 @@ if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
       probe_cmd="${p_probe%% *}"; probe_arg="${p_probe#* }"; [ "$probe_arg" = "$p_probe" ] && probe_arg=""
       if command -v "$probe_cmd" >/dev/null 2>&1; then
         # shellcheck disable=SC2086 — probe_arg is one validated verb, not user input
-        PROBE_OUT="$(perl -e 'my $p=fork; if($p==0){setpgrp(0,0); exec(@ARGV) or exit 127} local $SIG{ALRM}=sub{kill "KILL",-$p}; alarm 5; waitpid($p,0)' \
+        PROBE_OUT="$(perl -e 'my $p=fork; if($p==0){setpgrp(0,0); exec(@ARGV) or exit 127} local $SIG{ALRM}=sub{kill "KILL",-$p}; alarm 5; waitpid($p,0); exit(($? & 127) ? 124 : ($? >> 8))' \
                      "$probe_cmd" $probe_arg 2>&1 | head -3)" || PROBE_OUT=""
         if [ -n "$PROBE_OUT" ]; then
           QUERY="$QUERY
@@ -355,6 +365,38 @@ $PROBE_OUT
   fi
 fi
 
+# Numeric table description uses a parser for facts, not a model for arithmetic.
+# Run before the generic context cap: a row count from a prefix is a false fact.
+if [ "$(intent_handler "$INTENT")" = tabular-profile ] && ! $PREFLIGHT; then
+  [ -z "$QUERY" ] || emit_error invalid_args "describe-data is a deterministic table profile; use qa --ctx for a custom question" 2
+  [ -z "$FORMAT_FILE" ] || emit_error invalid_args "describe-data returns a fixed .data profile; --format is for model intents" 2
+  if [ -z "$CTX_FILE" ]; then
+    [ -t 0 ] && emit_error ctx_required "describe-data needs --ctx FILE or piped CSV/TSV/JSON" 2
+    CTX_FILE=-
+  fi
+  profile_args=(--input "$CTX_FILE" --mode "$MODE" --log "$LOG")
+  [ -n "$SHEET" ] && profile_args+=(--sheet "$SHEET")
+  if $PROSE; then
+    [ "$MODE" != stream ] || emit_error invalid_args "--prose does not support --stream-json; use --json" 2
+    profile_args=(--input "$CTX_FILE" --mode json --log "$LOG")
+    [ -n "$SHEET" ] && profile_args+=(--sheet "$SHEET")
+    profile="$(python3 "$DIR/lib/data-profile.py" "${profile_args[@]}")" || exit $?
+    [ "$(printf '%s' "$profile" | jq -r '.ok')" = true ] || { printf '%s\n' "$profile"; exit 12; }
+    model_reply="$(printf '%s' "$profile" | jq -r .text | "$DIR/bin/q" --json --ctx - -m "$MODEL" qa \
+      "Suggest up to three useful patterns or follow-up checks from this exact table profile. Treat its counts and extrema as authoritative. Say when the profile alone cannot support an inference.")" || exit $?
+    if [ "$MODE" = json ]; then
+      jq -cn --argjson profile "$profile" --argjson reply "$model_reply" \
+        '$profile + {prose: $reply.text, prose_model: $reply.model, prose_verified: false}'
+    else
+      printf '%s\n\nInterpretation (model suggestion; check against source):\n%s\n' \
+        "$(printf '%s' "$profile" | jq -r .text)" "$(printf '%s' "$model_reply" | jq -r .text)"
+    fi
+    exit 0
+  fi
+  exec python3 "$DIR/lib/data-profile.py" "${profile_args[@]}"
+fi
+[ "$PROSE" = false ] || emit_error invalid_args "--prose applies only to describe-data" 2
+
 # Constrained decoding: --format FILE passes a JSON schema to Ollama's `format`
 # field, so the model's output IS schema-valid JSON. In --json mode the envelope
 # gains a `data` field with that output pre-parsed.
@@ -379,6 +421,7 @@ elif [ -n "$CTX_FILE" ]; then
   # "binary" and we'd refuse it with a misleading reason.
   [ -s "$CTX_FILE" ] || emit_error ctx_empty "file is empty: $CTX_FILE" 12
   ext="$(printf '%s' "${CTX_FILE##*.}" | tr 'A-Z' 'a-z')"
+  [ -z "$SHEET" ] || [ "$ext" = xlsx ] || emit_error invalid_args "--sheet applies only to XLSX files" 2
   case "$ext" in
     pdf)
       command -v pdftotext >/dev/null \
@@ -388,19 +431,46 @@ elif [ -n "$CTX_FILE" ]; then
     doc|docx|rtf|odt|html|htm)
       CTX="$(textutil -convert txt -stdout "$CTX_FILE" 2>/dev/null)" \
         || emit_error ctx_unsupported "could not extract text from .$ext file" 12 ;;
-    xlsx|xls|xlsm)
+    xlsx)
       # A spreadsheet is a zip, so the raw bytes read as binary and used to be
       # refused. Convert to CSV locally (zconvert) so the model sees real rows.
+      if $PREFLIGHT; then
+        sheet_info="$(python3 "$DIR/lib/data-profile.py" --input "$CTX_FILE" --sheets-only)" \
+          || emit_error ctx_unsupported "could not read XLSX sheet list: $CTX_FILE" 12
+        sheets="$(printf '%s' "$sheet_info" | jq -c '.sheets')"
+        [ "$(printf '%s' "$sheets" | jq 'length')" -gt 0 ] \
+          || emit_error ctx_empty "workbook has no sheets: $CTX_FILE" 12
+        if [ -n "$SHEET" ]; then
+          selected="$(printf '%s' "$sheets" | jq -c --arg s "$SHEET" 'if ($s | test("^[0-9]+$")) then .[($s | tonumber) - 1] // null else map(select(. == $s))[0] // null end')"
+          [ "$selected" != null ] || emit_error sheet_missing "no sheet named or numbered '$SHEET'" 12
+          SHEET="$(printf '%s' "$selected" | jq -r '.')"
+        elif [ "$(printf '%s' "$sheets" | jq 'length')" -gt 1 ]; then
+          if [ "$MODE" = json ] || [ "$MODE" = stream ]; then
+            jq -cn --arg name "${CTX_NAME:-$(basename "$CTX_FILE")}" --argjson sheets "$sheets" --argjson max "$MAX_CTX" \
+              '{ok:true,format:"xlsx",source:$name,sheets:$sheets,selected_sheet:null,sheet_required:true,extracted_chars:null,estimated_tokens:null,max_ctx_chars:$max,would_truncate:null}' \
+              | if [ "$MODE" = stream ]; then jq -c '{t:"done",data:.}'; else cat; fi
+          else
+            printf '%s: workbook sheets: %s; select one with --sheet NAME or number to measure extracted size\n' \
+              "${CTX_NAME:-$(basename "$CTX_FILE")}" "$(printf '%s' "$sheets" | jq -r 'join(", ")')"
+          fi
+          exit 0
+        else
+          selected="$(printf '%s' "$sheets" | jq '.[0]')"
+        fi
+      fi
       command -v zconvert >/dev/null \
         || emit_error ctx_unsupported "reading a spreadsheet needs zconvert (the tabular converter)" 12
       _xdir="$(mktemp -d "${TMPDIR:-/tmp}/q-xlsx-XXXXXX")"
-      if zconvert "$CTX_FILE" "$_xdir/sheet.csv" >/dev/null 2>&1; then
+      sheet_args=(); [ -n "$SHEET" ] && sheet_args=(--sheet "$SHEET")
+      if zconvert "$CTX_FILE" "$_xdir/sheet.csv" "${sheet_args[@]}" >/dev/null 2>&1; then
         CTX="$(cat "$_xdir/sheet.csv" 2>/dev/null)"
       else
         rm -rf "$_xdir" 2>/dev/null
         emit_error ctx_unsupported "zconvert could not read $CTX_FILE to CSV (a multi-sheet book may need one sheet exported)" 12
       fi
       rm -rf "$_xdir" 2>/dev/null ;;
+    xls|xlsm)
+      emit_error ctx_unsupported ".$ext spreadsheets are not supported by zconvert; export as .xlsx or .csv first" 12 ;;
     *)
       # Refuse binaries rather than feed garbage. `file --mime-encoding` is the
       # right tool — a NUL-only sniff misses NUL-free binaries (200 random bytes
@@ -417,11 +487,36 @@ elif [ -n "$CTX_FILE" ]; then
 elif [ ! -t 0 ]; then
   CTX="$(cat)"
 fi
+if $PREFLIGHT; then
+  [ -n "$CTX" ] || emit_error ctx_required "preflight needs --ctx FILE or piped input" 2
+  source_format="$(printf '%s' "${CTX_FILE##*.}" | tr 'A-Z' 'a-z')"
+  [ "$CTX_FILE" = - ] && source_format=stdin
+  [ -z "$CTX_FILE" ] && source_format=stdin
+  sheets="${sheets:-[]}"; selected="${selected:-null}"
+  if [ "$source_format" = xlsx ]; then
+    : "${selected:?XLSX sheet must be selected before conversion}"
+  fi
+  chars=${#CTX}; tokens=$(( (chars + 3) / 4 ))
+  truncated=false; [ "$chars" -gt "$MAX_CTX" ] && truncated=true
+  if [ "$MODE" = json ] || [ "$MODE" = stream ]; then
+    jq -cn --arg fmt "$source_format" --arg name "${CTX_NAME:-stdin}" --argjson sheets "$sheets" --argjson selected "$selected" \
+      --argjson chars "$chars" --argjson tokens "$tokens" --argjson max "$MAX_CTX" --argjson truncated "$truncated" \
+      '{ok:true, format:$fmt, source:$name, sheets:$sheets, selected_sheet:$selected, sheet_required:false, extracted_chars:$chars, estimated_tokens:$tokens, max_ctx_chars:$max, would_truncate:$truncated}' \
+      | if [ "$MODE" = stream ]; then jq -c '{t:"done", data:.}'; else cat; fi
+  else
+    printf '%s: %s extracted chars (~%s tokens); context limit %s chars%s\n' "${CTX_NAME:-stdin}" "$chars" "$tokens" "$MAX_CTX" "$([ "$truncated" = true ] && echo ' (would truncate)' || true)"
+    [ "$source_format" = xlsx ] && printf 'sheets: %s; selected: %s\n' "$(printf '%s' "$sheets" | jq -r 'join(", ")')" "$(printf '%s' "$selected" | jq -r '.')"
+  fi
+  exit 0
+fi
 if [ -n "$CTX" ]; then
   # 400k chars (~25x the default window) means a binary or a mistake — refuse
   # rather than silently summarize 4% of it.
   [ "${#CTX}" -gt 400000 ] && emit_error ctx_too_large "document is ${#CTX} chars (hard cap 400000)" 12
-  if [ "${#CTX}" -gt "$MAX_CTX" ]; then CTX="${CTX:0:$MAX_CTX}"; TRUNC=true; fi
+  if [ "${#CTX}" -gt "$MAX_CTX" ]; then
+    [ "$INTENT" = describe-data ] && emit_error ctx_truncated "describe-data needs the whole table to report size and outliers; input has ${#CTX} characters, limit is $MAX_CTX. Narrow the table or raise --max-ctx only if the model can fit it." 12
+    CTX="${CTX:0:$MAX_CTX}"; TRUNC=true
+  fi
   CTX_OPEN="<input>"
   [ -n "$CTX_NAME" ] && CTX_OPEN="<input name=\"$CTX_NAME\">"
   if [ -n "$QUERY" ]; then QUERY="$QUERY
@@ -432,8 +527,8 @@ $CTX
   else QUERY="$CTX_OPEN
 $CTX
 </input>"; fi
-  if $TRUNC && [ "$MODE" = text ]; then QUERY="$QUERY
-[input truncated at $MAX_CTX chars]"; fi
+  if $TRUNC; then QUERY="$QUERY
+[input truncated at $MAX_CTX chars; absence beyond this prefix cannot be established]"; fi
 fi
 # Document intents are meaningless without a document. The #1 trap (observed):
 # naming a file IN THE PROMPT — which is just text the model can't open — and
@@ -455,6 +550,11 @@ if intent_needs_ctx "$INTENT" && [ -z "$CTX" ]; then
     set +f
     emit_error ctx_required "$hint" 2
   fi
+fi
+
+if [ "$INTENT" = code-dispatch ]; then
+  [[ "$CTX" == *'=== JUDGE ==='* ]] \
+    || emit_error judge_required "code-dispatch needs a === JUDGE === section with a runnable check in --ctx; use q complete for a test-specified single-file completion" 2
 fi
 
 if [ -z "$QUERY" ]; then

@@ -1,11 +1,11 @@
 # CAPABILITIES — everything the lm suite can do
 
 The full menu. Every ability, grouped by category, with real examples — read this when you're
-wondering "can the local suite do X?". Everything runs on this machine; nothing leaves it.
+wondering "can the suite do X?". Most paths stay local. `lm gemini` and `q --web` use the network.
 Current state and architecture live in `STATE.md`; this file is the *what can I order* card.
 
 All commands are on PATH (`q`, `see`, `review`, `imagine`, `warm`, `lm …`) and every one has
-`-h` help. The suite is zero-idle: nothing stays in RAM unless you pin it (see § Residency).
+`-h` help. Per-request residency, `warm` leases, and scheduled warmth control RAM use (see § Residency).
 
 ---
 
@@ -21,7 +21,10 @@ q title "$(cat draft.md)"                      # short title for anything
 git diff | q commit                            # commit message from the piped diff
 q summarize --file report.pdf                  # local PDF → summary (poppler extract, no cloud)
 q explain-code --ctx bin/lm-serve              # walk a script
-q describe-data --ctx data.csv                 # what's in this file
+q describe-data --ctx data.csv                 # exact rows, missing values, extrema, types
+q describe-data --ctx book.xlsx --sheet Sales  # select a workbook sheet explicitly
+q describe-data --ctx data.csv --prose          # optional model interpretation after exact facts
+q --preflight --ctx book.xlsx --json            # sheets, extracted size, context limit; no model
 q qa --ctx contract.md "who signs off?"        # grounded Q&A over a document
 q intents                                      # list every registered verb
 ```
@@ -61,6 +64,7 @@ q --json --ctx - qa "who signs off?" < doc.md              # one JSON object
 q --stream-json "..."                                      # NDJSON: chunk / done / error frames
 q --json --format schema.json "list 3 risks" --ctx plan.md # constrained decoding: output IS
 # schema-valid JSON; envelope gains .data (pre-parsed) — Ollama format-field enforcement
+q describe-data --ctx data.csv --json | jq .data.fields  # parser facts, no model arithmetic
 ```
 
 ## 3 · Vision — `see`
@@ -76,7 +80,7 @@ see menu.png --ui "which item is enabled?"      # UI inventory + a focused answe
 see dashboard.png --mlx                         # high-accuracy UI-structure read via Qwen3-VL-8B (mlx-vlm, outside ollama; UI_DEFAULT_MLX=0 reverts --ui to gemma4:26b)
 see ui.png -m mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit  # any mlx-vlm model through see
 see --menubar "which app is focused?"           # capture the live macOS top strip, then --ui it
-see panel.png --ui --json | jq .data            # schema-constrained {kind,theme,regions[].elements[],icons,palette}
+see panel.png --ui --json | jq .data            # best-effort structured MLX inventory by default
 see mockup.png --json                           # {ok,text,model,ms,artifact} for an agent
 see receipt.png --ocr                           # EXACT text via Apple Vision — no model, ~300ms, verbatim
 see shot.png --ocr --json | jq .data.words      # positioned text: {text, x,y,w,h, pos: top-left..bottom-right}
@@ -111,22 +115,21 @@ model judges** — the VLM read is barred from disputing an extractor's number. 
 artifact folder gains `evidence.json` + a `contact.png` (A│B│ΔE-heat), the two inputs a
 downstream judge reads. `--only`/`--grid` re-run one extractor against a content-addressed
 cache and return just the delta. Every run journals to `logs/compare-history.jsonl`.
-The judgment layer (L2, a gcc `/vis-compare` skill) is not built yet — this is the
-evidence half. Battery: `probe/fixtures/vis-battery.py` (F1-F8, model-free, in verify.sh).
+The gcc `/vis-compare` skill supplies the L2 judgment and L3 loop. The evidence
+battery is `probe/fixtures/vis-battery.py` (model-free, in verify.sh).
 
 `--menubar` screencaptures the main display's top strip and reads it (cropping first
 is the biggest quality lever for widgets — a full-screen frame buries the strip);
 needs Screen Recording permission, and reads the frontmost app's content instead of
-the menu bar while a fullscreen app is active. `--ui --json` returns the inventory as
-a schema-constrained object in `.data` (`intents/ui-inventory.schema.json`, Ollama
-`format` enforcement, same contract as `q --format`) for agents that consume elements
-rather than read markdown.
+the menu bar while a fullscreen app is active. `--ui --json` returns a structured
+inventory in `.data`. The default MLX route is best effort; select the Ollama
+route for schema-constrained decoding. Agents should check the fields they need.
 
 `--ui` is the sectioned UI-inventory read for websites/apps/widgets/mocks — enumerated
 elements with verbatim labels and states, visual hierarchy, icon best-effort, formatting
-patterns, coarse palette. It auto-routes to the big tier (`UI_VISION_MODEL`, measured better
-at structure/state 2026-07-08; `-m` overrides) and honors an active `warm on big` lease for
-batches. Benchmarked vs gemini vision on 15 real screenshots:
+patterns, coarse palette. It uses Qwen3-VL-8B through MLX by default;
+`UI_DEFAULT_MLX=0` selects the Ollama UI tier, and `-m` overrides either route.
+Benchmarked vs gemini vision on 15 real screenshots:
 `.claude/output/20260708-vision-ui-batch/report.md` (gemini wins exact-string fidelity,
 `see --ui` wins speed/cost/privacy; crop menu-bar strips before reading). Vision via the
 gemini lane: `lm gemini "describe @shot.png"`.
@@ -217,8 +220,11 @@ conclusions but leaked deliberation — caught here, not by benchmarks (docs/05 
 
 ## 7 · Fan-out & orchestration — `lm fleet`
 
-One intent × N files, concurrency-capped, every output through a Judge, run record on disk.
-Turns cloud sub-agent fan-outs (audit/reconcile/verify) into free local ones.
+One intent × N files, concurrency-capped, with a run record on disk. The default
+gate checks only that each result is a valid, nonempty response envelope. Pass a
+task-specific `--judge` to check content; a default pass does not establish that
+the answer is correct. Batch use saves cloud work only when a narrow content
+gate or a small, targeted sample makes the results useful.
 
 ```bash
 lm fleet review src/*.sh                        # audit every script
@@ -229,7 +235,13 @@ lm fleet summarize notes/*.md --judge 'jq -e ".text|length>100"'   # custom gate
                                                 #   CMD <result.json>, $FLEET_ITEM = source
 lm fleet review src/ -j 3 --timeout 600 --json  # machine mode → index.jsonl on stdout
 ls outputs/fleet/<ts>-review/                   # meta.json · items.txt · results/ · index.jsonl
+lm fleet sample outputs/fleet/<run> --count 5   # source excerpts plus answers for human checks
+lm fleet verdict outputs/fleet/<run> --item 2 --status accepted --note "source supports answer"
+lm fleet audit outputs/fleet/<run>              # envelope/content gate and human counts
 ```
+
+The run's `meta.json` records the judge command and optional `--judge-version`. A human
+verdict is tied to result, source, and index-row hashes; edits make it stale in `lm fleet audit`.
 
 Multi-file completion (the conductor pattern): `probe/fixtures/unfinished-v1/` — a partial
 codebase + pytest Judge + `conduct.sh`; qwen3.6 finished it 16/16. The `complete` intent is
@@ -260,7 +272,13 @@ lm status --json               # <150ms machine probe: warm/latency_class/models
 lm models                      # ● resident, tier labels, sizes
 lm doctor                      # 11-point smoke check of the whole toolkit
 lm examples                    # colored, comprehensive showcase: every capability, grouped, paste-ready
+lm help table                  # colored short path for a table job; also document/screenshot/compare/batch/retrieval/research
+lm bench quick                 # fixed table, answer, visual-evidence cases; JSON report on disk
 ```
+
+`lm bench` records pass/fail, wall time, process peak RSS, resident models, and model-cache
+disk delta. RSS excludes the separate Ollama or MLX server process; it is not a total model
+memory measurement.
 
 ## 9 · Editor & agent integration
 

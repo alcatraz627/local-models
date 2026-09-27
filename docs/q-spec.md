@@ -30,7 +30,8 @@ git diff | q commit       commit message from the piped diff
 | `cmd` | macOS/BSD command assistant; ONE command only | a single shell command |
 | `title` | 2-5 word Title Case summary | a bare title |
 | `commit` | commit-message writer; imperative subject <72 chars, why-over-what | a bare commit message |
-| `summarize` · `describe-data` · `explain-code` · `qa` | **document intents** — REQUIRE a document via `--ctx`/`--file`/stdin | grounded answer |
+| `summarize` · `explain-code` · `qa` | **document intents** — require a document via `--ctx`/`--file`/stdin | model answer |
+| `describe-data` | deterministic CSV/TSV/JSON/XLSX table profile; requires input | exact rows, missing counts, types, distinct counts, numeric extrema, sheet names |
 
 **Document intents require real context.** `summarize`/`describe-data`/`explain-code`/`qa` refuse
 with no document (`ctx_required`, exit 2) and, if you named an existing file *in the prompt*, nudge
@@ -87,7 +88,8 @@ carry `tokens_in` / `tokens_out` as fields in the done/result object instead.
    so a wrong answer is reproducible and fixable via the prompt, not random.
 7. **Pipe-friendly stdin.** Non-TTY stdin is appended as input context below the instruction
    (`git log | q "summarize"`, `git diff | q commit`), truncated at `--max-ctx` chars (default
-   16000) to respect the warm model's 8k-token window. The answer on stdout stays bare;
+   16000) to respect the warm model's 8k-token window. `describe-data` reads the entire table
+   with a parser and does not truncate it. The answer on stdout stays bare;
    `--think` traces go to stderr.
 8. **Friendly server-down failure.** If the ollama server is unreachable, `q` prints a one-line
    hint (with the `launchctl kickstart` command) instead of a Python traceback.
@@ -131,8 +133,8 @@ prompts are flattened to keep display numbers == line numbers); open any entry i
 
 - Reasoning, multi-step analysis, code generation → use full Claude.
 - Clarifying dialogue → by design, never.
-- Web search (`--web`) → deferred (off-by-default, needs a search-backend decision).
-- MCP / Claude-calls-local → deferred to the future "Claude offloads to local" capability.
+- Connected web search is available through `--web`; it sends the query to the search backend.
+- Agent use is caller-directed through `lm`, `q`, and `see`; these tools do not decide when an agent should delegate.
 
 ## API (machine modes — `api_version: 1`)
 
@@ -150,6 +152,12 @@ q --stream-json …                 NDJSON: {"t":"chunk","text"} … {"t":"done"
 q --json --format SCHEMA.json …   constrained decoding (Ollama `format`): output is schema-valid
                                   JSON; the envelope gains `data` (the output pre-parsed, null if
                                   unparseable). Without --format, `data` is absent — additive only.
+q describe-data --json --ctx FILE exact profile in `.data`, model `deterministic:tabular`.
+                                  `--prose` adds separately labeled model suggestions.
+q --preflight --json --ctx FILE   extracted format/size, workbook sheets, selected sheet,
+                                  estimated tokens, context limit, truncation warning; no model.
+                                  A multi-sheet XLSX without --sheet returns its sheet list,
+                                  sheet_required:true, and null size fields before conversion.
 ```
 
 Warmth is **read-only** for machine consumers: `lm status --json` reports `warm` /
@@ -175,9 +183,13 @@ Error contract (branch on `code` + exit, never on message text):
 | `timeout` | 13 | `--timeout` wall clock exceeded |
 | `cancelled` | 130 | SIGTERM/SIGINT — a bash `trap` covers the pre-exec phase, then q execs python whose handler takes over; the dropped connection stops Ollama generating |
 
-Document-grounded intents (prompt-craft lives HERE, never in clients): `summarize`,
-`explain-code` (flags rm/curl-pipe-sh/sudo/cred access), `describe-data`, `qa` (document-only
-ground truth). q never prompts interactively in any mode, so no confirmation flow exists to break.
+Document-grounded model intents: `summarize`, `explain-code` (flags risky operations), `qa`.
+`describe-data` uses `lib/data-profile.py`; XLSX with multiple sheets requires `--sheet NAME|N`.
+Distinct counts use source values and keep JSON numbers distinct from JSON strings.
+Zero-padded integer strings are text so IDs retain their leading zeros. Date
+classification validates calendar dates. The parser owns
+numeric facts. `--prose` is optional and its suggestions are unverified.
+q never prompts interactively in any mode.
 
 ## `--web` and `--diy` (adaptive capabilities, 2026-07-10)
 

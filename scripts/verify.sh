@@ -28,9 +28,18 @@ SYN_FAIL=0
 for f in bin/lm bin/q bin/see bin/review bin/warm lib/fleet lib/repo-index lib/gemini lib/ui-verify lib/websearch scripts/self-audit.sh scripts/verify.sh; do
   bash -n "$f" 2>/dev/null || { bad "syntax: $f"; SYN_FAIL=1; }
 done
-# bin/probe is python — compile-check, don't bash -n it.
-python3 -m py_compile bin/probe 2>/dev/null || { bad "syntax: bin/probe (py_compile)"; SYN_FAIL=1; }
-[ "$SYN_FAIL" -eq 0 ] && ok "syntax on all bin/ lib/ scripts/ entrypoints (bash -n + py_compile)"
+# bin/probe is Python. Parse it without writing bytecode into the user's cache.
+python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' bin/probe 2>/dev/null || { bad "syntax: bin/probe (ast.parse)"; SYN_FAIL=1; }
+for f in lib/data-profile.py lib/fleet-review.py scripts/bench.py; do
+  python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$f" 2>/dev/null || { bad "syntax: $f"; SYN_FAIL=1; }
+done
+[ "$SYN_FAIL" -eq 0 ] && ok "syntax on all bin/ lib/ scripts/ entrypoints (bash -n + ast.parse)"
+
+echo "── deterministic table contract ──"
+TBL="$(python3 probe/fixtures/table-contract.py 2>&1)" \
+  && ok "$TBL" || bad "table contract: $TBL"
+BR="$(.venv/bin/python probe/fixtures/bench-rag-contract.py 2>&1)" \
+  && ok "$BR" || bad "benchmark and RAG contract: $BR"
 
 echo "── toolkit (lm doctor) ──"
 if ./bin/lm doctor >/dev/null 2>&1; then ok "lm doctor (server, models, venv, PATH)"; else bad "lm doctor — run it directly to see which check"; fi
@@ -52,9 +61,9 @@ if W=$(./lib/websearch "ollama github" -n 2 --json 2>/dev/null) && [ "$(printf '
   ok "websearch → $(printf '%s' "$W" | jq '.results | length') results"
 else skip "websearch unreachable (offline or DDG layout change — check by hand if online)"; fi
 
-echo "── fleet: fan-out + judge + lease + run history ──"
+echo "── fleet: fan-out + envelope gate + lease + run history ──"
 if ./bin/lm fleet summarize intents/ask.toml -m qwen2.5-coder:3b >/dev/null 2>&1; then
-  ok "lm fleet 1-item run (judge passed)"
+  ok "lm fleet 1-item run (envelope passed)"
   T=$(tail -1 logs/fleet-history.jsonl | jq -r .pass 2>/dev/null)
   [ "$T" = "1" ] && ok "fleet-history run line" || bad "fleet-history missing/odd"
 else bad "lm fleet run"; fi
@@ -182,11 +191,7 @@ elif [ -f "$HOME/.claude/.fable-subagent-promo" ]; then
 else
   [ "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"fable","prompt":"x"}}' | "$H" | jq -r .decision 2>/dev/null)" = "block" ] && ok "guard-model-tier: fable → block" || bad "guard-model-tier block path"
 fi
-if [ -f "$HOME/.claude/.model-tier-off" ]; then
-  skip "guard-model-tier warn path — muted machine-wide (~/.claude/.model-tier-off exists; silence is correct)"
-else
-  echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"prompt":"x"}}' | "$H" | jq -e .hookSpecificOutput >/dev/null 2>&1 && ok "guard-model-tier: unpinned → warn" || bad "guard-model-tier warn path"
-fi
+[ -z "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"prompt":"x"}}' | "$H")" ] && ok "guard-model-tier: unpinned → silent (warn retired)" || bad "guard-model-tier retired warn path"
 [ -z "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"sonnet","prompt":"x"}}' | "$H")" ] && ok "guard-model-tier: pinned → silent" || bad "guard-model-tier silent path"
 echo '{"session_id":"verify","tool_name":"Read","tool_input":{"file_path":"'"$DIR"'/presets/skybound-isles.png"}}' | ~/.claude/scripts/hooks/log-image-reads.sh && [ -n "$(tail -1 ~/.claude/logs/image-reads.jsonl | jq -r .est_tokens 2>/dev/null)" ] && ok "log-image-reads" || bad "log-image-reads"
 

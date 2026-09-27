@@ -1,7 +1,7 @@
 # local-models — orientation for an agent with no context
 
-A local LLM + vision + image-gen toolkit for one Apple Silicon Mac (M5 Pro, 64 GB). Every
-tool runs **on this machine, $0, offline**, alongside cloud Claude. You are usually the
+A local LLM + vision + image-gen toolkit for one Apple Silicon Mac (M5 Pro, 64 GB). Most
+model calls run locally; `lm gemini` and `q --web` use the network. You are usually the
 *user* of these tools, not just their maintainer.
 
 **Read in this order:** `docs/STATE.md` (current state + what's pending, kept current) →
@@ -10,11 +10,11 @@ whatever you're touching (`docs/03`–`docs/10`).
 
 ## The three hard rules
 
-1. **No idle penalty.** Nothing stays resident unless explicitly pinned or leased
-   (`warm`). A tool that silently keeps 23 GB warm is a bug.
-2. **Trust = a passing gate, never model confidence.** Every local-model output crosses a
-   mechanical gate (a schema, a judge, a test) before anyone believes it. "The model said
-   so" is not evidence anywhere in this repo.
+1. **Bounded residency.** Per-request expiry and `warm` leases prevent accidental
+   large-model pins. Scheduled warmth jobs may keep the small companion resident.
+2. **Trust = a task-appropriate check, never model confidence.** A schema or a nonempty
+   response proves only that transport worked. Exact table facts come from the deterministic
+   profiler. Other consequential claims need a source check, executable judge, or human review.
 3. **Disk budget, reasoned not enforced.** Local-model storage stays under 150 GB in
    steady state, 200 GB absolute. The two stores that count are `~/.ollama/models` and
    `~/.cache/huggingface`; the repo itself is ~1 GB and does not. This is a policy you
@@ -38,7 +38,7 @@ whatever you're touching (`docs/03`–`docs/10`).
 | `bin/` | the CLIs on PATH — `q` `see` `review` `imagine` `warm` `lm` (front door) |
 | `lib/` | the non-CLI machinery — extractors, ledgers, gates (`vis-compare.py`, `vis-ledger.py`, `asset-verify.py`, `findings-gate.py`, `e8-dom.py`) |
 | `intents/` | intents-as-data — a `q` intent is a TOML (system prompt + tier + ctx need) |
-| `probe/fixtures/` | the model-free battery (`vis-battery.py`) — the correctness contract |
+| `probe/fixtures/` | model-free behavior checks (`vis-battery.py`, `table-contract.py`) |
 | `scripts/verify.sh` | **the one command that says whether the suite works** (~30s) |
 | `docs/` | numbered design docs; `STATE.md` is the live one |
 | `logs/`, `outputs/` | JSONL histories + run artifacts — **these are the agent API** |
@@ -47,11 +47,13 @@ whatever you're touching (`docs/03`–`docs/10`).
 ## Verify before you believe
 
 ```bash
-bash scripts/verify.sh                              # the whole suite (~37 checks)
-.venv/bin/python probe/fixtures/vis-battery.py      # the model-free battery (50 assertions)
+bash scripts/verify.sh                              # live smoke suite
+.venv/bin/python probe/fixtures/vis-battery.py      # model-free image battery (53 assertions)
+python3 probe/fixtures/table-contract.py            # table row and error contract
+.venv/bin/python probe/fixtures/bench-rag-contract.py # benchmark and chunk boundaries
 ```
 
-**Use `.venv/bin/python`, never bare `python3`** — PIL and the extractors live in the venv.
+**Use `.venv/bin/python` for code that needs repo dependencies** such as PIL and sqlite-vec.
 A green battery is the bar for any change to `lib/`.
 
 ## Gotchas that have bitten before

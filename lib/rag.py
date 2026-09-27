@@ -15,6 +15,7 @@ import json
 import os
 import sqlite3
 import sys
+import tempfile
 import urllib.request
 
 import sqlite_vec
@@ -22,7 +23,6 @@ from sqlite_vec import serialize_float32
 
 HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 MODEL = os.environ.get("RAG_EMBED_MODEL", "nomic-embed-text")
-DIMS = 768
 MAX_CHARS = 2400   # ~600 tokens per chunk keeps 6-8 retrieved chunks inside q's ctx
 OVERLAP_LINES = 3
 
@@ -72,17 +72,29 @@ def chunk_file(path):
         sections.append((cur_head, cur_start, cur))
 
     for head, start, seg in sections:
-        buf, buf_start, size = [], start, 0
+        pieces = []
         for off, line in enumerate(seg):
-            buf.append(line)
-            size += len(line) + 1
-            if size >= MAX_CHARS:
-                yield head, buf_start, "\n".join(buf)
+            # Markdown often stores a whole paragraph on one source line.
+            window = MAX_CHARS - 100
+            parts = [line[i:i + window] for i in range(0, len(line), window)] or [""]
+            pieces.extend((start + off, part) for part in parts)
+        buf, size, fresh = [], 0, False
+        for line_no, part in pieces:
+            added = len(part) + (1 if buf else 0)
+            if buf and size + added > MAX_CHARS:
+                if fresh:
+                    yield head, buf[0][0], "\n".join(text for _, text in buf)
                 keep = buf[-OVERLAP_LINES:]
-                buf_start = start + off - len(keep) + 1
-                buf, size = list(keep), sum(len(l) + 1 for l in keep)
-        if any(l.strip() for l in buf):
-            yield head, buf_start, "\n".join(buf)
+                while keep and sum(len(text) for _, text in keep) + len(keep) + len(part) > MAX_CHARS:
+                    keep.pop(0)
+                buf = list(keep)
+                size = sum(len(text) for _, text in buf) + max(0, len(buf) - 1)
+                fresh = False
+            buf.append((line_no, part))
+            size += len(part) + (1 if len(buf) > 1 else 0)
+            fresh = True
+        if fresh and any(text.strip() for _, text in buf):
+            yield head, buf[0][0], "\n".join(text for _, text in buf)
 
 
 def open_db(path):
@@ -95,13 +107,6 @@ def open_db(path):
 
 
 def cmd_index(db_path, files):
-    db = open_db(db_path)
-    db.executescript(
-        "DROP TABLE IF EXISTS chunks; DROP TABLE IF EXISTS vec_chunks; DROP TABLE IF EXISTS meta;"
-        "CREATE TABLE chunks(id INTEGER PRIMARY KEY, path TEXT, heading TEXT, start_line INT, text TEXT);"
-        f"CREATE VIRTUAL TABLE vec_chunks USING vec0(embedding float[{DIMS}]);"
-        "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);"
-    )
     keep = resident_keep_alive()
     rows, n_files = [], 0
     for f in files:
@@ -109,24 +114,48 @@ def cmd_index(db_path, files):
         for head, start, text in chunk_file(f):
             rows.append((f, head, start, text))
     vecs = embed([f"{p} § {h}\n{t}" for p, h, t in [(r[0], r[1], r[3]) for r in rows]], keep)
-    for i, ((path, head, start, text), v) in enumerate(zip(rows, vecs), 1):
-        db.execute("INSERT INTO chunks(id,path,heading,start_line,text) VALUES(?,?,?,?,?)",
-                   (i, path, head, start, text))
-        db.execute("INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)", (i, serialize_float32(v)))
-    from datetime import datetime, timezone
-    for k, v in (("embedder", MODEL), ("dims", str(DIMS)),
-                 ("created", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
-                 ("files", str(n_files))):
-        db.execute("INSERT INTO meta VALUES(?,?)", (k, v))
-    db.commit()
+    if not rows or len(vecs) != len(rows):
+        raise ValueError(f"index needs one embedding per nonempty chunk (chunks={len(rows)}, embeddings={len(vecs)})")
+    dims = len(vecs[0])
+    if not dims or any(len(v) != dims for v in vecs):
+        raise ValueError("embedding vectors have inconsistent dimensions")
+    dest = os.path.abspath(db_path)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="rag-index-", dir=os.path.dirname(dest)) as tmp:
+        staged = os.path.join(tmp, "index.db")
+        db = open_db(staged)
+        db.executescript(
+            "CREATE TABLE chunks(id INTEGER PRIMARY KEY, path TEXT, heading TEXT, start_line INT, text TEXT);"
+            f"CREATE VIRTUAL TABLE vec_chunks USING vec0(embedding float[{dims}]);"
+            "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);"
+        )
+        for i, ((path, head, start, text), v) in enumerate(zip(rows, vecs), 1):
+            db.execute("INSERT INTO chunks(id,path,heading,start_line,text) VALUES(?,?,?,?,?)",
+                       (i, path, head, start, text))
+            db.execute("INSERT INTO vec_chunks(rowid,embedding) VALUES(?,?)", (i, serialize_float32(v)))
+        from datetime import datetime, timezone
+        for k, v in (("embedder", MODEL), ("dims", str(dims)),
+                     ("created", datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
+                     ("files", str(n_files))):
+            db.execute("INSERT INTO meta VALUES(?,?)", (k, v))
+        db.commit()
+        db.close()
+        os.replace(staged, dest)
     print(json.dumps({"ok": True, "files": n_files, "chunks": len(rows),
-                      "db": db_path, "embedder": MODEL}))
+                      "db": db_path, "embedder": MODEL, "dims": dims}))
 
 
 def cmd_search(db_path, query, k):
+    if not os.path.exists(db_path):
+        raise ValueError(f"no index at {db_path}; run lm rag index")
     db = open_db(db_path)
+    meta = dict(db.execute("SELECT key, value FROM meta").fetchall())
+    if meta.get("embedder") != MODEL:
+        raise ValueError(f"index uses {meta.get('embedder')}; set RAG_EMBED_MODEL to match or build a separate index")
     keep = resident_keep_alive()
     qv = embed([query], keep)[0]
+    if len(qv) != int(meta["dims"]):
+        raise ValueError(f"query embedding has {len(qv)} dimensions; index has {meta['dims']}")
     hits = db.execute(
         "SELECT rowid, distance FROM vec_chunks WHERE embedding MATCH ? AND k = ? ORDER BY distance",
         (serialize_float32(qv), k),

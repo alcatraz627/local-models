@@ -4,8 +4,8 @@
 # The $0 verification gate for UI work: after a change, claims like "the save
 # button is disabled" or "the count shows 457" are mechanically checkable — no
 # cloud vision spend, no trusting the implementer. `see --ui --json` reads the
-# pixels into a schema-constrained inventory (measured: zero fabrications on
-# enumerables); a local judge then rules pass/fail/unsure per claim, strictly,
+# pixels into an inventory (best-effort JSON on the default MLX path); a local
+# judge then rules pass/fail/unsure per claim, strictly,
 # defaulting to unsure. Judgment about aesthetics stays with Claude — this gate
 # only rules on what is enumerable.
 #
@@ -75,7 +75,7 @@ done
 [ -f "$SCHEMA" ] || emit_error format_unreadable "verdict schema missing: $SCHEMA" 12
 
 # 1) Ground truth — two evidence lanes:
-#    image lane: see --ui --json (schema-constrained VLM inventory; good-but-verify)
+#    image lane: see --ui --json (VLM inventory; good-but-verify)
 #    app lane (--app): the LIVE accessibility tree via `ax` (semantic and exact,
 #    but only covers what the app exposes to accessibility)
 if [ -n "$APP" ]; then
@@ -101,11 +101,11 @@ else
   [ -n "$CROP" ]   && see_args+=(--crop "$CROP")
   ENV_JSON="$("$DIR/bin/see" "${see_args[@]}")" \
     || emit_error inventory_failed "see --ui --json failed: $(printf '%s' "$ENV_JSON" | jq -r '.message // "unknown"' 2>/dev/null)" 10
-  INV="$(printf '%s' "$ENV_JSON" | jq -c '.data // empty')"
-  [ -n "$INV" ] || emit_error inventory_failed "see returned no schema-valid inventory (.data is null)" 10
+  INV="$(printf '%s' "$ENV_JSON" | jq -c '.data | select(type == "object" and (.kind | type == "string") and (.theme | type == "string") and (.regions | type == "array") and all(.regions[]; type == "object" and (.name | type == "string") and (.elements | type == "array")))' 2>/dev/null)"
+  [ -n "$INV" ] || emit_error inventory_failed "see returned no structurally valid UI inventory" 10
   ARTIFACT="$(printf '%s' "$ENV_JSON" | jq -r '.artifact // ""')"
   CLAIM_ARGS=("${positionals[@]:1}")
-  INV_DESC="a UI inventory JSON: the ground-truth machine read of a screenshot (regions with elements carrying verbatim text and state, icons, palette, theme)"
+  INV_DESC="a best-effort UI inventory JSON from a screenshot (regions with elements, text and state, icons, palette, theme); exact strings and states may be wrong"
   # --boxes: placement claims need measured positions, not the VLM's sense of
   # layout — Apple Vision's boxes, reduced by the SCRIPT to 3×3 grid labels,
   # ride along as a second machine-measured section. Judge matches labels;

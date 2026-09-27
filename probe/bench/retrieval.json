@@ -1,0 +1,16 @@
+{
+  "name": "repo-doc-retrieval",
+  "corpus": ["docs/q-spec.md", "docs/03-tool-orchestration-decision.md", "docs/05-perf-levers-and-usage-audit.md", "docs/09-local-fleet.md", "docs/CAPABILITIES.md", "docs/STATE.md", "docs/07-implementation.md", "docs/04-ollama-vs-llamacpp-decision.md"],
+  "queries": [
+    {"query": "What does q do if I ask it to summarize without a file?", "file": "docs/q-spec.md", "heading": "Intents"},
+    {"query": "How does the quick answer tool handle a document larger than its context?", "file": "docs/q-spec.md", "heading": "Behavior contract (the smart defaults)"},
+    {"query": "Why should the local model not choose shell tools on its own?", "file": "docs/03-tool-orchestration-decision.md", "heading": "Why NO (the three reasons, so they're not re-litigated)"},
+    {"query": "If autonomous model tool use is reconsidered, what experiment should precede it?", "file": "docs/03-tool-orchestration-decision.md", "heading": "If this is ever revisited — probe first, don't build on faith (~2h)"},
+    {"query": "Which inference performance improvements were ordered by return on effort?", "file": "docs/05-perf-levers-and-usage-audit.md", "heading": "The lever stack (ROI-ordered)"},
+    {"query": "How much real agent usage was measured to pick local model jobs?", "file": "docs/05-perf-levers-and-usage-audit.md", "heading": "3-day usage audit → local-fit tiers"},
+    {"query": "What sorts of tasks are appropriate for batch local workers?", "file": "docs/09-local-fleet.md", "heading": "2. Use-case catalog — what the fleet does (and does NOT)"},
+    {"query": "What stages make up the local batch worker harness?", "file": "docs/09-local-fleet.md", "heading": "4. The harness ladder — what to build"},
+    {"query": "How are follow-up exchanges connected in q's saved query log?", "file": "docs/q-spec.md", "heading": "History"},
+    {"query": "What fields does q return to a program asking for one JSON result?", "file": "docs/q-spec.md", "heading": "API (machine modes — `api_version: 1`)"}
+  ]
+}

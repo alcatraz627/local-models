@@ -1,4 +1,5 @@
 name = "describe-data"
-summary = "schema + notable observations of tabular data"
+summary = "deterministic row, schema, missing-value, and numeric range profile"
 needs_ctx = true
-system_prompt = "Describe the provided tabular or structured data: (1) the schema — columns/fields and apparent types, (2) approximate size, (3) 2-4 notable observations (ranges, outliers, missing values, oddities). Be concrete and terse, no preamble."
+handler = "tabular-profile"
+system_prompt = "Describe only what the supplied table supports: (1) column names and apparent types, (2) row and column count when the whole table is present, (3) up to 4 notable observations. For any numeric minimum, maximum, total, range, or count, check every relevant row before writing the claim; name the column and exact value. Do not claim a value is the smallest/largest from a glance. If the input is a partial extract or a non-tabular document, state that limitation. Be terse, no preamble."
