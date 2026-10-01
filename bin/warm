@@ -24,10 +24,16 @@ DEFAULT_LEASE="60m"
 # Load (or re-pin) MODEL with KEEP_ALIVE via an empty-prompt generate — a pure
 # load, no tokens produced. keep_alive is last-writer-wins per request.
 pin() { # MODEL KEEP_ALIVE(number or "duration")
-  local ka="$2"
+  local ka="$2" out
   [[ "$ka" =~ ^-?[0-9]+$ ]] || ka="\"$ka\""
-  curl -s "$OLLAMA_HOST/api/generate" -d "{\"model\":\"$1\",\"keep_alive\":$ka}" \
-    >/dev/null || { echo "failed to load '$1' — is it pulled? (ollama list)"; exit 1; }
+  out="$(curl -s "$OLLAMA_HOST/api/generate" -d "{\"model\":\"$1\",\"keep_alive\":$ka}")" \
+    || { echo "failed to reach Ollama at $OLLAMA_HOST" >&2; exit 1; }
+  # Ollama answers a refusal (model not pulled, bad name) with HTTP 404 and an
+  # error body, which curl -s still counts as success; read the body instead.
+  if [[ "$out" == *'"error"'* ]]; then
+    echo "failed to load '$1': $out (is it pulled? ollama list)" >&2
+    exit 1
+  fi
 }
 
 cmd="${1:-status}"
