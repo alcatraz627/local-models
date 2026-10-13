@@ -104,7 +104,7 @@ done
 if [ "$HANDLER" = tabular-profile ]; then
   MODEL=deterministic:tabular
 else
-  ollama_up || { server_down_msg; emit_error server_down "ollama server is down" 11; }
+  ollama_ensure || { server_down_msg; emit_error server_down "ollama server is down" 11; }
   MODEL="$(resolve_tier "$TIER")"
 fi
 

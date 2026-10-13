@@ -613,7 +613,7 @@ fi
 if intent_exists "$INTENT"; then SYS="$(intent_sys "$INTENT")"; else SYS=""; fi
 $RAW && SYS=""
 
-if ! ollama_up; then
+if ! ollama_ensure; then
   if [ "$MODE" = text ]; then server_down_msg; exit 10; fi
   emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
 fi

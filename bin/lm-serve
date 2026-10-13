@@ -6,8 +6,10 @@
 # when the app owned the server. Running serve ourselves makes the policy
 # deterministic and version-controlled. Owns 127.0.0.1:11434.
 #
-# Started by the LaunchAgent com.alcatraz.local-models-ollama at login; also
-# runnable by hand for debugging. None of these vars are credentials.
+# Started on demand by the LaunchAgent com.alcatraz.local-models-ollama (callers
+# use ollama_ensure in bin/_lib.sh), never at login. The server exits by itself
+# once it has been idle for LM_IDLE_EXIT_SECS: no model resident and no
+# generate/chat/embed request in that window. None of these vars are credentials.
 
 # Unload models immediately by default; Tier W overrides per-request (`warm on`).
 export OLLAMA_KEEP_ALIVE=0
@@ -24,4 +26,43 @@ export OLLAMA_KV_CACHE_TYPE=q8_0
 # llama-server. OLLAMA_USE_MLX never existed. Measured verdict (kept Q4_K_M on the
 # code tier — prefill + judgment beat MLX's faster load): docs/05 §1.
 
-exec /opt/homebrew/bin/ollama serve
+IDLE_EXIT_SECS="${LM_IDLE_EXIT_SECS:-300}"
+POLL_SECS=30
+HOST="http://127.0.0.1:11434"
+# launchd sends the server's stderr here; request lines ([GIN] ... POST) are how
+# we see a call that loaded and unloaded a model between two polls.
+LOG="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/logs/ollama-serve.err.log"
+
+/opt/homebrew/bin/ollama serve &
+srv=$!
+trap 'kill "$srv" 2>/dev/null; wait "$srv"; exit 0' TERM INT
+
+offset=$(wc -c <"$LOG" 2>/dev/null || echo 0)
+idle=0
+while kill -0 "$srv" 2>/dev/null; do
+  sleep "$POLL_SECS"
+  size=$(wc -c <"$LOG" 2>/dev/null || echo 0)
+  # A rotated or truncated log restarts the read from the top.
+  [ "$size" -lt "$offset" ] && offset=0
+  # Status polls (GET /api/ps, /api/version) from Switchboard and friends do not
+  # count as use, or the server would never go idle.
+  if tail -c +"$((offset + 1))" "$LOG" 2>/dev/null | /usr/bin/grep -q '| POST '; then
+    used=1
+  else
+    used=0
+  fi
+  offset=$size
+  ps=$(curl -s -m 3 "$HOST/api/ps") || continue
+  if [ "$used" = 1 ] || [[ "$ps" != *'"models":[]'* ]]; then
+    idle=0
+  else
+    idle=$((idle + POLL_SECS))
+  fi
+  if [ "$idle" -ge "$IDLE_EXIT_SECS" ]; then
+    echo "lm-serve: idle ${idle}s, shutting the server down" >&2
+    kill "$srv" 2>/dev/null
+    wait "$srv"
+    exit 0
+  fi
+done
+wait "$srv"

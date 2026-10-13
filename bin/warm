@@ -40,6 +40,7 @@ cmd="${1:-status}"
 case "$cmd" in
   on)
     target="${2:-}"
+    ollama_ensure || { server_down_msg; exit 1; }
     if [ -z "$target" ]; then
       echo "warming $WARM_MODEL (keep_alive=$WARM_KEEP_ALIVE) ..."
       pin "$WARM_MODEL" "$WARM_KEEP_ALIVE"
@@ -50,25 +51,26 @@ case "$cmd" in
       echo "leasing $model (keep_alive=$ttl) ..."
       pin "$model" "$ttl"
     fi
-    ollama ps
+    ollama_cli ps
     ;;
   off)
     target="${2:-}"
+    ollama_up || { echo "server is down, nothing resident"; exit 0; }
     if [ "$target" = all ]; then
       # Stop everything resident — one sweep back to zero-idle.
-      ollama ps 2>/dev/null | awk 'NR>1 {print $1}' | while read -r m; do
+      ollama_cli ps 2>/dev/null | awk 'NR>1 {print $1}' | while read -r m; do
         echo "shutting down $m ..."
-        ollama stop "$m" 2>/dev/null || true
+        ollama_cli stop "$m" 2>/dev/null || true
       done
     else
       model="$(resolve_tier "${target:-$WARM_MODEL}")"
       echo "shutting down $model ..."
-      ollama stop "$model" 2>/dev/null || true
+      ollama_cli stop "$model" 2>/dev/null || true
     fi
-    ollama ps
+    ollama_cli ps || true
     ;;
   status)
-    ollama ps
+    ollama_cli ps || echo "server is down, nothing resident (it starts on demand)"
     ;;
   restart)
     "$0" off

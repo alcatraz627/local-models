@@ -229,12 +229,12 @@ lm_status() {
   if ollama_up; then
     echo "up · ${OLLAMA_HOST#http://}"
   else
-    echo "DOWN — start: launchctl kickstart -k gui/$(id -u)/$LM_LAUNCHD_LABEL"
+    echo "down (starts on demand, stops after idle) — start now: launchctl kickstart gui/$(id -u)/$LM_LAUNCHD_LABEL"
   fi
   printf '%sloaded%s   resident models (warm)\n' "$Y" "$Rs"
-  ollama ps 2>/dev/null | sed '1d;s/^/  /' | grep -q . && ollama ps 2>/dev/null | sed '1d;s/^/  /' || echo "  none (idle, ~0 RAM)"
+  ollama_cli ps 2>/dev/null | sed '1d;s/^/  /' | grep -q . && ollama_cli ps 2>/dev/null | sed '1d;s/^/  /' || echo "  none (idle, ~0 RAM)"
   printf '%smodels%s   on disk\n' "$Y" "$Rs"
-  ollama list 2>/dev/null | sed '1d;s/^/  /' | head -8
+  ollama_cli list 2>/dev/null | sed '1d;s/^/  /' | head -8 || echo "  (listed once the server is up)"
 }
 
 # One pass/fail line per dependency the toolkit stands on. Exit 1 if any fail.
@@ -250,7 +250,7 @@ lm_doctor() {
   check "server up ($OLLAMA_HOST)"           ollama_up
   check "LaunchAgent loaded ($LM_LAUNCHD_LABEL)" launchctl print "gui/$(id -u)/$LM_LAUNCHD_LABEL"
   check "warm model built (${WARM_MODEL:-gemma4-e4b-warm})" \
-        sh -c "ollama list 2>/dev/null | grep -q '^${WARM_MODEL:-gemma4-e4b-warm}'"
+        sh -c "curl -s -m 3 '$OLLAMA_HOST/api/tags' | grep -q '\"${WARM_MODEL:-gemma4-e4b-warm}'"
   check "mflux venv ($DIR/.venv)"            test -x "$DIR/.venv/bin/mflux-generate"
   local c; for c in lm q imagine warm see review; do
     check "on PATH: $c -> $BIN/$c"           sh -c "command -v $c | grep -q ."

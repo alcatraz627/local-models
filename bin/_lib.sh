@@ -84,14 +84,32 @@ lm_step() {
 # ── Ollama server + residency ──
 ollama_up() { curl -s -m 3 "$OLLAMA_HOST/api/version" >/dev/null 2>&1; }
 
+# The `ollama` CLI. On macOS a bare `ollama ps` with no server up launches
+# Ollama.app, whose own server ignores lm-serve's policy and never goes away, so
+# every CLI call goes through here and simply fails while the server is down.
+ollama_cli() { ollama_up || return 1; ollama "$@"; }
+
+# Start our server if it is not running, for callers about to use a model. It
+# stops itself after a few idle minutes (bin/lm-serve), so this is cheap to call.
+ollama_ensure() {
+  ollama_up && return 0
+  launchctl kickstart "gui/$(id -u)/$LM_LAUNCHD_LABEL" >/dev/null 2>&1 || return 1
+  local i
+  for i in $(seq 1 40); do
+    sleep 0.25
+    ollama_up && return 0
+  done
+  return 1
+}
+
 # True if MODEL is currently resident. keep_alive is last-writer-wins per
 # request, so every API caller MUST check this before choosing keep_alive:
 # resident -> -1 (preserve the warm pin) · not resident -> 0 (load-and-unload).
 # Exact name or name:tag — a bare prefix match would let `q -m gemma4` count the
 # resident gemma4-e4b-warm as itself and pin the wrong model forever.
-ollama_resident() { ollama ps 2>/dev/null | awk -v m="$1" 'NR>1 && ($1 == m || index($1, m ":") == 1) {f=1} END{exit !f}'; }
+ollama_resident() { ollama_cli ps 2>/dev/null | awk -v m="$1" 'NR>1 && ($1 == m || index($1, m ":") == 1) {f=1} END{exit !f}'; }
 
 server_down_msg() {
   echo "ollama server is DOWN ($OLLAMA_HOST)" >&2
-  echo "  start it: launchctl kickstart -k gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2
+  echo "  start it: launchctl kickstart gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2
 }

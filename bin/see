@@ -379,7 +379,7 @@ else
 if $NO_READ && ! $DIFF; then
   emit_error invalid_args "--no-read only applies to diff (other modes ARE the read) — drop the flag, or use: see diff <A> <B> --no-read" 2
 fi
-if ! $NO_READ && ! $MLX && ! ollama_up; then
+if ! $NO_READ && ! $MLX && ! ollama_ensure; then
   $DIFF || emit_error server_down "ollama server unreachable at $OLLAMA_HOST" 10
   VLM_FAILED=true
 fi
@@ -543,7 +543,7 @@ elif $MLX; then
   # depend on a human having pre-launched the watchdog. Warn on a big-model co-load,
   # then ensure the mem-guard backstop is up (idempotent; it is single-instance-locked).
   if ollama_up; then
-    _big="$(ollama ps 2>/dev/null | awk 'NR>1 && $4=="GB" && $3+0>=8 {print $1}')"
+    _big="$(ollama_cli ps 2>/dev/null | awk 'NR>1 && $4=="GB" && $3+0>=8 {print $1}')"
     [ -n "$_big" ] && echo "see: WARNING — a large ollama model is resident ($_big); running mlx-vlm alongside it can OOM the machine. Free it first: ollama stop $_big" >&2
   fi
   if ! pgrep -f "scripts/mem-guard.py" >/dev/null 2>&1; then
