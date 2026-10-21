@@ -1,0 +1,117 @@
+{
+  "model": "code",
+  "rows": [
+    {
+      "case": "arith-crates",
+      "verdict": "pass",
+      "detail": "160",
+      "ms": 1088,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The shop has $7 \\times 24 + 5 = 173$ total bottles. Subtracting the 13 broken bottles leaves $173 - 13 = 160$ intact bottles.\nANSWER: 160"
+    },
+    {
+      "case": "weekday",
+      "verdict": "pass",
+      "detail": "Thursday",
+      "ms": 551,
+      "served": "qwen3.6:35b-a3b",
+      "text": "October 22, 2026, falls on a Thursday.\nANSWER: Thursday"
+    },
+    {
+      "case": "extract-total",
+      "verdict": "pass",
+      "detail": "1284.50",
+      "ms": 678,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The invoice total is calculated by adding the subtotal, shipping, and tax amounts together.\n\nANSWER: 1284.50"
+    },
+    {
+      "case": "letter-count",
+      "verdict": "fail",
+      "detail": "5",
+      "ms": 588,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The letter 'r' appears 5 times in the phrase 'strawberry raspberry'.\nANSWER: 5"
+    },
+    {
+      "case": "logic-order",
+      "verdict": "pass",
+      "detail": "Cy",
+      "ms": 743,
+      "served": "qwen3.6:35b-a3b",
+      "text": "Based on the given relationships, the height order from tallest to shortest is Dee, Ana, Ben, and Cy. Therefore, Cy is the shortest person.\nANSWER: Cy"
+    },
+    {
+      "case": "sort",
+      "verdict": "pass",
+      "detail": "3, 7, 19, 19, 42, 88",
+      "ms": 979,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The sorted numbers are 3, 7, 19, 19, 42, 88.\nANSWER: 3, 7, 19, 19, 42, 88"
+    },
+    {
+      "case": "code-trace",
+      "verdict": "pass",
+      "detail": "35",
+      "ms": 993,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The expression filters odd numbers from the list (1, 3, 5), squares them (1, 9, 25), and sums them to get 35.\n\nANSWER: 35"
+    },
+    {
+      "case": "units",
+      "verdict": "pass",
+      "detail": "210.75",
+      "ms": 936,
+      "served": "qwen3.6:35b-a3b",
+      "text": "3.5 hours is 210 minutes, and 45 seconds is 0.75 minutes, totaling 210.75 minutes.\nANSWER: 210.75"
+    },
+    {
+      "case": "regex",
+      "verdict": "fail",
+      "detail": "abc, axc",
+      "ms": 1651,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The regex `^a.c$` requires a string starting with 'a', followed by any single character, and ending with 'c'. Among the options, \"abc\" (a + b + c) and \"axc\" (a + x + c) fit this pattern; \"ac\" is too short, \"abbc\" is too long, \"a.c\" contains a literal dot, and \"Abc\" has an uppercase A.\n\nANSWER: abc, axc"
+    },
+    {
+      "case": "false-premise",
+      "verdict": "pass",
+      "detail": "Never",
+      "ms": 588,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The Eiffel Tower was never moved to London; it remains in Paris, France.\nANSWER: Never"
+    },
+    {
+      "case": "buried-fact",
+      "verdict": "pass",
+      "detail": "19",
+      "ms": 801,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The notes explicitly state that Priya said the server migration finishes on day 19 of the sprint.\n\nANSWER: 19"
+    },
+    {
+      "case": "percent",
+      "verdict": "pass",
+      "detail": "15%",
+      "ms": 503,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The price increased by 15%.\nANSWER: 15%"
+    },
+    {
+      "case": "negation",
+      "verdict": "pass",
+      "detail": "2, 6, 10",
+      "ms": 1129,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The even numbers between 1 and 10 are 2, 4, 6, 8, and 10. Excluding those divisible by 4 (4 and 8) leaves 2, 6, and 10.\nANSWER: 2, 6, 10"
+    },
+    {
+      "case": "count-words",
+      "verdict": "pass",
+      "detail": "9",
+      "ms": 505,
+      "served": "qwen3.6:35b-a3b",
+      "text": "The sentence contains nine words.\nANSWER: 9"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "model": "small",
+  "rows": [
+    {
+      "case": "arith-crates",
+      "verdict": "pass",
+      "detail": "160",
+      "ms": 4559,
+      "served": "gemma4-e4b-warm",
+      "text": "The shop has $7 \\times 24 + 5 = 168 + 5 = 173$ bottles in total. Subtract the 13 broken bottles: $173 - 13 = 160$.\nANSWER: 160"
+    },
+    {
+      "case": "weekday",
+      "verdict": "fail",
+      "detail": "Wednesday",
+      "ms": 2026,
+      "served": "gemma4-e4b-warm",
+      "text": "22 October 2026 was a Wednesday.\nANSWER: Wednesday"
+    },
+    {
+      "case": "extract-total",
+      "verdict": "pass",
+      "detail": "1284.50",
+      "ms": 2189,
+      "served": "gemma4-e4b-warm",
+      "text": "The invoice total is $1,284.50.\nANSWER: 1284.50"
+    },
+    {
+      "case": "letter-count",
+      "verdict": "fail",
+      "detail": "7",
+      "ms": 2128,
+      "served": "gemma4-e4b-warm",
+      "text": "The letter 'r' appears 7 times in the phrase 'strawberry raspberry'.\nANSWER: 7"
+    },
+    {
+      "case": "logic-order",
+      "verdict": "pass",
+      "detail": "Cy",
+      "ms": 2167,
+      "served": "gemma4-e4b-warm",
+      "text": "The order of height is Dee > Ana > Ben > Cy. Cy is the shortest.\nANSWER: Cy"
+    },
+    {
+      "case": "sort",
+      "verdict": "pass",
+      "detail": "3, 7, 19, 19, 42, 88",
+      "ms": 2875,
+      "served": "gemma4-e4b-warm",
+      "text": "The sorted numbers are 3, 7, 19, 19, 42, 88.\nANSWER: 3, 7, 19, 19, 42, 88"
+    },
+    {
+      "case": "code-trace",
+      "verdict": "pass",
+      "detail": "35",
+      "ms": 3078,
+      "served": "gemma4-e4b-warm",
+      "text": "The code calculates the sum of the squares of the odd numbers in the list. The odd numbers are 1, 3, and 5, so the sum is $1^2 + 3^2 + 5^2 = 1 + 9 + 25 = 35$.\nANSWER: 35"
+    },
+    {
+      "case": "units",
+      "verdict": "pass",
+      "detail": "210.75",
+      "ms": 2820,
+      "served": "gemma4-e4b-warm",
+      "text": "3.5 hours is 210 minutes, and 45 seconds is $0.75$ minutes. The total is $210.75$ minutes.\nANSWER: 210.75"
+    },
+    {
+      "case": "regex",
+      "verdict": "fail",
+      "detail": "abc, axc",
+      "ms": 1944,
+      "served": "gemma4-e4b-warm",
+      "text": "The strings that fully match the regex `^a.c$` are `abc` and `axc`.\nANSWER: abc, axc"
+    },
+    {
+      "case": "false-premise",
+      "verdict": "pass",
+      "detail": "N/A",
+      "ms": 2574,
+      "served": "gemma4-e4b-warm",
+      "text": "The Eiffel Tower was never moved to London.\nANSWER: N/A"
+    },
+    {
+      "case": "buried-fact",
+      "verdict": "pass",
+      "detail": "19",
+      "ms": 2083,
+      "served": "gemma4-e4b-warm",
+      "text": "The server migration finishes on day 19 of the sprint.\nANSWER: 19"
+    },
+    {
+      "case": "percent",
+      "verdict": "pass",
+      "detail": "15%",
+      "ms": 2452,
+      "served": "gemma4-e4b-warm",
+      "text": "The price increased by 15%.\nANSWER: 15%"
+    },
+    {
+      "case": "negation",
+      "verdict": "pass",
+      "detail": "2, 6, 10",
+      "ms": 3248,
+      "served": "gemma4-e4b-warm",
+      "text": "The even numbers between 1 and 10 are 2, 4, 6, 8, and 10. Excluding those divisible by 4 (4 and 8) leaves 2, 6, and 10.\nANSWER: 2, 6, 10"
+    },
+    {
+      "case": "count-words",
+      "verdict": "pass",
+      "detail": "9",
+      "ms": 2352,
+      "served": "gemma4-e4b-warm",
+      "text": "There are nine words in that sentence.\nANSWER: 9"
+    }
+  ]
+}

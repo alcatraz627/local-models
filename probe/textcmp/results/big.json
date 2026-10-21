@@ -1,0 +1,117 @@
+{
+  "model": "big",
+  "rows": [
+    {
+      "case": "arith-crates",
+      "verdict": "fail",
+      "detail": "176",
+      "ms": 972,
+      "served": "gemma4:26b",
+      "text": "There are 176 intact bottles. This is calculated by (7 * 24) + 5 - 13.\n\nANSWER: 176"
+    },
+    {
+      "case": "weekday",
+      "verdict": "pass",
+      "detail": "Thursday",
+      "ms": 608,
+      "served": "gemma4:26b",
+      "text": "October 22, 2026, will be a Thursday.\n\nANSWER: Thursday"
+    },
+    {
+      "case": "extract-total",
+      "verdict": "pass",
+      "detail": "$1,284.50",
+      "ms": 726,
+      "served": "gemma4:26b",
+      "text": "The invoice total is $1,284.50.\n\nANSWER: $1,284.50"
+    },
+    {
+      "case": "letter-count",
+      "verdict": "fail",
+      "detail": "5",
+      "ms": 576,
+      "served": "gemma4:26b",
+      "text": "The letter 'r' appears 5 times in the phrase 'strawberry raspberry'.\n\nANSWER: 5"
+    },
+    {
+      "case": "logic-order",
+      "verdict": "pass",
+      "detail": "Cy",
+      "ms": 608,
+      "served": "gemma4:26b",
+      "text": "Cy is the shortest because the order from tallest to shortest is Dee, Ana, Ben, and Cy.\n\nANSWER: Cy"
+    },
+    {
+      "case": "sort",
+      "verdict": "pass",
+      "detail": "3, 7, 19, 19, 42, 88",
+      "ms": 1053,
+      "served": "gemma4:26b",
+      "text": "3, 7, 19, 19, 42, 88.\n\nANSWER: 3, 7, 19, 19, 42, 88"
+    },
+    {
+      "case": "code-trace",
+      "verdict": "pass",
+      "detail": "35",
+      "ms": 834,
+      "served": "gemma4:26b",
+      "text": "The code calculates the sum of the squares of the odd numbers in the list (1, 9, and 25). The result is 35.\n\nANSWER: 35"
+    },
+    {
+      "case": "units",
+      "verdict": "pass",
+      "detail": "210.75",
+      "ms": 762,
+      "served": "gemma4:26b",
+      "text": "There are 210.75 minutes in 3.5 hours plus 45 seconds.\n\nANSWER: 210.75"
+    },
+    {
+      "case": "regex",
+      "verdict": "fail",
+      "detail": "abc, axc",
+      "ms": 450,
+      "served": "gemma4:26b",
+      "text": "abc, axc\n\nANSWER: abc, axc"
+    },
+    {
+      "case": "false-premise",
+      "verdict": "pass",
+      "detail": "Never",
+      "ms": 607,
+      "served": "gemma4:26b",
+      "text": "The Eiffel Tower was never moved to London; it remains in Paris, France.\n\nANSWER: Never"
+    },
+    {
+      "case": "buried-fact",
+      "verdict": "pass",
+      "detail": "19",
+      "ms": 565,
+      "served": "gemma4:26b",
+      "text": "The server migration finishes on day 19 of the sprint.\n\nANSWER: 19"
+    },
+    {
+      "case": "percent",
+      "verdict": "pass",
+      "detail": "15%",
+      "ms": 880,
+      "served": "gemma4:26b",
+      "text": "The price rose by 15%. This is calculated by dividing the increase of 12 by the original price of 80.\n\nANSWER: 15%"
+    },
+    {
+      "case": "negation",
+      "verdict": "pass",
+      "detail": "2, 6, 10",
+      "ms": 974,
+      "served": "gemma4:26b",
+      "text": "The even numbers between 1 and 10 that are not divisible by 4 are 2, 6, and 10.\n\nANSWER: 2, 6, 10"
+    },
+    {
+      "case": "count-words",
+      "verdict": "pass",
+      "detail": "9",
+      "ms": 630,
+      "served": "gemma4:26b",
+      "text": "There are 9 words in that sentence.\n\nANSWER: 9"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "model": "qwen2.5-coder:3b",
+  "rows": [
+    {
+      "case": "arith-crates",
+      "verdict": "fail",
+      "detail": "15",
+      "ms": 1360,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 15"
+    },
+    {
+      "case": "weekday",
+      "verdict": "fail",
+      "detail": "Wednesday",
+      "ms": 1012,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: Wednesday"
+    },
+    {
+      "case": "extract-total",
+      "verdict": "fail",
+      "detail": "1,784.50",
+      "ms": 1155,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 1,784.50"
+    },
+    {
+      "case": "letter-count",
+      "verdict": "fail",
+      "detail": "3",
+      "ms": 1071,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 3"
+    },
+    {
+      "case": "logic-order",
+      "verdict": "pass",
+      "detail": "Cy",
+      "ms": 765,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: Cy"
+    },
+    {
+      "case": "sort",
+      "verdict": "pass",
+      "detail": "3, 7, 19, 19, 42, 88",
+      "ms": 1213,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 3, 7, 19, 19, 42, 88"
+    },
+    {
+      "case": "code-trace",
+      "verdict": "fail",
+      "detail": "30",
+      "ms": 1054,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 30"
+    },
+    {
+      "case": "units",
+      "verdict": "fail",
+      "detail": "213.5",
+      "ms": 1093,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 213.5"
+    },
+    {
+      "case": "regex",
+      "verdict": "fail",
+      "detail": "abc, ac, a.c",
+      "ms": 1071,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: abc, ac, a.c"
+    },
+    {
+      "case": "false-premise",
+      "verdict": "fail",
+      "detail": "1938",
+      "ms": 775,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 1938"
+    },
+    {
+      "case": "buried-fact",
+      "verdict": "pass",
+      "detail": "19",
+      "ms": 783,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 19"
+    },
+    {
+      "case": "percent",
+      "verdict": "fail",
+      "detail": "5%",
+      "ms": 1223,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 5%"
+    },
+    {
+      "case": "negation",
+      "verdict": "fail",
+      "detail": "2, 6, 8",
+      "ms": 1121,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 2, 6, 8"
+    },
+    {
+      "case": "count-words",
+      "verdict": "fail",
+      "detail": "29",
+      "ms": 1441,
+      "served": "qwen2.5-coder:3b",
+      "text": "ANSWER: 29"
+    }
+  ]
+}

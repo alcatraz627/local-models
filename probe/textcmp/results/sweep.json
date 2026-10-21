@@ -1,0 +1,117 @@
+{
+  "model": "sweep",
+  "rows": [
+    {
+      "case": "arith-crates",
+      "verdict": "pass",
+      "detail": "160",
+      "ms": 2989,
+      "served": "granite4:tiny-h",
+      "text": "There are 7 crates \u00d7 24 bottles per crate = 168 bottles in the crates. Adding the 5 loose bottles gives 168 + 5 = 173 bottles. Subtracting the 13 broken bottles leaves 173 - 13 = 160 intact bottles. ANSWER: 160"
+    },
+    {
+      "case": "weekday",
+      "verdict": "fail",
+      "detail": "Tuesday",
+      "ms": 1221,
+      "served": "granite4:tiny-h",
+      "text": "22 October 2026 falls on a Tuesday. ANSWER: Tuesday."
+    },
+    {
+      "case": "extract-total",
+      "verdict": "pass",
+      "detail": "$1284.50",
+      "ms": 1543,
+      "served": "granite4:tiny-h",
+      "text": "The invoice total is $1,284.50. ANSWER: $1284.50."
+    },
+    {
+      "case": "letter-count",
+      "verdict": "fail",
+      "detail": "4",
+      "ms": 1209,
+      "served": "granite4:tiny-h",
+      "text": "The letter r appears 4 times in the phrase 'strawberry raspberry'. ANSWER: 4"
+    },
+    {
+      "case": "logic-order",
+      "verdict": "pass",
+      "detail": "Cy",
+      "ms": 1362,
+      "served": "granite4:tiny-h",
+      "text": "Cy is the shortest. ANSWER: Cy"
+    },
+    {
+      "case": "sort",
+      "verdict": "pass",
+      "detail": "3, 7, 19, 19, 42, 88",
+      "ms": 1665,
+      "served": "granite4:tiny-h",
+      "text": "3, 7, 19, 19, 42, 88. ANSWER: <3, 7, 19, 19, 42, 88>"
+    },
+    {
+      "case": "code-trace",
+      "verdict": "pass",
+      "detail": "35",
+      "ms": 1138,
+      "served": "granite4:tiny-h",
+      "text": "The code prints 35. ANSWER: 35"
+    },
+    {
+      "case": "units",
+      "verdict": "fail",
+      "detail": "2100.75",
+      "ms": 1384,
+      "served": "granite4:tiny-h",
+      "text": "3.5 hours equals 2100 minutes plus 45 seconds which is 0.75 minutes, totaling 2100.75 minutes. ANSWER: 2100.75"
+    },
+    {
+      "case": "regex",
+      "verdict": "pass",
+      "detail": "abc,axc,a.c",
+      "ms": 1165,
+      "served": "granite4:tiny-h",
+      "text": "abc,axc,a.c\nANSWER: abc,axc,a.c"
+    },
+    {
+      "case": "false-premise",
+      "verdict": "pass",
+      "detail": "No, it was not moved to London",
+      "ms": 1581,
+      "served": "granite4:tiny-h",
+      "text": "The Eiffel Tower was not moved to London. ANSWER: <answer>No, it was not moved to London.</answer>"
+    },
+    {
+      "case": "buried-fact",
+      "verdict": "pass",
+      "detail": "19",
+      "ms": 1228,
+      "served": "granite4:tiny-h",
+      "text": "The server migration finishes on sprint day 19. ANSWER: 19"
+    },
+    {
+      "case": "percent",
+      "verdict": "pass",
+      "detail": "15%",
+      "ms": 1161,
+      "served": "granite4:tiny-h",
+      "text": "The price increased by 15%. ANSWER: 15%"
+    },
+    {
+      "case": "negation",
+      "verdict": "pass",
+      "detail": "2, 6, 10",
+      "ms": 1555,
+      "served": "granite4:tiny-h",
+      "text": "2, 6, 10. ANSWER: 2, 6, 10."
+    },
+    {
+      "case": "count-words",
+      "verdict": "pass",
+      "detail": "9",
+      "ms": 1159,
+      "served": "granite4:tiny-h",
+      "text": "The sentence contains 9 words. ANSWER: 9"
+    }
+  ]
+}
