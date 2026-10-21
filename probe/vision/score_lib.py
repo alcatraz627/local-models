@@ -247,16 +247,18 @@ def absent_answer(value):
 
 
 
-ANSWER_RE = re.compile(r"^\W*ANSWER\W*[:：]\s*(.+)$", re.IGNORECASE)
+# Models put the marker mid-line ("... checked. ANSWER: X") or shorten it to
+# "ANS:"; both still follow the contract, so both count. Only the last one wins.
+ANSWER_RE = re.compile(r"(?:^|[\s*_`(>])ANS(?:WER)?\W{0,3}[:：]\s*(.+)$", re.IGNORECASE)
 
 
 def answer_line(reply):
-    """The last 'ANSWER: ...' line with markdown stars and backticks removed, or None."""
+    """The last 'ANSWER: ...' (or 'ANS:') value with markdown stars and backticks removed, or None."""
     last = None
     for line in str(reply or "").splitlines():
-        m = ANSWER_RE.match(line.strip())
-        if m:
-            value = m.group(1).strip().strip("*`_ ").strip()
+        for m in ANSWER_RE.finditer(line.strip()):
+            value = re.sub(r"</?answer>", "", m.group(1), flags=re.I)
+            value = value.strip().strip("*`_ <>").strip()
             if value:
                 last = value
     return last
