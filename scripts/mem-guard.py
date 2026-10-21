@@ -34,6 +34,7 @@ PAGE = 16384  # Apple Silicon page size (bytes)
 # ollama.*runn / ollama_llama branches matched nothing on this build and were dropped;
 # if ollama renames its runner, add the new name here.
 KILLSET = re.compile(r"(mlx_vlm|mlx\.launch|mlx_lm|llama[-_]server)", re.I)
+MLX_PROC = re.compile(r"(mlx_vlm|mlx\.launch|mlx_lm)", re.I)
 # Agent processes to never kill. Matched against IDENTITY, not the full command path.
 NEVER = re.compile(r"(claude|node|Cursor|Electron|Code Helper|com\.apple)", re.I)
 LOG = os.path.expanduser("~/Code/local-models/logs/mem-guard.jsonl")
@@ -167,6 +168,19 @@ def kill_one(pid, rss, cmd, reason):
         return True
 
 
+def should_fire(lvl, avail, thr, pressure_trigger, procs):
+    """Whether memory is bad enough to kill a model process right now.
+
+    Warn-level pressure is normal while one big ollama model loads, and the
+    machine-killing case was always an mlx load beside ollama. So warn fires only
+    with an mlx process alive; critical pressure or a low free floor fire always.
+    Firing on warn alone once killed eight gemma4:26b loads in a row.
+    """
+    mlx_alive = any(MLX_PROC.search(cmd) for _, _, cmd in procs)
+    warn = lvl is not None and lvl >= pressure_trigger and mlx_alive
+    return warn or (lvl is not None and lvl >= 4) or avail < thr
+
+
 def other_guard_running():
     """True if another mem-guard.py process is alive. Uses pgrep on the SCRIPT name,
     not the pidfile's bare pid — a stale pidfile whose pid has been reused by an
@@ -198,7 +212,7 @@ def daemon(threshold_gb, pressure_trigger, interval, max_runtime, stop_file):
             break
         lvl = pressure_level()
         avail = available_bytes()
-        fire = (lvl is not None and lvl >= pressure_trigger) or avail < thr
+        fire = should_fire(lvl, avail, thr, pressure_trigger, model_procs())
         if fire:
             procs = [p for p in model_procs()
                      if time.time() - unkillable.get(p[0], 0) > 30]
