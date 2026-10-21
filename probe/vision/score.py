@@ -309,7 +309,13 @@ def _ui_payload(reply, data):
     try:
         loaded = json.loads(reply) if isinstance(reply, str) else reply
     except ValueError:
-        return None
+        # same fallback as see's .data: the outermost {...} span, for fenced replies
+        s = reply if isinstance(reply, str) else ""
+        a, b = s.find("{"), s.rfind("}")
+        try:
+            loaded = json.loads(s[a:b + 1]) if 0 <= a < b else None
+        except ValueError:
+            return None
     return loaded if isinstance(loaded, dict) else None
 
 

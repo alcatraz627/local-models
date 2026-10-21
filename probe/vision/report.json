@@ -1,0 +1,3473 @@
+{
+  "models": [
+    "apple-vision",
+    "gemma4:26b",
+    "gemma4-e4b-warm",
+    "minicpm-v4.6",
+    "mlx:mlx-community/Qwen3.5-9B-MLX-4bit",
+    "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit",
+    "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit",
+    "qwen3.6:35b-a3b"
+  ],
+  "cases": [
+    "C01",
+    "C02",
+    "C03",
+    "C04",
+    "T01",
+    "T02",
+    "T03",
+    "T04",
+    "T05",
+    "T06",
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "K03",
+    "G01",
+    "G03",
+    "G04",
+    "B01",
+    "B02",
+    "U01",
+    "U02",
+    "U03",
+    "U04",
+    "U06",
+    "U07",
+    "R01",
+    "D01",
+    "D02",
+    "D03",
+    "D04",
+    "D05",
+    "D06",
+    "D07",
+    "H01",
+    "H02",
+    "H03",
+    "H04",
+    "O01",
+    "O02",
+    "O03",
+    "O04"
+  ],
+  "matrix": {
+    "apple-vision": {
+      "T06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      }
+    },
+    "gemma4:26b": {
+      "C01": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "C02": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 2,
+        "n": 3,
+        "rate": 0.0
+      },
+      "C03": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "C04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T03": {
+        "pass": 0,
+        "fail": 2,
+        "format_fail": 1,
+        "n": 3,
+        "rate": 0.0
+      },
+      "T04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T05": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "S01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "K03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "B01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "B02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U06": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U07": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "R01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D01": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D05": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D07": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "H01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O03": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "O04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      }
+    },
+    "gemma4-e4b-warm": {
+      "C01": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "C02": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "C03": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "C04": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "T01": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "T02": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "T03": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "T04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T05": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "S01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "K03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G03": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "G04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "B01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "B02": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "U01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U06": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U07": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "R01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D01": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D02": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "D03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D05": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D06": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D07": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "H01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O02": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "O03": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "O04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      }
+    },
+    "minicpm-v4.6": {
+      "C01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "C02": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "C03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "C04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T01": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "T02": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "T03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T04": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "T05": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "S01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "K03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G01": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "G03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "B01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "B02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U01": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "U02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U04": {
+        "pass": 0,
+        "fail": 2,
+        "format_fail": 1,
+        "n": 3,
+        "rate": 0.0
+      },
+      "U06": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U07": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "R01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D01": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D02": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "D03": {
+        "pass": 0,
+        "fail": 2,
+        "format_fail": 1,
+        "n": 3,
+        "rate": 0.0
+      },
+      "D04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D05": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D06": {
+        "pass": 0,
+        "fail": 0,
+        "format_fail": 1,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D07": {
+        "pass": 0,
+        "fail": 2,
+        "format_fail": 1,
+        "n": 3,
+        "rate": 0.0
+      },
+      "H01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H02": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "H03": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "H04": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "O01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O02": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "O03": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "O04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      }
+    },
+    "mlx:mlx-community/Qwen3.5-9B-MLX-4bit": {
+      "C01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "C02": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "C03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "C04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T05": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "S01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "K03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "B01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "B02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U06": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U07": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "R01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D01": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D05": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D07": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "H01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O03": {
+        "pass": 0,
+        "fail": 0,
+        "format_fail": 3,
+        "n": 3,
+        "rate": 0.0
+      },
+      "O04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      }
+    },
+    "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
+      "C01": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "C02": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "C03": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "C04": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "T01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T03": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "T04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T05": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "S01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "K03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G04": {
+        "pass": 0,
+        "fail": 0,
+        "format_fail": 1,
+        "n": 1,
+        "rate": 0.0
+      },
+      "B01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "B02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U04": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "U06": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U07": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "R01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D01": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D02": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "D03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D05": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D07": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "H01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O02": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "O03": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "O04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      }
+    },
+    "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit": {
+      "C01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "C02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "C03": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "C04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T05": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "S01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "K03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "B01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "B02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U06": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U07": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "R01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D01": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D02": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "D03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D05": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D07": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "H01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O02": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "O03": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "O04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      }
+    },
+    "qwen3.6:35b-a3b": {
+      "C01": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "C02": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "C03": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "C04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T05": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "S01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S02": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "S03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "K03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "B01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "B02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U04": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "U06": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U07": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "R01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D01": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D03": {
+        "pass": 2,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.6666666666666666
+      },
+      "D04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D05": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D07": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "H01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O03": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "O04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      }
+    }
+  },
+  "model_stats": {
+    "apple-vision": {
+      "pass": 1,
+      "fail": 0,
+      "format_fail": 0,
+      "n": 1,
+      "rate": 1.0,
+      "median_wall_s": 0.2
+    },
+    "gemma4:26b": {
+      "pass": 97,
+      "fail": 12,
+      "format_fail": 3,
+      "n": 112,
+      "rate": 0.8660714285714286,
+      "median_wall_s": 1.5
+    },
+    "gemma4-e4b-warm": {
+      "pass": 78,
+      "fail": 34,
+      "format_fail": 0,
+      "n": 112,
+      "rate": 0.6964285714285714,
+      "median_wall_s": 2.2
+    },
+    "minicpm-v4.6": {
+      "pass": 74,
+      "fail": 34,
+      "format_fail": 4,
+      "n": 112,
+      "rate": 0.6607142857142857,
+      "median_wall_s": 1.8
+    },
+    "mlx:mlx-community/Qwen3.5-9B-MLX-4bit": {
+      "pass": 100,
+      "fail": 9,
+      "format_fail": 3,
+      "n": 112,
+      "rate": 0.8928571428571429,
+      "median_wall_s": 5.5
+    },
+    "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
+      "pass": 85,
+      "fail": 26,
+      "format_fail": 1,
+      "n": 112,
+      "rate": 0.7589285714285714,
+      "median_wall_s": 3.4
+    },
+    "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit": {
+      "pass": 101,
+      "fail": 11,
+      "format_fail": 0,
+      "n": 112,
+      "rate": 0.9017857142857143,
+      "median_wall_s": 3.5
+    },
+    "qwen3.6:35b-a3b": {
+      "pass": 98,
+      "fail": 14,
+      "format_fail": 0,
+      "n": 112,
+      "rate": 0.875,
+      "median_wall_s": 2.0
+    }
+  },
+  "capability_rollup": {
+    "apple-vision": {
+      "dense text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "reading": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    },
+    "gemma4:26b": {
+      "UI": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI inventory": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI state": {
+        "rate": 1.0,
+        "cases": 5
+      },
+      "absence": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "chart": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "chart values": {
+        "rate": 1.0,
+        "cases": 3
+      },
+      "checked": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "color": {
+        "rate": 0.6666666666666666,
+        "cases": 4
+      },
+      "counting": {
+        "rate": 0.5833333333333333,
+        "cases": 4
+      },
+      "crop lift": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "dense layout": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "dense text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "diff": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "diff localization": {
+        "rate": 0.3333333333333333,
+        "cases": 3
+      },
+      "disabled": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "false premise": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "hallucination trap": {
+        "rate": 1.0,
+        "cases": 7
+      },
+      "low-contrast text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "no language prior": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "odd-one-out": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "on/off": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "reading": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "reading small text": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "real art": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotated text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotation": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "selected": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "spatial relations": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "table": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "table cells": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "text binding": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    },
+    "gemma4-e4b-warm": {
+      "UI": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI inventory": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI state": {
+        "rate": 1.0,
+        "cases": 5
+      },
+      "absence": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "chart": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "chart values": {
+        "rate": 0.7777777777777778,
+        "cases": 3
+      },
+      "checked": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "color": {
+        "rate": 0.5833333333333334,
+        "cases": 4
+      },
+      "counting": {
+        "rate": 0.16666666666666666,
+        "cases": 4
+      },
+      "crop lift": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "dense layout": {
+        "rate": 0.6666666666666666,
+        "cases": 2
+      },
+      "dense text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "diff": {
+        "rate": 0.5,
+        "cases": 4
+      },
+      "diff localization": {
+        "rate": 0.2222222222222222,
+        "cases": 3
+      },
+      "disabled": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "false premise": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "hallucination trap": {
+        "rate": 0.7142857142857143,
+        "cases": 7
+      },
+      "low-contrast text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "no language prior": {
+        "rate": 0.3333333333333333,
+        "cases": 1
+      },
+      "odd-one-out": {
+        "rate": 0.25,
+        "cases": 4
+      },
+      "on/off": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "reading": {
+        "rate": 0.8333333333333334,
+        "cases": 4
+      },
+      "reading small text": {
+        "rate": 0.6666666666666666,
+        "cases": 4
+      },
+      "real art": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "rotated text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotation": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "selected": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "spatial relations": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "table": {
+        "rate": 0.3333333333333333,
+        "cases": 1
+      },
+      "table cells": {
+        "rate": 0.6666666666666666,
+        "cases": 2
+      },
+      "text binding": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    },
+    "minicpm-v4.6": {
+      "UI": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI inventory": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI state": {
+        "rate": 0.7333333333333333,
+        "cases": 5
+      },
+      "absence": {
+        "rate": 0.8333333333333333,
+        "cases": 2
+      },
+      "chart": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "chart values": {
+        "rate": 0.4444444444444444,
+        "cases": 3
+      },
+      "checked": {
+        "rate": 0.6666666666666666,
+        "cases": 1
+      },
+      "color": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "counting": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "crop lift": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "dense layout": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "dense text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "diff": {
+        "rate": 0.25,
+        "cases": 4
+      },
+      "diff localization": {
+        "rate": 0.0,
+        "cases": 3
+      },
+      "disabled": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "false premise": {
+        "rate": 0.16666666666666666,
+        "cases": 2
+      },
+      "hallucination trap": {
+        "rate": 0.42857142857142855,
+        "cases": 7
+      },
+      "low-contrast text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "no language prior": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "odd-one-out": {
+        "rate": 0.3333333333333333,
+        "cases": 4
+      },
+      "on/off": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "reading": {
+        "rate": 0.5,
+        "cases": 4
+      },
+      "reading small text": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "real art": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "rotated text": {
+        "rate": 0.6666666666666666,
+        "cases": 1
+      },
+      "rotation": {
+        "rate": 0.3333333333333333,
+        "cases": 1
+      },
+      "selected": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "spatial relations": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "table": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "table cells": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "text binding": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    },
+    "mlx:mlx-community/Qwen3.5-9B-MLX-4bit": {
+      "UI": {
+        "rate": 0.6666666666666666,
+        "cases": 1
+      },
+      "UI inventory": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI state": {
+        "rate": 1.0,
+        "cases": 5
+      },
+      "absence": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "chart": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "chart values": {
+        "rate": 1.0,
+        "cases": 3
+      },
+      "checked": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "color": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "counting": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "crop lift": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "dense layout": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "dense text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "diff": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "diff localization": {
+        "rate": 0.3333333333333333,
+        "cases": 3
+      },
+      "disabled": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "false premise": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "hallucination trap": {
+        "rate": 1.0,
+        "cases": 7
+      },
+      "low-contrast text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "no language prior": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "odd-one-out": {
+        "rate": 0.5,
+        "cases": 4
+      },
+      "on/off": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "reading": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "reading small text": {
+        "rate": 0.9166666666666666,
+        "cases": 4
+      },
+      "real art": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "rotated text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotation": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "selected": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "spatial relations": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "table": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "table cells": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "text binding": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    },
+    "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
+      "UI": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI inventory": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI state": {
+        "rate": 0.8,
+        "cases": 5
+      },
+      "absence": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "chart": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "chart values": {
+        "rate": 0.6666666666666666,
+        "cases": 3
+      },
+      "checked": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "color": {
+        "rate": 0.6666666666666666,
+        "cases": 4
+      },
+      "counting": {
+        "rate": 0.41666666666666663,
+        "cases": 4
+      },
+      "crop lift": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "dense layout": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "dense text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "diff": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "diff localization": {
+        "rate": 0.0,
+        "cases": 3
+      },
+      "disabled": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "false premise": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "hallucination trap": {
+        "rate": 1.0,
+        "cases": 7
+      },
+      "low-contrast text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "no language prior": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "odd-one-out": {
+        "rate": 0.3333333333333333,
+        "cases": 4
+      },
+      "on/off": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "reading": {
+        "rate": 0.5,
+        "cases": 4
+      },
+      "reading small text": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "real art": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "rotated text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotation": {
+        "rate": 0.3333333333333333,
+        "cases": 1
+      },
+      "selected": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "spatial relations": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "table": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "table cells": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "text binding": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    },
+    "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit": {
+      "UI": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI inventory": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI state": {
+        "rate": 1.0,
+        "cases": 5
+      },
+      "absence": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "chart": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "chart values": {
+        "rate": 1.0,
+        "cases": 3
+      },
+      "checked": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "color": {
+        "rate": 0.6666666666666666,
+        "cases": 4
+      },
+      "counting": {
+        "rate": 0.9166666666666666,
+        "cases": 4
+      },
+      "crop lift": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "dense layout": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "dense text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "diff": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "diff localization": {
+        "rate": 0.2222222222222222,
+        "cases": 3
+      },
+      "disabled": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "false premise": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "hallucination trap": {
+        "rate": 1.0,
+        "cases": 7
+      },
+      "low-contrast text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "no language prior": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "odd-one-out": {
+        "rate": 0.41666666666666663,
+        "cases": 4
+      },
+      "on/off": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "reading": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "reading small text": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "real art": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "rotated text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotation": {
+        "rate": 0.6666666666666666,
+        "cases": 1
+      },
+      "selected": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "spatial relations": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "table": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "table cells": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "text binding": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    },
+    "qwen3.6:35b-a3b": {
+      "UI": {
+        "rate": 0.6666666666666666,
+        "cases": 1
+      },
+      "UI inventory": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI state": {
+        "rate": 0.9333333333333333,
+        "cases": 5
+      },
+      "absence": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "chart": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "chart values": {
+        "rate": 1.0,
+        "cases": 3
+      },
+      "checked": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "color": {
+        "rate": 0.6666666666666666,
+        "cases": 4
+      },
+      "counting": {
+        "rate": 0.5833333333333333,
+        "cases": 4
+      },
+      "crop lift": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "dense layout": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "dense text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "diff": {
+        "rate": 0.9166666666666666,
+        "cases": 4
+      },
+      "diff localization": {
+        "rate": 0.7777777777777778,
+        "cases": 3
+      },
+      "disabled": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "false premise": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "hallucination trap": {
+        "rate": 1.0,
+        "cases": 7
+      },
+      "low-contrast text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "no language prior": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "odd-one-out": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "on/off": {
+        "rate": 0.6666666666666666,
+        "cases": 1
+      },
+      "reading": {
+        "rate": 0.9166666666666666,
+        "cases": 4
+      },
+      "reading small text": {
+        "rate": 0.9166666666666666,
+        "cases": 4
+      },
+      "real art": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotated text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotation": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "selected": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "spatial relations": {
+        "rate": 0.9166666666666666,
+        "cases": 4
+      },
+      "table": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "table cells": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "text binding": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    }
+  },
+  "script_baseline": {
+    "C02": {
+      "pass": 3,
+      "n": 3,
+      "rate": 1.0
+    },
+    "T06": {
+      "pass": 1,
+      "n": 1,
+      "rate": 1.0
+    },
+    "D02": {
+      "pass": 3,
+      "n": 3,
+      "rate": 1.0
+    },
+    "D07": {
+      "pass": 3,
+      "n": 3,
+      "rate": 1.0
+    },
+    "O03": {
+      "pass": 3,
+      "n": 3,
+      "rate": 1.0
+    }
+  },
+  "crop_lift": {
+    "B02": {
+      "gemma4:26b": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "gemma4-e4b-warm": {
+        "full": {
+          "pass": 1,
+          "fail": 2,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 0.3333333333333333
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "minicpm-v4.6": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "mlx:mlx-community/Qwen3.5-9B-MLX-4bit": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "qwen3.6:35b-a3b": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      }
+    },
+    "R01": {
+      "gemma4:26b": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "region": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "gemma4-e4b-warm": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "region": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "minicpm-v4.6": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "region": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "mlx:mlx-community/Qwen3.5-9B-MLX-4bit": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "region": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "region": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "region": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
+      "qwen3.6:35b-a3b": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "region": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      }
+    }
+  },
+  "plain_read_companion": {
+    "H01": {
+      "gemma4:26b": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "gemma4-e4b-warm": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "minicpm-v4.6": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "mlx:mlx-community/Qwen3.5-9B-MLX-4bit": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "qwen3.6:35b-a3b": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      }
+    }
+  },
+  "flags": {
+    "apple-vision": {},
+    "gemma4:26b": {},
+    "gemma4-e4b-warm": {
+      "autocorrected": 1,
+      "band_trap": 1
+    },
+    "minicpm-v4.6": {},
+    "mlx:mlx-community/Qwen3.5-9B-MLX-4bit": {},
+    "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
+      "band_trap": 1
+    },
+    "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit": {},
+    "qwen3.6:35b-a3b": {}
+  }
+}

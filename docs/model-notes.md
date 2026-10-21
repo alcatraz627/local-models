@@ -25,16 +25,19 @@ Newest first.
 
 | Date | Task | Checked how | Result | Note |
 |---|---|---|---|---|
+| 2026-10-22 | 290 KB needle question, auto-routed to the direct API | exact answer | right, 3 s, served by 3.8-flash | gemini-cli 0.64 (upgraded from 0.46) now also serves 3.8-flash as requested |
 | 2026-10-21 | Same 170K sweep, called by the direct API | exact-answer key | 7/7, 11.1s | Through gemini-cli 0.46, requests for 3.8-flash are answered by 3.6-flash (`served` field in gem-history) |
 
 ## Codex gpt-6-luna
 
 | Date | Task | Checked how | Result | Note |
 |---|---|---|---|---|
+| 2026-10-22 | Build the vision harness and fix 23 CLI review findings, two runs at once | the drafts were finished and tested by Claude sonnet seats | Both runs hit the account usage limit midway: full drafts of the harness files, none run; partial edits to `_lib.sh` and `q` | Quota resets 2026-11-20. Its harness drafts were sound enough to finish, with one crash (a missing baseline) |
 | 2026-10-21 | PR review, speedway #110, exploring the exported tree read-only, effort high | each finding read against the code at head (shallow) | 2 findings: 1 held (the most product-relevant of either review), 1 false (shared with Argon) | gpt-6-astra and gpt-6-sol are refused on this ChatGPT login; luna is the heaviest accepted |
 
 ## Local vision (minicpm-v4.6, Qwen3-VL-8B MLX)
 
 | Date | Task | Checked how | Result | Note |
 |---|---|---|---|---|
+| 2026-10-22 | 42-case vision harness, 3 seeds, 7 models | generated truths, meaning-based scorers, every failing cell read | Qwen3-VL-8B 101/112, Qwen3.5-9B 100, qwen3.6:35b 98, gemma4:26b 97, Qwen3-VL-4B 85, gemma4-e4b 78, minicpm-v4.6 74 | `docs/20261022-model-comparison.md` |
 | 2026-10-21 | Name the odd motif of 12 on the Affinity rug-border fixture | case.json truth (motif 9) | minicpm said 3, Qwen3-VL said 6: both wrong | Counting and comparing many small shapes is a measuring job; a pixel script found motif 9 |

@@ -1,0 +1,42 @@
+{
+  "stage": "see-diff",
+  "model": "gemma4:26b",
+  "checks": [
+    {
+      "fixture": "diff-login",
+      "pass": true,
+      "detail": "required=['12', '47', 'last sync']",
+      "answer": "## TEXT CHANGES\nREMOVED (in A only): \"Open orders 12\"\nADDED (in B only): \"Open orders 47\" | \"Last sync: 2 min ago\"\nMOVED: \"Refresh\" bottom-left -> bottom-right (d=+0.67,+0.00)\n\n## LAYOUT SHIFTS\n- The \"Refresh\" button has moved from the bottom-left corner of the content area to the bottom-right corner.\n- The new text element \"Last sync: 2 min ago\" is positioned in the middle-left area of the content area.\n\n## ADDED / REMOVED\n- ADDED: A new text line \"Last sync: 2 min ago\" appears below the \"Open orders\" line.\n\n## STYLE & COLOR\n- The color palette (black header, white background, blue button) remains consistent.\n- The typography and font weight appear identical between both versions.\n\n## FIDELITY NOTES\n- The change in \"Open orders\" value (from 12 to 47) represents a change in the underlying data/state being displayed.\n- The addition of \"Last sync: 2 min ago\" provides new temporal context/metadata not present in the original.\n- The relocation of the \"Refresh\" button changes the UI interaction pattern (from left-aligned to right-aligned)."
+    },
+    {
+      "fixture": "f2",
+      "pass": false,
+      "detail": "required=['different', 'color', 'border']",
+      "answer": "## TEXT CHANGES\n(no text-layer differences detected)\n\n## LAYOUT SHIFTS\nThe central play icon (white triangle) remains centered in both images. The outer container (blue square) has changed from a sharp-cornered square in A to a rounded-corner square in B.\n\n## ADDED / REMOVED\nNo elements were added or removed; only the corner radius of the container was modified.\n\n## STYLE & COLOR\n*   **Shape:** Image A features a square with sharp 90-degree corners. Image B features a square with rounded corners.\n*   **Color:** The blue color in B appears slightly more saturated/vibrant than the blue in A.\n*   **Border:** The dark blue border in A is thinner than the thicker, more pronounced dark blue border in B.\n\n## FIDELITY NOTES\nThe change is purely cosmetic. The fundamental meaning of the icon (a \"play\" button) remains intact, though the visual style has shifted from a sharp, geometric aesthetic to a softer, more modern rounded aesthetic."
+    },
+    {
+      "fixture": "f3",
+      "pass": true,
+      "detail": "required_any=['identical', 'no difference', 'unchanged']; forbidden=['different', 'changed']",
+      "answer": "## TEXT CHANGES\n(no text-layer differences detected)\n\n## LAYOUT SHIFTS\nThe elements (the green square and the white play triangle) are in identical positions and dimensions in both images.\n\n## ADDED / REMOVED\nNone.\n\n## STYLE & COLOR\nThe images are identical in color, shape, and composition.\n\n## FIDELITY NOTES\nThe images are identical."
+    },
+    {
+      "fixture": "f4",
+      "pass": false,
+      "detail": "required=['light', 'dark', 'same text']",
+      "answer": "## TEXT CHANGES\n(no text-layer differences detected)\n\n## LAYOUT SHIFTS\nThe layout remains identical in terms of element positioning and hierarchy.\n\n## ADDED / REMOVED\nNo elements were added or removed.\n\n## STYLE & COLOR\n*   **Theme:** Image A uses a Light Mode theme (white background). Image B uses a Dark Mode theme (dark navy/black background).\n*   **Color Palette:** \n    *   The header background remains the same blue in both.\n    *   The primary text color changes from dark grey/black in A to white/light grey in B.\n    *   The secondary text color (\"Revenue\", \"3 items tracked\") changes from a medium grey in A to a lighter grey in B to maintain contrast against the dark background.\n*   **Button:** The \"View all\" button maintains the same blue background and white text.\n\n## FIDELITY NOTES\nThe change from Light Mode to Dark Mode is a cosmetic/thematic choice and does not alter the information or functionality of the dashboard. All data points ($1,240, 3 items tracked) remain consistent."
+    },
+    {
+      "fixture": "f5",
+      "pass": false,
+      "detail": "required=['incomparable', 'aspect']",
+      "answer": "## TEXT CHANGES\nThe provided machine-verified text diff indicates that all text elements present in A are also present in B. No text changes were identified between the two images.\n\n## LAYOUT SHIFTS\nThe layout remains identical between A and B. Both images feature a top navigation bar with text links and a row of four metric cards below it.\n\n## ADDED / REMOVED\nThere are no added or removed elements between the two images.\n\n## STYLE & COLOR\nThe style and color are identical between A and B. Both use a dark navy/black background for the header, a light grey/white background for the main area, and white cards with dark text.\n\n## FIDELITY NOTES\nThe two images are identical. There are no functional or informational differences."
+    },
+    {
+      "fixture": "f6",
+      "pass": true,
+      "detail": "required=['q3', 'q5', 'bar']",
+      "answer": "## TEXT CHANGES\nREMOVED (in A only): \"Q1 Q2 Q3 Q4\"\nADDED (in B only): \"Q1 Q2 Q5 Q4\"\n\n## LAYOUT SHIFTS\nThe x-axis labels have shifted due to the change in the third value: \"Q3\" has been replaced by \"Q5\".\n\n## ADDED / REMOVED\nNo whole elements or regions were added or removed, only the content of the x-axis labels was modified.\n\n## STYLE & COLOR\nThe color palette, typography, and bar heights remain visually consistent between both images, though the relative proportions of the bars have changed to reflect the new data point.\n\n## FIDELITY NOTES\nThe change from \"Q3\" to \"Q5\" represents a significant data error/contradiction. In a standard quarterly sales chart, \"Q5\" is non-existent, meaning the candidate image (B) fails to accurately represent the temporal sequence established in the reference image (A). Additionally, the bar corresponding to the third position has increased in height in B compared to A."
+    }
+  ]
+}

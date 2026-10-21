@@ -1,0 +1,42 @@
+{
+  "stage": "see-diff",
+  "model": "minicpm-v4.6",
+  "checks": [
+    {
+      "fixture": "diff-login",
+      "pass": true,
+      "detail": "required=['12', '47', 'last sync']",
+      "answer": "## TEXT CHANGES\n\nREMOVED (in A only): \"Open orders 12\"\nADDED (in B only): \"Open orders 47\" | \"Last sync: 2 min ago\"\nMOVED: \"Refresh\" bottom-left -> bottom-right (d=+0.67,+0.00)\n\n## LAYOUT SHIFTS\n\nNo significant layout changes; the \"Refresh\" button's position is adjusted to the bottom-right in B compared to A.\n\n## ADDED / REMOVED\n\nNew text \"Open orders 47\" and \"Last sync: 2 min ago\" are present in B, not A.\n\n## STYLE & COLOR\n\nStylings appear consistent across both images; colors and typography are unchanged.\n\n## FIDELITY NOTES\n\nFunctional information is altered: the count of open orders is updated from 12 to 47, and additional sync details are added. The \"Refresh\" button's placement is adjusted, indicating a layout change. No elements are visibly contradicted."
+    },
+    {
+      "fixture": "f2",
+      "pass": false,
+      "detail": "required=['different', 'color', 'border']",
+      "answer": "## TEXT CHANGES\n\nThe textual content within both interfaces appears identical with no discernible differences in wording or placement.\n\n## LAYOUT SHIFTS\n\nThere are no visible shifts in layout or resizing between the two proposed interfaces; the central white triangle within the blue square maintains its position and proportion.\n\n## ADDED / REMOVED\n\nNo elements are visibly added or removed between the reference and candidate images. The visual composition remains consistent.\n\n## STYLE & COLOR\n\nBoth interfaces exhibit a consistent blue square with a white triangular play symbol, suggesting uniform style and color palettes without stylistic alterations.\n\n## FIDELITY NOTES\n\nThe interfaces appear functionally equivalent, with no indications of lost information or state changes. Any cosmetic differences are minimal and do not affect usability or information conveyance."
+    },
+    {
+      "fixture": "f3",
+      "pass": true,
+      "detail": "required_any=['identical', 'no difference', 'unchanged']; forbidden=['different', 'changed']",
+      "answer": "## TEXT CHANGES\n\nThe provided machine-verified text diff shows no textual differences between the reference (A) and the candidate (B), with only stylistic or layout adjustments observed.\n\n## LAYOUT SHIFTS\n\nThere are no discernible shifts in placement or resizing of visible elements; the play button icon appears consistently within a square boundary in both versions.\n\n## ADDED / REMOVED\n\nNo whole elements are visibly added or removed between the two images. The play button icon is present in both, with no new or removed components.\n\n## STYLE & COLOR\n\nThe theme, palette, typography, and overall color scheme remain consistent across both A and B. The visual emphasis and spacing are maintained without pixel-level deviations.\n\n## FIDELITY NOTES\n\nAny differences that affect function or information are marked as missing or not present; all other changes are cosmetic. The play button icon is identical in both, indicating no functional loss or state change."
+    },
+    {
+      "fixture": "f4",
+      "pass": false,
+      "detail": "required=['light', 'dark', 'same text']",
+      "answer": "## TEXT CHANGES\n\nThe section labeled \"Revenue\" is repositioned: in A it's on a light background, in B it's on a dark background. The numerical value \"$1,240\" appears in bold, with a clear contrast between the two layout states. The text \"3 items tracked\" is present in both, but its visual context differs due to the background change. The \"View all\" button is present in A and B, but its styling and placement suggest adaptation to the new background.\n\n## LAYOUT SHIFTS\n\nThe content block shifts from a light to a dark background, affecting the visual emphasis and readability of the displayed information.\n\n## ADDED / REMOVED\n\nNo whole elements are visibly added or removed; the layout adjustment is primarily a background change.\n\n## STYLE & COLOR\n\nThe overall theme and palette are adjusted to match the new layout background, with typography and spacing maintaining consistency between the two states.\n\n## FIDELITY NOTES\n\nDifferences in background color indicate a change in layout context, while textual content appears to be preserved. No elements are visibly contradicted or missing."
+    },
+    {
+      "fixture": "f5",
+      "pass": false,
+      "detail": "required=['incomparable', 'aspect']",
+      "answer": "## TEXT CHANGES\n\nThe reference (A) displays a header listing \"Analytics\", \"Users\", \"Revenue\", \"Settings\" with sub-items for \"Users\" (12,405), \"Sessions\" (48,201), \"Bounce\" (42%), \"Revenue\" ($92,140). The candidate (B) adds a section labeled \"Analytics Users Revenue Settings\" with associated values \"Users\" (12,405), \"Sessions\" (48,201), \"Bounce\" (42%), \"Revenue\" ($92,140), and an additional label \"Analytics Users Revenue Settings | Users | 12,405 | Sessions | 48,201 | Bounce | 42% | Revenue | $92,140\". Notably, the candidate includes a list of values under the header, which is not present in A.\n\n## LAYOUT SHIFTS\n\nThe header in A is a single line with separated categories, while B reorganizes the header to include a consolidated list of categories and their associated data, indicating a layout shift from a flat header to a bulleted or list-based section.\n\n## ADDED / REMOVED\n\nThe section \"Analytics Users Revenue Settings\" is added in B, along with the detailed value list for Users, Sessions, Bounce, and Revenue, which are not present in A. No elements are removed.\n\n## STYLE & COLOR\n\nBoth images maintain a consistent color scheme and typography; the primary difference is the addition of styled text and numerical data in B, with no significant style changes.\n\n## FIDELITY NOTES\n\nThe added text and numerical values in B are faithful to the reference A, with no contradictions or missing information. The layout shift is a functional reorganization, not a cosmetic alteration."
+    },
+    {
+      "fixture": "f6",
+      "pass": true,
+      "detail": "required=['q3', 'q5', 'bar']",
+      "answer": "## TEXT CHANGES\n\nREMOVED (in A only): \"Q1 Q2 Q3 Q4\"\nADDED (in B only): \"Q1 Q2 Q5 Q4\"\n\n## LAYOUT SHIFTS\n\nThe bar under Q5 in B is longer than in A, indicating an addition of a new category.\n\n## ADDED / REMOVED\n\nWhole elements or regions present in only one image (B) beyond bare text \u2014 specifically, the inclusion of \"Q5\" which is not present in A.\n\n## STYLE & COLOR\n\nBoth images maintain a consistent blue color scheme and simple typography; no stylistic changes are evident.\n\n## FIDELITY NOTES\n\nDifferences are in the listed text additions and removals, with no visual or functional changes to the bar structures or overall layout. Any other elements are purely cosmetic or absent."
+    }
+  ]
+}

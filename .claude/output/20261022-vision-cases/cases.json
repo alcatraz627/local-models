@@ -1,0 +1,847 @@
+[
+  {
+    "id": "C01",
+    "mode": "qa",
+    "capability": [
+      "counting"
+    ],
+    "difficulty": "easy",
+    "core": true,
+    "prompt": "How many filled circles are in this image? End your reply with exactly one line of the form: ANSWER: <integer>",
+    "generator": "640x400 white; N filled circles r=22 color (15,23,42); seeded rejection sampling in [30,610]x[30,370], min center distance 2r+12; N per seed in {5,7,9}.",
+    "scoring": "ints = to_int(answer); pass = ints == {N}",
+    "truth": {
+      "count": 7
+    },
+    "expected_failure": "off-by-one at 9; vague 'several'"
+  },
+  {
+    "id": "C02",
+    "mode": "qa",
+    "capability": [
+      "counting",
+      "script_beats_model"
+    ],
+    "difficulty": "hard",
+    "core": true,
+    "prompt": "Count only the FILLED dots. Hollow rings do not count. End your reply with exactly one line of the form: ANSWER: <integer>",
+    "generator": "800x600 white; 23 filled circles r=7 color (30,30,30) plus 4 hollow rings r=7 width 2; min distance 22px; seeded.",
+    "scoring": "pass = to_int(answer) == {23}; record abs_err; flag decoy_counted if 27",
+    "truth": {
+      "count": 23,
+      "decoys": 4
+    },
+    "expected_failure": "estimates near 20-25; counts the hollow decoys",
+    "script_baseline": "threshold + connected components, keep fill ratio > 0.6 -> 23"
+  },
+  {
+    "id": "C03",
+    "mode": "qa",
+    "capability": [
+      "counting",
+      "color"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "How many BLUE squares are there? End your reply with exactly one line of the form: ANSWER: <integer>",
+    "generator": "720x480 white; 6 red (220,38,38), 4 blue (37,99,235), 5 green (22,163,74) 36px squares; seeded positions, min gap 14px; seeds rotate asked color and counts in {3..6}.",
+    "scoring": "pass = to_int(answer) == {4}; flag answered_total if 15",
+    "truth": {
+      "color": "blue",
+      "count": 4,
+      "total": 15
+    },
+    "expected_failure": "counts all squares or the most salient color"
+  },
+  {
+    "id": "C04",
+    "mode": "qa",
+    "capability": [
+      "counting",
+      "table"
+    ],
+    "difficulty": "easy",
+    "core": false,
+    "prompt": "How many data rows does the table have, not counting the header row? End your reply with exactly one line of the form: ANSWER: <integer>",
+    "generator": "B01 table: header + 7 data rows.",
+    "scoring": "pass = to_int(answer) == {7}; flag counted_header if 8",
+    "truth": {
+      "rows": 7
+    },
+    "expected_failure": "includes the header"
+  },
+  {
+    "id": "T01",
+    "mode": "qa",
+    "capability": [
+      "reading small text"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "What is the full Build ID? End your reply with exactly one line of the form: ANSWER: <id>",
+    "generator": "900x220 white; 'Release notes' Arial Bold 32 at (40,24); 'Build ID: K7Q-48XZ-2093' Menlo 14 at (40,120); decoy 'Ref: K7Q-48XZ' Menlo 14 at (40,160); seeds draw ID from [A-Z0-9]{3}-[A-Z0-9]{4}-[0-9]{4} excluding O,I,L.",
+    "scoring": "pass = norm_str(answer).replace(' ','') == truth.text; record levenshtein",
+    "truth": {
+      "text": "K7Q-48XZ-2093"
+    },
+    "expected_failure": "one swapped character, or returns the shorter decoy"
+  },
+  {
+    "id": "T02",
+    "mode": "qa",
+    "capability": [
+      "reading small text"
+    ],
+    "difficulty": "hard",
+    "core": false,
+    "prompt": "Transcribe the line of text exactly. End your reply with exactly one line of the form: ANSWER: <text>",
+    "generator": "1200x300 white; 'Invoice 55-0193 due 14 Mar' Arial 9 (sub-cases at 7 and 12px).",
+    "scoring": "pass = norm_str(answer) == norm_str(truth.text); report smallest passing px per model",
+    "truth": {
+      "text": "Invoice 55-0193 due 14 Mar",
+      "px": 9
+    },
+    "expected_failure": "invents a plausible invoice number"
+  },
+  {
+    "id": "T03",
+    "mode": "read",
+    "capability": [
+      "reading",
+      "no language prior"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "(default structured read, no question)",
+    "generator": "800x260 white; Arial 26 lines at y=30,85,140,195, x=40: 'vorplex trindle', 'quaso maffin', 'glent 4417 drubb', 'ostrawe nym'; seeds pick from a fixed pseudo-word list.",
+    "scoring": "toks = set(re.findall('[A-Z0-9]+', norm_str(text))); recall = |truth.tokens & toks|/9; pass = recall == 1.0; flag each autocorrect trap word present",
+    "truth": {
+      "tokens": [
+        "VORPLEX",
+        "TRINDLE",
+        "QUASO",
+        "MAFFIN",
+        "GLENT",
+        "4417",
+        "DRUBB",
+        "OSTRAWE",
+        "NYM"
+      ],
+      "autocorrect_traps": {
+        "MAFFIN": "MUFFIN",
+        "GLENT": "GLINT",
+        "NYM": "NYMPH"
+      }
+    },
+    "expected_failure": "language prior autocorrects pseudo-words to real words"
+  },
+  {
+    "id": "T04",
+    "mode": "qa",
+    "capability": [
+      "rotated text"
+    ],
+    "difficulty": "hard",
+    "core": false,
+    "prompt": "What does the vertical text along the left edge say? End your reply with exactly one line of the form: ANSWER: <text>",
+    "generator": "600x600 white; 'ORBIT 7731' Arial Bold 34 rotated 90deg pasted at left edge; decoy 'LUMEN 2208' rotated 30deg at center; seeds vary strings.",
+    "scoring": "pass = norm_str(answer) == 'ORBIT 7731'; flag answered_decoy",
+    "truth": {
+      "text": "ORBIT 7731",
+      "decoy": "LUMEN 2208"
+    },
+    "expected_failure": "reads it reversed or returns the decoy"
+  },
+  {
+    "id": "T05",
+    "mode": "qa",
+    "capability": [
+      "low-contrast text"
+    ],
+    "difficulty": "hard",
+    "core": true,
+    "prompt": "There are two lines of text. What does the faint, light-gray line say? End your reply with exactly one line of the form: ANSWER: <text>",
+    "generator": "800x300 background (210,210,210); target 'delta 5508' Arial 30 in (196,196,196) at (60,180); decoy 'alpha 1234' Arial 30 in (20,20,20) at (60,60).",
+    "scoring": "pass = norm_str(answer) == 'DELTA 5508'; flag decoy",
+    "truth": {
+      "text": "DELTA 5508",
+      "decoy": "ALPHA 1234"
+    },
+    "expected_failure": "cannot see the target; returns decoy or invents"
+  },
+  {
+    "id": "T06",
+    "mode": "ocr+read",
+    "capability": [
+      "reading",
+      "dense text",
+      "script_beats_model"
+    ],
+    "difficulty": "med",
+    "core": false,
+    "prompt": "Transcribe all text exactly, line by line. End your reply with exactly one line of the form: ANSWER: DONE",
+    "generator": "900x300 white, Verdana 16, three fixed lines (see truth). OCR lane: see IMG --ocr --json.",
+    "scoring": "cer = levenshtein(norm(reply_lines), norm(truth_lines))/len(truth); pass = cer <= 0.01; OCR lane expected cer 0",
+    "truth": {
+      "lines": [
+        "Shipment 7 of 12 left Rotterdam on 03/09.",
+        "Net weight 1,482.6 kg; tare 212 kg.",
+        "Contact: ops-desk@example.test, ext. 4471."
+      ]
+    },
+    "expected_failure": "drops punctuation, rounds numbers",
+    "script_baseline": "see --ocr (Apple Vision)"
+  },
+  {
+    "id": "S01",
+    "mode": "qa",
+    "capability": [
+      "spatial relations"
+    ],
+    "difficulty": "easy",
+    "core": false,
+    "prompt": "Which shape is further left: the circle or the square? End your reply with exactly one line of the form: ANSWER: circle or square",
+    "generator": "600x400 white; red circle r=50 and blue 100px square centered at (150,200) and (450,200); seed decides which is left; run 4 seeds, 2 each way.",
+    "scoring": "pass = answer names exactly one of {circle,square} and it equals truth.left",
+    "truth": {
+      "left": "circle"
+    },
+    "expected_failure": "position bias (always 'left' item named first)"
+  },
+  {
+    "id": "S02",
+    "mode": "qa",
+    "capability": [
+      "spatial relations"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "Which lettered box is closest to the green star? End your reply with exactly one line of the form: ANSWER: <letter>",
+    "generator": "800x500 white; five 70x50 outlined boxes labeled A-E (Arial Bold 26) at seeded positions; green 5-point star r=18; regenerate unless runner-up is >=60px farther.",
+    "scoring": "letters = set(re.findall(r'\\b[A-E]\\b', norm_str(answer))); pass = letters == {truth.letter}",
+    "truth": {
+      "letter": "C",
+      "margin_px_min": 60
+    },
+    "expected_failure": "picks box nearest in reading order"
+  },
+  {
+    "id": "S03",
+    "mode": "qa",
+    "capability": [
+      "spatial relations"
+    ],
+    "difficulty": "easy",
+    "core": false,
+    "prompt": "Where in the image is the triangle? Use one of: top-left, top, top-right, left, center, right, bottom-left, bottom, bottom-right. End your reply with exactly one line of the form: ANSWER: <position>",
+    "generator": "600x600 white; one yellow triangle side 80 centered in one of 9 thirds-grid positions, seeded.",
+    "scoring": "pass = pos_of(answer) == truth.position",
+    "truth": {
+      "position": "bottom-right"
+    },
+    "expected_failure": "left/right mirror confusion"
+  },
+  {
+    "id": "S04",
+    "mode": "qa",
+    "capability": [
+      "spatial relations",
+      "color"
+    ],
+    "difficulty": "med",
+    "core": false,
+    "prompt": "List the circle colors from left to right. End your reply with exactly one line of the form: ANSWER: color, color, color, color, color",
+    "generator": "900x200 white; five circles r=40 at x=110,280,450,620,790, y=100; seeded permutation of red, blue, green, yellow, purple.",
+    "scoring": "seq = [color_of(t) for t in answer.split(',')]; pass = seq == truth.order",
+    "truth": {
+      "order": [
+        "green",
+        "red",
+        "purple",
+        "blue",
+        "yellow"
+      ]
+    },
+    "expected_failure": "drift after the first three"
+  },
+  {
+    "id": "K03",
+    "mode": "qa",
+    "capability": [
+      "color",
+      "text binding"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "What color is the ink of the word LEMON? End your reply with exactly one line of the form: ANSWER: <color>",
+    "generator": "700x300 white, Arial Bold 48: 'APPLE' yellow (234,179,8) at (40,40), 'LEMON' red (220,38,38) at (40,120), 'GRAPE' green (22,163,74) at (40,200); seeds permute so ink never matches the word's usual color.",
+    "scoring": "pass = {color_of(answer)} == {'red'}; flag answered_prior if yellow",
+    "truth": {
+      "word": "LEMON",
+      "ink": "red",
+      "prior": "yellow"
+    },
+    "expected_failure": "answers the semantic prior"
+  },
+  {
+    "id": "G01",
+    "mode": "qa",
+    "capability": [
+      "chart values"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "What is Thursday's value? End your reply with exactly one line of the form: ANSWER: <number>",
+    "generator": "640x420 white; y axis 0-80, gridlines + tick labels every 10 (Arial 14) at x=60; y=360 is 0, y=40 is 80 (4px/unit); five bars width 60 at x=100..500 labeled Mon-Fri; values seeded, distinct by >=8, e.g. [23,47,35,62,18]; no value labels.",
+    "scoring": "n = to_num(answer); pass = len(n)==1 and abs(n[0]-62) <= 3",
+    "truth": {
+      "label": "Thu",
+      "value": 62,
+      "tol": 3
+    },
+    "expected_failure": "reads the wrong bar or a tick label"
+  },
+  {
+    "id": "G03",
+    "mode": "qa",
+    "capability": [
+      "chart values"
+    ],
+    "difficulty": "hard",
+    "core": false,
+    "prompt": "In which month does series B first rise above series A? End your reply with exactly one line of the form: ANSWER: <month>",
+    "generator": "720x420 white; two polylines over Jan-Aug, A blue solid, B orange dashed, legend top-right; seeded so B crosses above A once with >=6 units gap either side.",
+    "scoring": "pass = month_of(answer) == truth.month",
+    "truth": {
+      "month": "May"
+    },
+    "expected_failure": "picks a month where lines are close but not crossed"
+  },
+  {
+    "id": "G04",
+    "mode": "qa",
+    "capability": [
+      "chart values",
+      "reading"
+    ],
+    "difficulty": "med",
+    "core": false,
+    "prompt": "Which quarter has the tallest bar, and which the shortest? End your reply with exactly one line of the form: ANSWER: tallest=<label>, shortest=<label>",
+    "generator": "existing fixture: probe/fixtures/f6-a.png (bars [80,120,60,100], labels Q1-Q4, per make-fixtures.py).",
+    "scoring": "parse tallest=(Q\\d) and shortest=(Q\\d); both must match",
+    "truth": {
+      "tallest": "Q2",
+      "shortest": "Q3"
+    },
+    "expected_failure": "swaps Q2 and Q4"
+  },
+  {
+    "id": "B01",
+    "mode": "qa",
+    "capability": [
+      "table cells"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "In the row whose Name is Halvorsen, what is the Units value? End your reply with exactly one line of the form: ANSWER: <integer>",
+    "generator": "900x420 white, Arial 18, 1px gray grid; header Name/Region/Units/Price; 7 rows (Halvorsen, Okafor, Brandt, Ivanova, Mendes, Tanaka, Novak), Units distinct 10-99; columns x=40,280,480,640; row pitch 46.",
+    "scoring": "pass = to_int(answer) == {truth.value}; flag row_off_by_one if equals neighbour row's Units",
+    "truth": {
+      "row": "Halvorsen",
+      "col": "Units",
+      "value": 57
+    },
+    "expected_failure": "row misalignment"
+  },
+  {
+    "id": "B02",
+    "mode": "qa+crop",
+    "capability": [
+      "table cells",
+      "dense layout"
+    ],
+    "difficulty": "hard",
+    "core": false,
+    "prompt": "What is the Status for ID R-0412? End your reply with exactly one line of the form: ANSWER: <status>",
+    "generator": "1400x900 white, Arial 11; 15 rows x 6 cols (ID, Owner, Status, Qty, Updated, Note); IDs R-0401..R-0415; R-0412 HOLD, R-0411 OPEN, R-0413 DONE. Run full and --crop 700x300+0+560.",
+    "scoring": "pass = norm_str(answer) == 'HOLD'; report full and cropped",
+    "truth": {
+      "value": "HOLD",
+      "crop": "700x300+0+560"
+    },
+    "expected_failure": "neighbour-row answer at full size"
+  },
+  {
+    "id": "U01",
+    "mode": "qa",
+    "capability": [
+      "UI state",
+      "checked"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "Which options are checked? End your reply with exactly one line of the form: ANSWER: comma-separated labels",
+    "generator": "600x360 white; five rows y=40+60i: 18px square outline at x=40, label Arial 20 at x=74 (Email alerts, Dark mode, Auto-save, Beta features, Analytics); checked = blue fill + white checkmark; seed picks 2.",
+    "scoring": "got = {norm_str(t) for t in answer.split(',')}; pass = got == {norm_str(x) for x in truth.checked}",
+    "truth": {
+      "checked": [
+        "Email alerts",
+        "Dark mode"
+      ]
+    },
+    "expected_failure": "lists all options or the first ones"
+  },
+  {
+    "id": "U02",
+    "mode": "qa",
+    "capability": [
+      "UI state",
+      "disabled"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "Which button is disabled? End your reply with exactly one line of the form: ANSWER: <label>",
+    "generator": "700x200 white; three 160x48 rounded buttons (r=8) at x=40,240,440, y=76: Save, Export, Delete, Arial 20; enabled fill (37,99,235) white text; disabled fill (229,231,235) text (156,163,175); seed picks the disabled one.",
+    "scoring": "pass = norm_str(answer) == norm_str(truth.disabled)",
+    "truth": {
+      "disabled": "Export"
+    },
+    "expected_failure": "names Delete (destructive prior) or 'none'"
+  },
+  {
+    "id": "U03",
+    "mode": "qa",
+    "capability": [
+      "UI state",
+      "selected"
+    ],
+    "difficulty": "easy",
+    "core": false,
+    "prompt": "Which tab is selected? End your reply with exactly one line of the form: ANSWER: <tab>",
+    "generator": "900x120 white; tabs Overview, Logs, Metrics, Alerts, Settings Arial 20 at x=30+170i, y=40; selected = Arial Bold, blue, 3px underline at y=80; seeded.",
+    "scoring": "pass = norm_str(answer) == norm_str(truth.selected)",
+    "truth": {
+      "selected": "Logs"
+    },
+    "expected_failure": "answers the first tab"
+  },
+  {
+    "id": "U04",
+    "mode": "ui-json",
+    "capability": [
+      "UI state",
+      "on/off"
+    ],
+    "difficulty": "med",
+    "core": false,
+    "prompt": "(see --ui --json default)",
+    "generator": "600x320 white; rows Wi-Fi, Bluetooth, AirDrop, Hotspot labels at x=40; toggle track 52x30 at x=480; on = green (52,199,89), knob right; off = gray (209,213,219), knob left; seed picks 2 on.",
+    "scoring": "for each label find elements in .data.regions[*].elements whose norm text contains it; state on if /on|enabled|checked|active|true/, off if /off|disabled|unchecked|inactive|false/; pass when all four correct; missing label fails",
+    "truth": {
+      "on": [
+        "Wi-Fi",
+        "AirDrop"
+      ],
+      "off": [
+        "Bluetooth",
+        "Hotspot"
+      ]
+    },
+    "expected_failure": "no state, or all 'on'"
+  },
+  {
+    "id": "U06",
+    "mode": "ui-json",
+    "capability": [
+      "dense layout",
+      "UI inventory",
+      "UI state"
+    ],
+    "difficulty": "hard",
+    "core": true,
+    "prompt": "(see --ui --json default)",
+    "generator": "900x640 white settings panel: title 'Account settings' Arial Bold 28; inputs (label Arial 16 above 360x36 box) Full name, Email, Company, Phone; checkboxes Send weekly digest (checked), Enable two-factor (unchecked); links Privacy policy, Terms, Help center (blue underlined); buttons Cancel (outlined), Save changes (blue), Delete account (red). Fixed coordinates.",
+    "scoring": "got = flatten(.data.regions[*].elements); match by norm_str exact or containment; recall = matched_truth/12; precision = matched_got/len(got_interactive) (title and label-only strings neutral); type_acc with synonym map; pass = recall>=0.9 and precision>=0.9 and checked state right; list hallucinated texts",
+    "truth": {
+      "elements": [
+        {
+          "text": "Full name",
+          "type": "input"
+        },
+        {
+          "text": "Email",
+          "type": "input"
+        },
+        {
+          "text": "Company",
+          "type": "input"
+        },
+        {
+          "text": "Phone",
+          "type": "input"
+        },
+        {
+          "text": "Send weekly digest",
+          "type": "checkbox",
+          "state": "checked"
+        },
+        {
+          "text": "Enable two-factor",
+          "type": "checkbox",
+          "state": "unchecked"
+        },
+        {
+          "text": "Privacy policy",
+          "type": "link"
+        },
+        {
+          "text": "Terms",
+          "type": "link"
+        },
+        {
+          "text": "Help center",
+          "type": "link"
+        },
+        {
+          "text": "Cancel",
+          "type": "button"
+        },
+        {
+          "text": "Save changes",
+          "type": "button"
+        },
+        {
+          "text": "Delete account",
+          "type": "button"
+        }
+      ],
+      "neutral": [
+        "Account settings"
+      ]
+    },
+    "expected_failure": "invents Submit or a search bar; drops links"
+  },
+  {
+    "id": "U07",
+    "mode": "qa",
+    "capability": [
+      "reading small text",
+      "UI"
+    ],
+    "difficulty": "med",
+    "core": false,
+    "prompt": "What number is on the notification badge? End your reply with exactly one line of the form: ANSWER: <number>",
+    "generator": "300x200 white; bell polygon 60px at (120,60); red circle r=13 at its top-right with white Arial Bold 14 text; seeds from {3,9,12,27,99+}.",
+    "scoring": "pass = norm_str(answer) == norm_str(truth.value)",
+    "truth": {
+      "value": "12"
+    },
+    "expected_failure": "reads 12 as 2, or describes the icon only"
+  },
+  {
+    "id": "R01",
+    "mode": "crop",
+    "capability": [
+      "crop lift",
+      "reading small text"
+    ],
+    "difficulty": "hard",
+    "core": true,
+    "prompt": "What is the Latency p99 value? End your reply with exactly one line of the form: ANSWER: <number> ms",
+    "generator": "2400x1500 (245,245,247); 6x8 white tiles 280x160 at x=20+295c, y=40+240r; label Arial 11 at (+12,+12), value Arial 13 at (+12,+40); target r=5,c=7 'Latency p99'/'412 ms'; neighbour r=5,c=6 'Latency p95'/'388 ms'. Runs: full, --crop 700x500+1700+1000, --region right.",
+    "scoring": "per run pass = to_num(answer) == [412]; lift = pass(crop) - pass(full); flag decoy 388",
+    "truth": {
+      "value": 412,
+      "decoy": 388,
+      "crop": "700x500+1700+1000"
+    },
+    "expected_failure": "full-frame invents or swaps with p95; crop fixes it"
+  },
+  {
+    "id": "D01",
+    "mode": "diff",
+    "capability": [
+      "hallucination trap",
+      "diff"
+    ],
+    "difficulty": "easy",
+    "core": true,
+    "prompt": "List every visible difference between A and B. If there are none, say so. End your reply with exactly one line of the form: ANSWER: NONE or ANSWER: <number of differences>",
+    "generator": "existing fixture: probe/fixtures/f3-a.png and f3-b.png (byte-identical).",
+    "scoring": "pass = absent_answer(answer) or to_int(answer) == {0}",
+    "truth": {
+      "differences": 0
+    },
+    "expected_failure": "invents a slight color shift",
+    "script_baseline": "vis-battery F3: all extractors zero"
+  },
+  {
+    "id": "D02",
+    "mode": "diff",
+    "capability": [
+      "diff localization",
+      "script_beats_model"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "Exactly one cell in this 4x4 grid differs. Which row and column (1-based, row 1 at top)? End your reply with exactly one line of the form: ANSWER: r<row>c<col>",
+    "generator": "two 512x512 white; 4x4 grid of 128px cells, each blue (37,99,235) circle r=36; in B one seeded cell becomes (220,38,38); hard variant (37,140,235).",
+    "scoring": "pass = cell_of(answer) == tuple(truth.cell)",
+    "truth": {
+      "cell": [
+        3,
+        2
+      ]
+    },
+    "expected_failure": "right change, wrong cell",
+    "script_baseline": "see diff --no-read --json --grid 4: top E5 cell"
+  },
+  {
+    "id": "D03",
+    "mode": "diff",
+    "capability": [
+      "diff",
+      "reading"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "One value changed between A and B. Give the old and the new value. End your reply with exactly one line of the form: ANSWER: <old> -> <new>",
+    "generator": "two 420x560 white receipts, Arial 22: 'Corner Cafe', 'Latte 4.50', 'Bagel 3.20', 'Tax 0.62', 'Total 8.32'; B changes only total to 'Total 8.82'.",
+    "scoring": "m = re.search(r'([\\d.]+)\\s*(->|→|to)\\s*([\\d.]+)', answer); pass = m and float(m[1])==8.32 and float(m[3])==8.82",
+    "truth": {
+      "old": 8.32,
+      "new": 8.82,
+      "line": "Total"
+    },
+    "expected_failure": "wrong line or old/new swapped"
+  },
+  {
+    "id": "D04",
+    "mode": "diff",
+    "capability": [
+      "diff localization",
+      "chart"
+    ],
+    "difficulty": "med",
+    "core": false,
+    "prompt": "List each difference as one line starting with \"- \". End your reply with exactly one line of the form: ANSWER: <number of differences>",
+    "generator": "existing fixture: probe/fixtures/f6-a.png vs f6-b.png (label Q3->Q5, third bar 60->140px).",
+    "scoring": "pass = to_int(answer)=={2} and a bullet mentions Q3 and Q5 and a bullet has (third|3rd|Q3|Q5) with (taller|higher|increased|grew)",
+    "truth": {
+      "count": 2,
+      "facts": [
+        {
+          "label_old": "Q3",
+          "label_new": "Q5"
+        },
+        {
+          "bar_index": 3,
+          "direction": "taller"
+        }
+      ]
+    },
+    "expected_failure": "finds the bar, misses the relabel",
+    "script_baseline": "vis-battery F6: E5 cols 9-11, E1 Q3->Q5"
+  },
+  {
+    "id": "D05",
+    "mode": "diff",
+    "capability": [
+      "hallucination trap",
+      "diff"
+    ],
+    "difficulty": "med",
+    "core": false,
+    "prompt": "Did any TEXT change between A and B (words or numbers, not colors)? End your reply with exactly one line of the form: ANSWER: YES or NO",
+    "generator": "existing fixture: probe/fixtures/f4-a.png (light) vs f4-b.png (dark), same text.",
+    "scoring": "pass = norm_str(answer) == 'NO'",
+    "truth": {
+      "text_changed": false,
+      "theme": "light to dark"
+    },
+    "expected_failure": "reports text change because colors changed",
+    "script_baseline": "vis-battery F4: E1 empty"
+  },
+  {
+    "id": "D06",
+    "mode": "diff",
+    "capability": [
+      "hallucination trap",
+      "diff"
+    ],
+    "difficulty": "med",
+    "core": false,
+    "prompt": "List every visible difference between A and B. If there are none, say so. End your reply with exactly one line of the form: ANSWER: NONE or ANSWER: <number of differences>",
+    "generator": "existing fixture: f4-a.png vs the same saved as JPEG quality 85 (battery F3b).",
+    "scoring": "pass = absent_answer(answer) or to_int(answer) == {0}",
+    "truth": {
+      "differences": 0
+    },
+    "expected_failure": "names compression noise as a change",
+    "script_baseline": "vis-battery F3b"
+  },
+  {
+    "id": "D07",
+    "mode": "diff",
+    "capability": [
+      "diff localization",
+      "script_beats_model"
+    ],
+    "difficulty": "hard",
+    "core": false,
+    "prompt": "What changed, and in which direction? End your reply with exactly one line of the form: ANSWER: <element> moved <direction>",
+    "generator": "600x300 white; button 160x48 'Continue' Arial 20 at (220,126) in A, (244,126) in B.",
+    "scoring": "pass = 'CONTINUE' in norm_str(answer) and direction_of(answer) == 'right'",
+    "truth": {
+      "element": "Continue",
+      "direction": "right",
+      "px": 24
+    },
+    "expected_failure": "says resized, or no direction",
+    "script_baseline": "E1 moved entry delta_xy x=+24"
+  },
+  {
+    "id": "H01",
+    "mode": "qa",
+    "capability": [
+      "hallucination trap",
+      "absence"
+    ],
+    "difficulty": "easy",
+    "core": true,
+    "prompt": "Is there any text in this image? If yes, transcribe it. End your reply with exactly one line of the form: ANSWER: NONE or the text",
+    "generator": "800x600 solid (255,255,255); sub-case H01b solid (17,24,39).",
+    "scoring": "pass = absent_answer(answer); companion plain read scored (not gated) with must_not=[button, chart, logo, menu, icon, lorem, title] via negation-aware mentions()",
+    "truth": {
+      "text": null
+    },
+    "expected_failure": "describes a minimal interface or invents text"
+  },
+  {
+    "id": "H02",
+    "mode": "qa",
+    "capability": [
+      "hallucination trap",
+      "false premise"
+    ],
+    "difficulty": "med",
+    "core": true,
+    "prompt": "What value does the orange series show for Wednesday? End your reply with exactly one line of the form: ANSWER: <number> or ABSENT if there is no such series",
+    "generator": "G01 bar chart (one blue series, no legend).",
+    "scoring": "pass = absent_answer(answer); any number fails",
+    "truth": {
+      "absent": true
+    },
+    "expected_failure": "answers Wednesday's blue value"
+  },
+  {
+    "id": "H03",
+    "mode": "qa",
+    "capability": [
+      "hallucination trap",
+      "absence"
+    ],
+    "difficulty": "hard",
+    "core": false,
+    "prompt": "Is there any text in this image? If yes, transcribe it. End your reply with exactly one line of the form: ANSWER: NONE or the text",
+    "generator": "800x600 (128,128,128) + seeded Gaussian noise sigma 6, clipped.",
+    "scoring": "pass = absent_answer(answer)",
+    "truth": {
+      "text": null
+    },
+    "expected_failure": "pareidolia, reads letters in noise"
+  },
+  {
+    "id": "H04",
+    "mode": "qa",
+    "capability": [
+      "hallucination trap",
+      "false premise"
+    ],
+    "difficulty": "med",
+    "core": false,
+    "prompt": "What color is the Cancel button? End your reply with exactly one line of the form: ANSWER: <color> or ABSENT if there is no Cancel button",
+    "generator": "U02 image (Save, Export, Delete).",
+    "scoring": "pass = absent_answer(answer)",
+    "truth": {
+      "absent": true
+    },
+    "expected_failure": "answers gray because Cancel usually is"
+  },
+  {
+    "id": "O01",
+    "mode": "odd",
+    "capability": [
+      "odd-one-out"
+    ],
+    "difficulty": "easy",
+    "core": false,
+    "prompt": "These 12 items are numbered. Exactly one differs from the rest. Which number? End your reply with exactly one line of the form: ANSWER: <number>",
+    "generator": "640x480 white, 3x4 grid cell 160x160; eleven blue circles r=40, one blue square side 80 at seeded index; index labels Arial 14 under each.",
+    "scoring": "pass = to_int(answer) == {truth.index}",
+    "truth": {
+      "index": 7
+    },
+    "expected_failure": "none expected; lane floor"
+  },
+  {
+    "id": "O02",
+    "mode": "odd",
+    "capability": [
+      "odd-one-out",
+      "rotation"
+    ],
+    "difficulty": "hard",
+    "core": false,
+    "prompt": "Exactly one of these 12 arrows differs. Counting left to right, top to bottom, starting at 1, which one? End your reply with exactly one line of the form: ANSWER: <number>",
+    "generator": "640x480 white, 3x4 grid of identical black right-pointing arrows (70px polygon); one rotated 12deg; no labels.",
+    "scoring": "pass = to_int(answer) == {truth.index}; report index error separately when the row is right",
+    "truth": {
+      "index": 10,
+      "rotation_deg": 12
+    },
+    "expected_failure": "misses 12deg or miscounts the index"
+  },
+  {
+    "id": "O03",
+    "mode": "odd",
+    "capability": [
+      "odd-one-out",
+      "color",
+      "script_beats_model"
+    ],
+    "difficulty": "hard",
+    "core": false,
+    "prompt": "These 12 items are numbered. Exactly one differs from the rest. Which number? End your reply with exactly one line of the form: ANSWER: <number>",
+    "generator": "640x480 white, 3x4 grid of 100px squares (37,99,235); one (52,99,235) (dE ~6); labeled.",
+    "scoring": "pass = to_int(answer) == {truth.index}",
+    "truth": {
+      "index": 4,
+      "deltaE": 6
+    },
+    "expected_failure": "chance-level pick",
+    "script_baseline": "per-cell mean RGB, argmax distance from median"
+  },
+  {
+    "id": "O04",
+    "mode": "odd",
+    "capability": [
+      "odd-one-out",
+      "real art"
+    ],
+    "difficulty": "hard",
+    "core": true,
+    "prompt": "This rug border has twelve taupe bump motifs in a row. Counting from the left starting at 1, which motif has a different shape from the others? End your reply with exactly one line of the form: ANSWER: <number>",
+    "generator": "existing fixture (read-only copy): /Users/alcatraz627/Code/Claude/Affinity/AffinityWork/guard/test/cases/rug-border-twelve-motifs/fixture.png; truth from case.json numbers.off_motif_index_from_left.",
+    "scoring": "pass = to_int(answer) == {9}; flag band_trap if answer in {3,4,5}",
+    "truth": {
+      "index": 9,
+      "band_trap": [
+        3,
+        4,
+        5
+      ]
+    },
+    "expected_failure": "picks a band-occluded motif or miscounts across the flipped half"
+  }
+]

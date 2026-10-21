@@ -96,6 +96,19 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-10-22 · vision comparison + lm CLI review wave:** a 42-case vision harness
+  (`probe/vision/`, deterministic truths, meaning-based scorers, script baselines, selftest
+  in verify.sh) run over 7 vision models, plus a 14-case text comparison (`probe/textcmp/`).
+  Qwen3-VL-8B MLX led (101/112); minicpm-v4.6, the plain `see` default, came last (74).
+  Summary and the open default-swap decision: `docs/20261022-model-comparison.md`. Also:
+  `see diff --mlx`; `lm gemini` sends piped input over 200 KB to the API directly
+  (`--direct`/`--cli`), and gemini-cli 0.64 now serves 3.8-flash as requested; the memory
+  guard no longer kills big Ollama loads at warn pressure without an MLX process alive.
+  An adversarial review of the CLI (23 defects, `.claude/output/20261022-lm-adversarial/`)
+  was fixed and then attacked by a second validator, whose 14 findings were fixed too:
+  `lm timeline` 43 s to 0.4 s, unknown flags and missing values rejected everywhere with
+  one message, local times in history, `lm last`, `lm doctor --json`, an exit-code table.
+
 - **2026-09-12 · local-model survey + integration wave (through `/bloop`):** ran 5 candidates
   through their real gates (survey + verdict at `.claude/output/20260911-model-survey/`), then
   built and adversarially validated the recommendations. Shipped: **VISION_MODEL → minicpm-v4.6**
@@ -209,19 +222,15 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## PENDING — current gates and optional work
 
-### Next round (queued 2026-10-21)
+### Next round (queued 2026-10-22)
 
-- **`lm gemini` large input:** piped input above about 200 KB hangs gemini-cli without sending the request (16 minutes on a 1.9 MB pack). Route those calls to `lib/gemini-direct.py`, which streams the answer and Argon's thought summaries when it emits them, and log them to gem-history.
-- **Served-model drift:** gemini-cli 0.46 answers `gemini-3.8-flash` requests with 3.6-flash (the `served` field in gem-history). Try a gemini-cli upgrade, or the direct API for the default model.
-- **Candidate suite:** branch `candidates-suite`, Codex worktree `/Users/alcatraz627/.codex/worktrees/9a53/local-models`. Gaps are in `probe/candidates/GAPS.md`.
-  - Stage 0: gemma4:26b beats minicpm-v4.6 on `see diff` (minicpm missed f2 and invented changes on f5), so gemma4:26b stays (owner).
-  - Wire MLX into `see diff` so Qwen3-VL can challenge it.
-  - Replace the scorer's keyword checks with checks that match on meaning (f2 and f4 failed on wording alone).
-  - Stages 1 to 3 need runners: MiMo-V2.6 9B (18.8 GB HF), Qwen2.5-VL-7B, Pixtral-12B (25.4 GB), granite-docling, mflux qwen-edit or Kontext, RMBG-2.0, Real-ESRGAN, MiniCPM5-2B. Drop "Nemotron 3.5 Bolt": it is a 74B model.
-  - Run Codex (gpt-6-luna) for the builds and Argon for ideation, to keep Claude usage low.
-- **Odd-one-out lane for `see`:** a model-free measure for "which of these repeated shapes differs". Both local vision models failed the Affinity 12-motif case, and a column-profile prototype found it (`.claude/output/20261021-argon-candidates/report.md`).
+- **Owner decision: plain `see` default.** Switch `VISION_MODEL` from minicpm-v4.6 to Qwen3-VL-8B on MLX? Evidence and trade-offs: `docs/20261022-model-comparison.md`.
+- **Odd-one-out and counting lane for `see`:** the vision run confirms it. Script baselines hit every seed on many-small-dots counting, odd colour out, and changed-cell location (C02, O03, D07), and most models missed them. The Affinity column-profile prototype is in `.claude/output/20261021-argon-candidates/report.md`.
+- **Qwen3.6-27B (MLX, 16 GB):** not run, because Hugging Face downloads stalled at about 170 KB/s. Pull it again on a good connection and run `probe/vision/run.py` on it.
+- **Older candidate suite** (`probe/candidates/`): stages 1 to 3 still need runners (granite-docling, image tools, MiniCPM5-2B). The vision harness supersedes its stage 0 and stage 1 reads.
+- **Codex is out of quota until 2026-11-20.** Builds go to sonnet seats until then. Argon stays the ideation and review seat.
 - **Outside-model track record:** `docs/model-notes.md`. Add a row after every Argon, Codex or Gemini run.
-- **Pre-existing verify.sh failures (4):** vis battery F6, the guard-model-tier block path, warm-morning missing, warm-evening-off not loaded.
+- **Pre-existing verify.sh failures (3):** the guard-model-tier block path, warm-morning missing, warm-evening-off not loaded.
 
 - **Speech and retrieval:** the September trials in `docs/20260926-lm-implementation-trials.md`
   establish feasibility, not adoption. Record 20 owner-spoken Mac clips and a held-out

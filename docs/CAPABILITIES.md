@@ -90,6 +90,7 @@ see shot.png --crop 800x600+0+120 "count?"      # exact pixel window (WxH+X+Y fr
 see diff ref.png candidate.png                  # compare two images: $0 evidence pack + judged read
 see diff a.png b.png --json | jq .evidence      # full pack: scores/text/color/grid/shape + nudges
 see diff a.png b.png --only E5 --grid 32        # slice rerun of one extractor — delta, no model call
+see diff a.png b.png --mlx                      # judged read by Qwen3-VL on MLX instead of the 17 GB gemma tier
 see more "what does the badge say?"             # drill into the LAST image (from its artifact copy)
 see photo.png --glow                            # rendered read
 see ui.png -m gemma4:26b                        # the stronger general-scene reasoner
@@ -304,7 +305,9 @@ lm gemini ingest-repo [dir]                      # pack a whole repo (repomix, g
 lm gemini ask "where is auth handled?"           # query the session (--session NAME = cross-project)
 lm gemini digest <dir|files...>                  # one-shot corpus digest -> JSON claims, each quote grep-verified (fail-closed)
 lm gemini research "official site of X?"         # web-shaped lookup -> JSON, null-when-unsure, 420s default cap
-lm gemini --json "..."                           # {ok, text, model, ms, session} for agents
+lm gemini --json "..."                           # {ok, text, model, ms, session, transport, served} for agents
+cat pack.md | lm gemini -m gemini-4-argon "review"  # over 200 KB piped: goes to the API directly (gemini-cli hangs on big stdin)
+lm gemini --direct "..." · --cli "..."           # force the transport; direct has no tools or @image, shows thought summaries live
 lm gemini history · show -1                      # every call logged (gem-history.jsonl, incl. bytes_in/bytes_out)
 ```
 

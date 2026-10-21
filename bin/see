@@ -754,7 +754,10 @@ if [ "$MODE" = json ]; then
   if [ -n "$FMT" ]; then
     jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
        '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end),
-         data:($t | try fromjson catch null)}'
+         # the mlx path is not schema-constrained and some models wrap the JSON in
+         # a ``` fence or a sentence, so fall back to the outermost {...} span
+         data:($t | try fromjson catch
+                 (try (index("{") as $a | rindex("}") as $b | .[$a:$b+1] | fromjson) catch null))}'
   elif [ -n "${OCR_DATA:-}" ]; then
     # --ocr --json: .data carries the positioned words (x/y/w/h normalized
     # top-left + the 3×3 pos label); .text stays the plain concatenation.
