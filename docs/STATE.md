@@ -209,6 +209,20 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## PENDING — current gates and optional work
 
+### Next round (queued 2026-10-21)
+
+- **`lm gemini` large input:** piped input above about 200 KB hangs gemini-cli without sending the request (16 minutes on a 1.9 MB pack). Route those calls to `lib/gemini-direct.py`, which streams the answer and Argon's thought summaries when it emits them, and log them to gem-history.
+- **Served-model drift:** gemini-cli 0.46 answers `gemini-3.8-flash` requests with 3.6-flash (the `served` field in gem-history). Try a gemini-cli upgrade, or the direct API for the default model.
+- **Candidate suite:** branch `candidates-suite`, Codex worktree `/Users/alcatraz627/.codex/worktrees/9a53/local-models`. Gaps are in `probe/candidates/GAPS.md`.
+  - Stage 0: gemma4:26b beats minicpm-v4.6 on `see diff` (minicpm missed f2 and invented changes on f5), so gemma4:26b stays (owner).
+  - Wire MLX into `see diff` so Qwen3-VL can challenge it.
+  - Replace the scorer's keyword checks with checks that match on meaning (f2 and f4 failed on wording alone).
+  - Stages 1 to 3 need runners: MiMo-V2.6 9B (18.8 GB HF), Qwen2.5-VL-7B, Pixtral-12B (25.4 GB), granite-docling, mflux qwen-edit or Kontext, RMBG-2.0, Real-ESRGAN, MiniCPM5-2B. Drop "Nemotron 3.5 Bolt": it is a 74B model.
+  - Run Codex (gpt-6-luna) for the builds and Argon for ideation, to keep Claude usage low.
+- **Odd-one-out lane for `see`:** a model-free measure for "which of these repeated shapes differs". Both local vision models failed the Affinity 12-motif case, and a column-profile prototype found it (`.claude/output/20261021-argon-candidates/report.md`).
+- **Outside-model track record:** `docs/model-notes.md`. Add a row after every Argon, Codex or Gemini run.
+- **Pre-existing verify.sh failures (4):** vis battery F6, the guard-model-tier block path, warm-morning missing, warm-evening-off not loaded.
+
 - **Speech and retrieval:** the September trials in `docs/20260926-lm-implementation-trials.md`
   establish feasibility, not adoption. Record 20 owner-spoken Mac clips and a held-out
   personal-document retrieval set before changing defaults. `lm rag` remains optional.
