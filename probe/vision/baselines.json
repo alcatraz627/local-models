@@ -1,0 +1,185 @@
+[
+  {
+    "case": "C02",
+    "seed": 0,
+    "answer": "23",
+    "method": "threshold, connected components, keep fill ratio above 0.6",
+    "score": {
+      "status": "pass",
+      "why": "counted [23], expected 23",
+      "flags": {
+        "abs_err": 0
+      },
+      "answer": "23",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "C02",
+    "seed": 1,
+    "answer": "23",
+    "method": "threshold, connected components, keep fill ratio above 0.6",
+    "score": {
+      "status": "pass",
+      "why": "counted [23], expected 23",
+      "flags": {
+        "abs_err": 0
+      },
+      "answer": "23",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "C02",
+    "seed": 2,
+    "answer": "23",
+    "method": "threshold, connected components, keep fill ratio above 0.6",
+    "score": {
+      "status": "pass",
+      "why": "counted [23], expected 23",
+      "flags": {
+        "abs_err": 0
+      },
+      "answer": "23",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "T06",
+    "seed": 0,
+    "answer": "Shipment 7 of 12 left Rotterdam on 03/09.\nNet weight 1,482.6 kg; tare 212 kg.\nContact: ops-desk@example.test, ext. 4471.",
+    "method": "see --ocr --json (Apple Vision)",
+    "score": {
+      "status": "pass",
+      "why": "character error rate 0.0000 (limit 0.01)",
+      "flags": {
+        "cer": 0.0
+      },
+      "answer": "",
+      "source": "reply"
+    }
+  },
+  {
+    "case": "D02",
+    "seed": 0,
+    "answer": "r3c2",
+    "method": "vis-compare E5 --grid 4, top cell",
+    "score": {
+      "status": "pass",
+      "why": "cell [(3, 2)], expected [3, 2]",
+      "flags": {},
+      "answer": "r3c2",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "D02",
+    "seed": 1,
+    "answer": "r2c1",
+    "method": "vis-compare E5 --grid 4, top cell",
+    "score": {
+      "status": "pass",
+      "why": "cell [(2, 1)], expected [2, 1]",
+      "flags": {},
+      "answer": "r2c1",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "D02",
+    "seed": 2,
+    "answer": "r3c1",
+    "method": "vis-compare E5 --grid 4, top cell",
+    "score": {
+      "status": "pass",
+      "why": "cell [(3, 1)], expected [3, 1]",
+      "flags": {},
+      "answer": "r3c1",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "D07",
+    "seed": 0,
+    "answer": "Continue moved right",
+    "method": "centre of non-white content, A vs B",
+    "shift_px": 24,
+    "e1_moved": false,
+    "score": {
+      "status": "pass",
+      "why": "named element True, direction ['right'], expected right",
+      "flags": {},
+      "answer": "Continue moved right",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "D07",
+    "seed": 1,
+    "answer": "Continue moved down",
+    "method": "centre of non-white content, A vs B",
+    "shift_px": 20,
+    "e1_moved": false,
+    "score": {
+      "status": "pass",
+      "why": "named element True, direction ['down'], expected down",
+      "flags": {},
+      "answer": "Continue moved down",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "D07",
+    "seed": 2,
+    "answer": "Continue moved left",
+    "method": "centre of non-white content, A vs B",
+    "shift_px": 30,
+    "e1_moved": false,
+    "score": {
+      "status": "pass",
+      "why": "named element True, direction ['left'], expected left",
+      "flags": {},
+      "answer": "Continue moved left",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "O03",
+    "seed": 0,
+    "answer": "4",
+    "method": "per-cell mean RGB, farthest from the median cell",
+    "score": {
+      "status": "pass",
+      "why": "item [4], expected 4",
+      "flags": {},
+      "answer": "4",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "O03",
+    "seed": 1,
+    "answer": "12",
+    "method": "per-cell mean RGB, farthest from the median cell",
+    "score": {
+      "status": "pass",
+      "why": "item [12], expected 12",
+      "flags": {},
+      "answer": "12",
+      "source": "answer_line"
+    }
+  },
+  {
+    "case": "O03",
+    "seed": 2,
+    "answer": "3",
+    "method": "per-cell mean RGB, farthest from the median cell",
+    "score": {
+      "status": "pass",
+      "why": "item [3], expected 3",
+      "flags": {},
+      "answer": "3",
+      "source": "answer_line"
+    }
+  }
+]
