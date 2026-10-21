@@ -1,0 +1,3 @@
+# gen.py rebuilds these byte-for-byte, so they stay out of git (about 5 MB).
+fixtures/
+__pycache__/
