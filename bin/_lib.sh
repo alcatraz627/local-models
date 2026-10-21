@@ -15,6 +15,11 @@ case ":$PATH:" in *:/opt/homebrew/bin:*) ;; *) PATH="/opt/homebrew/bin:$PATH" ;;
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
   Y=$'\033[1;33m'; C=$'\033[36m'; G=$'\033[32m'; Dm=$'\033[2m'; Rs=$'\033[0m'; Bd=$'\033[1m'
 else Y= C= G= Dm= Rs= Bd= ; fi
+# The same palette for text written to STDERR, decided by stderr's own TTY: the set above
+# follows stdout, so using it on a stderr line leaked escape codes into redirected logs.
+if [ -t 2 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
+  eY=$'\033[1;33m'; eC=$'\033[36m'; eDm=$'\033[2m'; eRs=$'\033[0m'; eRed=$'\033[31m'
+else eY= eC= eDm= eRs= eRed= ; fi
 
 # ── Help rendering (conventions/cli-help-design.md) ──
 _sec() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
@@ -42,6 +47,65 @@ jsonl_entry() { # LOG N ENTRY_JQ ($i bound to N in jq). N>0 = stable line no; N<
   local line; line=$(sed -n "${i}p" "$log")
   [ -n "$line" ] || { echo "no entry #$i"; return 1; }
   printf '%s' "$line" | jq -r --arg i "$i" "$fmt"
+}
+
+# ── Shared arg-parse helpers: same messages and exit code (2) in every tool ──
+# A flag that takes a value must have one; without this `shift 2` fails under
+# set -e and the tool exits 1 with no message at all.
+need_arg() { # TOOL FLAG [VALUE]
+  [ "$#" -ge 3 ] && [ -n "${3:-}" ] || {
+    printf '%s: %s needs a value\n' "$1" "$2" >&2
+    exit 2
+  }
+}
+
+# Call from the parser's catch-all branch. Only a flag-shaped word (-x, --xyz)
+# is refused; "-", "-1" and prompts with spaces ("- fix this") stay positionals.
+reject_unknown_flag() { # TOOL ARG
+  if [[ "$2" =~ ^--?[A-Za-z][A-Za-z0-9_-]*$ ]]; then
+    printf "%s: unknown flag '%s' (run %s -h to list flags); use -- before a prompt that starts with -\n" "$1" "$2" "$1" >&2
+    exit 2
+  fi
+}
+
+# Closest candidate to WORD by edit distance, printed only when it is a plausible
+# typo (1 edit for short words, 2 for words of 7+ letters). Prints nothing otherwise.
+did_you_mean() { # WORD CANDIDATE...
+  local w="$1"; shift
+  printf '%s\n' "$@" | awk -v w="$w" '
+    function lev(a, b,   i, j, la, lb, d, c, m) {
+      la = length(a); lb = length(b)
+      for (i = 0; i <= la; i++) d[i, 0] = i
+      for (j = 0; j <= lb; j++) d[0, j] = j
+      for (i = 1; i <= la; i++) for (j = 1; j <= lb; j++) {
+        c = (substr(a, i, 1) == substr(b, j, 1)) ? 0 : 1
+        m = d[i-1, j] + 1
+        if (d[i, j-1] + 1 < m) m = d[i, j-1] + 1
+        if (d[i-1, j-1] + c < m) m = d[i-1, j-1] + c
+        d[i, j] = m
+      }
+      return d[la, lb]
+    }
+    BEGIN { lim = (length(w) >= 7) ? 2 : 1; best = lim + 1 }
+    { n = lev(w, $0); if (n < best) { best = n; pick = $0 } }
+    END { if (best <= lim) print pick }'
+}
+
+# Local wall-clock time for a history entry's UTC .ts, as MM-DD HH:MM. Use inside jq.
+JQ_LOCAL_TS='def lts: (try (fromdateiso8601 | strflocaltime("%m-%d %H:%M")) catch "?");'
+
+jsonl_history_json() { # LOG N
+  local log="$1" n="$2"
+  [[ "$n" =~ ^[0-9]+$ ]] || n=15
+  [ -f "$log" ] || { printf '[]\n'; return; }
+  local total start
+  total=$(wc -l < "$log" | tr -d ' ')
+  start=$(( total - n + 1 )); (( start < 1 )) && start=1
+  tail -n "$n" "$log" | jq -c --argjson start "$start" 'input_line_number as $i | . + {n: ($start + $i - 1)}'
+}
+
+use_color_fd() { # FD
+  [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ] && [ -t "$1" ]
 }
 
 # ── Size-tier aliases → real model names ──
@@ -78,7 +142,9 @@ expand_tilde() {
 lm_step() {
   { [ -t 2 ] || [ -n "${LM_PROGRESS:-}" ]; } || return 0
   [ -n "${LM_QUIET:-}" ] && return 0
-  printf '%s[%s %s]%s %s\n' "${Dm:-}" "$(date +%H:%M:%S)" "$1" "${Rs:-}" "$2" >&2
+  # Colour follows stderr, not stdout: Dm was decided from stdout's TTY above.
+  local dm="" rs=""; use_color_fd 2 && { dm=$'\033[2m'; rs=$'\033[0m'; }
+  printf '%s[%s %s]%s %s\n' "$dm" "$(date +%H:%M:%S)" "$1" "$rs" "$2" >&2
 }
 
 # ── Ollama server + residency ──
