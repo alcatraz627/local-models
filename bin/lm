@@ -281,10 +281,17 @@ lm_models() {
     || { echo "server reachable but returned no model list" >&2; return 1; }
   ps=$(curl -s -m 2 "$OLLAMA_HOST/api/ps" 2>/dev/null)
   resident=$(printf '%s' "$ps" | jq -c '[.models[]?.name]' 2>/dev/null || echo '[]')
+  # tiers (the aliases `q -m` accepts) and gemini are the contract for other
+  # tools such as bfb's native host; the text output below is for people.
   if [ "${1:-}" = "--json" ]; then
     jq -n --arg default "$model" --argjson resident "${resident:-[]}" \
       --argjson tags "$(printf '%s' "$tags" | jq '[.models[]? | {name, size: (.size // 0), family: .details.family}]' 2>/dev/null || echo '[]')" \
-      '{default: $default, resident: $resident, available: $tags}'
+      --arg big "$(resolve_tier big)" --arg code "$(resolve_tier code)" --arg sweep "$(resolve_tier sweep)" \
+      --arg gdef "${GEMINI_MODEL:-}" --arg glist "${GEMINI_MODELS:-}" \
+      '{default: $default, resident: $resident, available: $tags,
+        tiers: [{alias: "small", model: $default}, {alias: "big", model: $big},
+                {alias: "code", model: $code}, {alias: "sweep", model: $sweep}],
+        gemini: ($glist | split(" ") | map(select(. != "")) | map({name: ., default: (. == $gdef)}))}'
     return
   fi
   printf '%smodels on disk%s  (● resident · tier = q -m <tier>)\n' "$Y" "$Rs"
