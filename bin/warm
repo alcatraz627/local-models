@@ -31,7 +31,15 @@ pin() { # MODEL KEEP_ALIVE(number or "duration")
   # Ollama answers a refusal (model not pulled, bad name) with HTTP 404 and an
   # error body, which curl -s still counts as success; read the body instead.
   if [[ "$out" == *'"error"'* ]]; then
-    echo "failed to load '$1': $out (is it pulled? ollama list)" >&2
+    # A load the memory guard killed looks the same as a missing model from here,
+    # so check its log before guessing.
+    local guard="$DIR/logs/mem-guard.jsonl" since
+    since="$(date -v-90S +%Y-%m-%dT%H:%M:%S)"
+    if [ -f "$guard" ] && tail -n 20 "$guard" | jq -e --arg s "$since" 'select(.action=="kill" and .ts >= $s)' >/dev/null 2>&1; then
+      echo "failed to load '$1': the memory guard killed it under memory pressure (see $guard). Free memory or stop the guard: touch /tmp/mem-guard.stop" >&2
+    else
+      echo "failed to load '$1': $out (is it pulled? ollama list)" >&2
+    fi
     exit 11
   fi
 }

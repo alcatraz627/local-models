@@ -82,6 +82,8 @@ did_you_mean() { # WORD CANDIDATE...
         m = d[i-1, j] + 1
         if (d[i, j-1] + 1 < m) m = d[i, j-1] + 1
         if (d[i-1, j-1] + c < m) m = d[i-1, j-1] + c
+        # a swapped pair of letters ("statsu") is one typo, not two
+        if (i > 1 && j > 1 && substr(a, i, 1) == substr(b, j-1, 1) && substr(a, i-1, 1) == substr(b, j, 1) && d[i-2, j-2] + 1 < m) m = d[i-2, j-2] + 1
         d[i, j] = m
       }
       return d[la, lb]

@@ -350,6 +350,14 @@ if [ "$rc" -eq 124 ]; then
   RETRIED=true
   sleep 5
   TIMEOUT=$(( TIMEOUT * 3 / 2 ))
+  # The killed attempt may already have created its new session, and gemini-cli
+  # refuses --session-id for one that exists; mint another (nothing finished, so
+  # nothing ingested is lost).
+  if [ "${SESS_ARGS[0]:-}" = --session-id ]; then
+    NEW_ID="$(uuidgen | tr 'A-Z' 'a-z')"
+    printf '%s\n' "$NEW_ID" > "$ID_FILE"
+    SESS_ARGS=(--session-id "$NEW_ID")
+  fi
   run_once
 fi
 ms=$(( $(now_ms) - T0_MS ))
