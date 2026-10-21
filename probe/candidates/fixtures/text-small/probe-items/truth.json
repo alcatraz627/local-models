@@ -1,0 +1,6 @@
+{
+  "kind": "reuse_probe_markers",
+  "source": "items.toml",
+  "human_verdict_required": true,
+  "envelope": "ok=true and nonempty text"
+}

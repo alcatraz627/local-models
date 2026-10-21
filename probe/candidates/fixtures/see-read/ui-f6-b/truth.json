@@ -1,0 +1,10 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "sales",
+    "q1",
+    "q2",
+    "q5",
+    "q4"
+  ]
+}

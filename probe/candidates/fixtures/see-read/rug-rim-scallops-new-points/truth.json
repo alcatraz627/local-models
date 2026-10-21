@@ -1,0 +1,12 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "six",
+    "5",
+    "6"
+  ],
+  "source_files": [
+    "case.json"
+  ],
+  "context": "A 1400 x 520 px rug end. Above is a finished scalloped strip (about 130 points, eight round lobes). Below are six straight rim pieces with 5 points each, whose top edge is one straight run, and 43 thin red lines (52 with the doubled ones) that stop 6 px short of that edge (every fifth is doubled)."
+}

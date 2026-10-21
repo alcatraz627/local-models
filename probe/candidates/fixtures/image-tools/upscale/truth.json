@@ -1,0 +1,9 @@
+{
+  "kind": "psnr_beats_lanczos",
+  "candidate_field": "model_psnr",
+  "baseline_field": "lanczos_psnr",
+  "second_check": "affinity rug tip crop read beats raw",
+  "source_files": [
+    "case.json"
+  ]
+}

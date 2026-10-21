@@ -1,0 +1,8 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "12",
+    "47",
+    "last sync"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "6",
+    "14"
+  ],
+  "source_files": [
+    "case.json"
+  ],
+  "context": "A 1200 x 700 px page: a pink stripe built from six overlapping hand-traced pieces (about 80 points each, one with a bump), 14 small purple slivers showing through it, an olive line below, a thinner pink line with its own bump, and a stepped fret band whose right-angle corners are the design. Her message came with a screenshot that is not part of the task, so what 'this' is, is not in the file."
+}

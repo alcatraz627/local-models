@@ -1,0 +1,8 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "light",
+    "dark",
+    "same text"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "773",
+    "11",
+    "14"
+  ],
+  "source_files": [
+    "case.json"
+  ],
+  "context": "One page, two versions of one rug side by side: her working file on the left (hand-edited tiles, 11 patches she added, wobbly crescents) and the cleaned copy on the right (smooth crescents, 14 scallop dashes the working file lacks). 773 shapes in all. 'Exactly this' is read as 'make the working file identical to the copy'."
+}
