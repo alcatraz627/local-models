@@ -1,0 +1,11 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "90",
+    "46"
+  ],
+  "source_files": [
+    "case.json"
+  ],
+  "context": "A 413 x 1025 px runner section: a vertical column of 45 rows of two taupe bricks on each side of the centre, between two red sections whose rays fan out from a point at the edge. Thin maroon gap lines run between the rows (a dozen are doubled). The right half is a flipped group. Her screenshot is not part of the task."
+}

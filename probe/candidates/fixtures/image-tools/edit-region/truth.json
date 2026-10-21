@@ -1,0 +1,31 @@
+{
+  "kind": "grid_cells_changed_only",
+  "result_field": "changed_cells",
+  "expected_cells": [
+    [
+      3,
+      3
+    ],
+    [
+      3,
+      4
+    ],
+    [
+      4,
+      3
+    ],
+    [
+      4,
+      4
+    ]
+  ],
+  "target_region_px": [
+    96,
+    96,
+    159,
+    159
+  ],
+  "source_files": [
+    "edited.png"
+  ]
+}

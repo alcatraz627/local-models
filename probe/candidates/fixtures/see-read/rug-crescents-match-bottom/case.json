@@ -1,0 +1,43 @@
+{
+  "id": "rug-crescents-match-bottom",
+  "title": "Make the two ragged top crescents like the clean bottom ones",
+  "kind": "rug",
+  "her_words": "i want the upper two big red areas to look crescent like bottom crescents. tapering circle sections",
+  "source": "transcripts/md/8d5c6092-6fd2-4a55-a612-5d30ed09ed32.md:5681 (earlier, :4315: \"i want this shape on both sides to have an exact crescent shape without any irregularities, am i making sense?\"; and :4977: \"smooth out these red shapes and keep my edits intact\"); catalogue P5 (hundreds of nodes from tracing), P1 (keep my edits)",
+  "context": "Page 413 x 1025 px (300 dpi) of a runner: brick columns, a sunburst in the middle, and four red crescents. The bottom pair is clean (64 points); the top pair was traced by hand (about 230 and 196 points, with wobble). The right-hand half is a group flipped by a transform, so the top-right crescent's points are stored mirrored.",
+  "requirement": "Reshape the two top crescents so their outline is the same smooth tapering crescent as the bottom ones (same size and tips as the bottom pair, mirrored for the right), moving their existing points only, with the tips staying where they are.",
+  "targets": ["Crescent top left", "Crescent top right"],
+  "references": ["Crescent bottom left", "Crescent bottom right"],
+  "must_not_change": [
+    "Crescent bottom left",
+    "Crescent bottom right",
+    "Tile edited 1",
+    "Tile edited 2",
+    "Tile edited 3",
+    "Sunburst centre",
+    "the 3 hand-moved mauve tiles beside the top-left crescent",
+    "the olive hairlines and taupe dashes drawn over each crescent",
+    "the hidden layer named Curve hidden",
+    "the locked Background group"
+  ],
+  "acceptance": [
+    "The top crescents have no lumps or ripples along either edge, and look like the bottom ones",
+    "Both tips of each top crescent sit where they were, to the eye",
+    "The left and right top crescents mirror each other",
+    "The three mauve tiles she moved by hand are exactly where they were",
+    "The hairlines and dashes drawn over the crescents are untouched",
+    "Nothing under the top-left crescent is changed except the crescent itself and its stacked twin, and the guard asked about the twin"
+  ],
+  "numbers": { "points_kept": true, "tolerance_px": 0.5, "top_points": [232, 196], "bottom_points": 64 },
+  "traps": [
+    "Two copies of Crescent top left sit on the same spot (a stacked twin); editing one leaves the other showing the old lump",
+    "A hidden older version (Curve hidden) sits under it; it must be left alone",
+    "The right half lives in a flipped group, so mirror_from or fit_to_reference must work in spread space, not local",
+    "Point counts differ (232 and 196 against 64), so a point-for-point copy is impossible; the op has to resample or fit, and say so",
+    "Thin olive lines and taupe dashes lie over the fills and must not move with the shape",
+    "Small 6 to 16 px rivets sit next to the crescents and are easy to pick up by accident",
+    "Three tiles she edited by hand are close to the top-left crescent"
+  ],
+  "expected_guard": "edit",
+  "expected_reason": "The wish is clear, reversible and within the node rule. The guard should still ask 'change both copies or only this one?' because of the stacked twin, then edit."
+}

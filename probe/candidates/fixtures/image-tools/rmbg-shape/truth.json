@@ -1,0 +1,8 @@
+{
+  "kind": "alpha_mae_percent",
+  "result_field": "alpha_mismatch_percent",
+  "mask": "mask.png",
+  "max_percent": 2,
+  "shape": "ellipse with centered rectangle stem",
+  "noise_seed": "integer-coordinate deterministic"
+}

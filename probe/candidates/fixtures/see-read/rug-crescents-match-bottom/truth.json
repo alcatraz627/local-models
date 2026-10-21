@@ -1,0 +1,12 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "232",
+    "196",
+    "64"
+  ],
+  "source_files": [
+    "case.json"
+  ],
+  "context": "Page 413 x 1025 px (300 dpi) of a runner: brick columns, a sunburst in the middle, and four red crescents. The bottom pair is clean (64 points); the top pair was traced by hand (about 230 and 196 points, with wobble). The right-hand half is a group flipped by a transform, so the top-right crescent's points are stored mirrored."
+}

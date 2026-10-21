@@ -1,0 +1,8 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "different",
+    "color",
+    "border"
+  ]
+}

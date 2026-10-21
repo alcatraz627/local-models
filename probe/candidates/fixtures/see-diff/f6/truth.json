@@ -1,0 +1,8 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "q3",
+    "q5",
+    "bar"
+  ]
+}

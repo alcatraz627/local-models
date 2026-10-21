@@ -1,0 +1,12 @@
+{
+  "kind": "absence",
+  "required": [
+    "identical",
+    "no difference",
+    "unchanged"
+  ],
+  "forbidden": [
+    "different",
+    "changed"
+  ]
+}

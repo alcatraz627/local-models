@@ -1,0 +1,8 @@
+{
+  "kind": "contains_all",
+  "expected": [
+    "dashboard",
+    "revenue",
+    "1,240"
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "id": "rug-border-twelve-motifs",
+  "title": "One of the twelve border motifs has the wrong curve",
+  "kind": "rug",
+  "her_words": "i need these bump in clean curves, dont exaggerate, stick to the first reference image. do this for both sides of the rug in this portion. make sure all the curves are uniform",
+  "source": "transcripts/md/8d5c6092-6fd2-4a55-a612-5d30ed09ed32.md:8078 (also :8830 \"i want the curves next to the red portion also to be uniform\", :10148 \"uniform clean curves, no exaggeration, strictly follow the reference for the curves\"); catalogue P2, P6",
+  "context": "A 1800 x 560 px rug border: twelve taupe protrusions in a row, each in its own group, the right six inside a second group that is flipped. The ninth motif from the left is taller, lumpier and leans, the other eleven are identical. A pink band hides the bottom of motifs 3 to 5, and a thin line runs across all of them.",
+  "requirement": "Make the ninth motif's outline match the other eleven (same height, same lobes, no lean), by moving its existing points. Leave the other eleven exactly as they are.",
+  "targets": ["Border > Group (right half) > motif 9 'Curve'"],
+  "references": ["any of the other eleven motifs 'Curve'"],
+  "must_not_change": [
+    "the other eleven motif outlines",
+    "Pink band",
+    "the long thin sage line drawn across the border",
+    "the inner maroon contour line inside each motif",
+    "the hidden 'Curve old' under motif 9",
+    "the yellow and sage dots on each motif",
+    "the tiny diamonds and dots in the echo row above",
+    "the locked Background group (diamond lattice)"
+  ],
+  "acceptance": [
+    "Motif 9 is the same shape and height as its neighbours, side by side",
+    "No other motif moved by even a pixel",
+    "Motif 9 is still where it was (same base, same centre) and mirrored correctly in the flipped half",
+    "The pink band, the sage line and the dots look the same as before",
+    "The hidden older copy under motif 9 is not what was edited"
+  ],
+  "numbers": { "points_kept": true, "tolerance_px": 0.5, "motif_points": 52, "off_motif_index_from_left": 9 },
+  "traps": [
+    "The reference motif in the left half lives in unflipped local space and the target in a flipped one; copying coordinates without the group transform makes a mirror-image or displaced motif",
+    "Each motif sits in its own group with a translation, so local coordinates look identical across motifs while the spread coordinates do not",
+    "A hidden old version of motif 9 sits under it with the right shape; it must not be edited or revealed, and it must not be mistaken for a perfect reference",
+    "The pink band covers the base of motifs 3 to 5, so a render-based match on those would be wrong",
+    "The thin sage line and the inner contour lie over the motifs and share their colour with other shapes in a colour filter",
+    "Tiny 6 to 14 px diamonds and dots are close by"
+  ],
+  "expected_guard": "edit",
+  "expected_reason": "Clear, reversible and node-only. The off motif has the same point count as the others, so fit_to_reference works once it handles the group transforms."
+}

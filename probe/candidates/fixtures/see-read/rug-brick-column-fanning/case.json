@@ -1,0 +1,34 @@
+{
+  "id": "rug-brick-column-fanning",
+  "title": "Give the brick column a fanning effect",
+  "kind": "rug",
+  "her_words": "no i need you to give this kind of a fanning effect throughtout the vertical column in the picture here. but use only node and shape tools, dont make it too jagged. do not use pen tool under any circumstances. before we begin, how long will u take?",
+  "source": "transcripts/md/68224e0c-c4cd-47f1-b15d-44a7f0d01af9.md:9952 (the real assistant asked which reading she meant at :9966 and she answered \"1st approach\"); catalogue P3 (wrong target), P6",
+  "context": "A 413 x 1025 px runner section: a vertical column of 45 rows of two taupe bricks on each side of the centre, between two red sections whose rays fan out from a point at the edge. Thin maroon gap lines run between the rows (a dozen are doubled). The right half is a flipped group. Her screenshot is not part of the task.",
+  "requirement": "Make the column look as if it fans like the red section's rays. That has two readings with very different cost: (1) round each brick end slightly, so the red edge scallops; (2) tilt the gap lines and reshape every brick to follow the rays.",
+  "targets": ["Brick column (left)", "Brick column (right)"],
+  "references": ["the rays in the red section"],
+  "must_not_change": [
+    "Red section (left and right)",
+    "the 36 rays on each side",
+    "Fan centre",
+    "the cream rivets along the red section",
+    "the locked Background group"
+  ],
+  "acceptance": [
+    "Before editing, the guard puts the two readings to her in one question and recommends one (the rounded ends, the less destructive)",
+    "It asks about scope too: this column or both sides, all columns",
+    "After her answer, the change is shallow and not jagged, same on both sides, and the red section is untouched"
+  ],
+  "numbers": { "points_kept": true, "bricks_per_side": 90, "gap_lines_per_side": 46, "max_curve_depth_note": "she said 'dont make it too jagged'" },
+  "traps": [
+    "Two readings of one screenshot, with a 15 minute and a 60 minute cost; the real assistant asked, and she answered in two words",
+    "About 90 bricks of 8 points each and 46 two-point lines per side: hundreds of shapes, so one op per brick must be batched",
+    "Stacked twins on every fourth gap line",
+    "The right half is flipped, so 'outward' is the opposite sign in local coordinates",
+    "The gap lines are drawn over the bricks, 1 px thin, easy to lose in the render",
+    "Node-only: the 2-point gap lines can bow with handles but cannot gain scallops without new points"
+  ],
+  "expected_guard": "ask",
+  "expected_reason": "Her picture can be read two ways with very different amounts of change. Ask once, with the recommended reading and the scope: 'Round each brick end slightly so the red edge scallops (about 15 minutes for this column, 40 for all), or tilt the gap lines to follow the rays (about an hour, changes your column a lot)?'"
+}

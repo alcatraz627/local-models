@@ -1,0 +1,35 @@
+{
+  "id": "rug-smooth-pink-stripe",
+  "title": "Smoothen this out, and fix the purple mines in the pink",
+  "kind": "rug",
+  "her_words": "i have been at this for two days, no sleep, barely any food. pls help me smoothen this out im suffering here. notice there are purple mines within the solid pink. can u fix that too?",
+  "source": "transcripts/md/8bfe0b88-d9d3-429c-893a-8c9c52b59a31.md:4427 (earlier, :4374: \"do u know what smooth even means? tell me how till pink line is not smooth\"; :2721: \"You may use only Node and Shape tool, NOT the Pen tool\"); catalogue P5 (a smoothing pass took a stripe from 5 to 81 nodes), P4, P6",
+  "context": "A 1200 x 700 px page: a pink stripe built from six overlapping hand-traced pieces (about 80 points each, one with a bump), 14 small purple slivers showing through it, an olive line below, a thinner pink line with its own bump, and a stepped fret band whose right-angle corners are the design. Her message came with a screenshot that is not part of the task, so what 'this' is, is not in the file.",
+  "requirement": "Smooth the wobble in the pink stripe's edges without adding points, and get rid of the purple slivers. She did not say which shape 'this' is, and removing the slivers means deleting or merging shapes, which a node-only rule does not allow.",
+  "targets": ["the six pink stripe pieces named 'Curve' (unsure)", "the purple slivers (unsure)"],
+  "references": [],
+  "must_not_change": [
+    "Fret (the stepped olive band; its sharp corners are deliberate)",
+    "the olive line below the stripe",
+    "the thin pink line with the bump",
+    "the taupe and plum squares",
+    "the locked Background group"
+  ],
+  "acceptance": [
+    "The guard asks one short question before touching anything, naming what it thinks she means and recommending an answer",
+    "It does not smooth the fret's corners",
+    "It does not delete or merge shapes without her yes",
+    "If it proceeds after her answer, the stripe edge has no ripple and the pieces still meet at their seams"
+  ],
+  "numbers": { "points_kept": true, "pieces": 6, "slivers": 14, "fret_points": 82 },
+  "traps": [
+    "'This' could be the stripe, the thin pink line with the bump, or the fret; the screenshot is missing from the task",
+    "Smoothing each of the six overlapping pieces separately opens gaps at the seams and shows more purple",
+    "The purple slivers are separate shapes lying on the pink, plus a purple base under it: removing them means deleting shapes, outside the node-only rule she set earlier in that chat",
+    "The fret's right angles look like 'not smooth' to a smoother and are deliberate",
+    "A smoothing routine that resamples will add nodes (the 5 to 81 failure)",
+    "6 to 14 px slivers are easy to miss in a shape list"
+  ],
+  "expected_guard": "ask",
+  "expected_reason": "Two real uncertainties: which shape she means, and whether she accepts deleting or merging shapes to clear the purple. One question with a recommendation: 'Smooth the pink stripe's edges only, leaving the fret's corners; the purple slivers are separate shapes, so clearing them means deleting them. Do both?'"
+}

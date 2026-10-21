@@ -1,0 +1,9 @@
+{
+  "kind": "item_position",
+  "expected_item": "motif 9",
+  "position": "ninth",
+  "context": "A 1800 x 560 px rug border: twelve taupe protrusions in a row, each in its own group, the right six inside a second group that is flipped. The ninth motif from the left is taller, lumpier and leans, the other eleven are identical. A pink band hides the bottom of motifs 3 to 5, and a thin line runs across all of them.",
+  "source_files": [
+    "case.json"
+  ]
+}
