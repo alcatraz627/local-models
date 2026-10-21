@@ -1,6 +1,6 @@
 # local-models — STATE (agent handoff / index)
 
-Project handoff index and historical ledger. Read this first, then verify current state with `lm status`, `lm models`, and the implementation. Reviewed 2026-09-27.
+Project handoff index and historical ledger. Read this first, then verify current state with `lm status`, `lm models`, and the implementation. Reviewed 2026-10-22.
 
 **What it is:** a local-model toolkit on an Apple-Silicon Mac (M5 Pro, 64 GB), running alongside
 cloud agents. Per-request expiry, explicit leases, and scheduled warmth control residency.
@@ -33,7 +33,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 | `lm opencode [args]` | opencode on the local code tier — auto lease/release around the session | — |
 | `lm gemini "..."` | the gemini lane (default gemini-3.8-flash, opt-in gemini-4-argon, wrapper-only, read-only posture); `ingest`/`ask` per-project sessions (UUID create/resume); structured `gemini_unavailable` fallback. **VERIFIED end-to-end 2026-07-07** — auth = API key in `~/.gemini/.env` (600, wrapper-loaded; settings selectedType=gemini-api-key). Note: plan-mode gemini can READ the workspace it runs in — don't point it at dirs holding secrets | `lm gemini -h` |
 | `warm on\|off [tier\|model] [ttl]` | companion pin (forever) or **bounded lease** for big tiers; `warm off all` sweeps | `warm -h` |
-| `lm status` / `models` / `doctor` / `timeline` | server + resident + on-disk · tiers · smoke-check · merged history (q/imagine/see/fleet) | `lm` |
+| `lm status` / `models` / `doctor` / `timeline` | server + resident + on-disk · tiers · smoke-check · merged history (q/imagine/see/fleet/gemini), `lm last`, `lm --version` | `lm` |
 
 ## Architecture
 
@@ -56,7 +56,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   a deterministic table handler; the other intents route to a model. Adding a handler requires
   implementation as well as a TOML entry.
 - **Histories are the API:** `logs/q-history.jsonl` (successes AND failures), `logs/see-history.jsonl`,
-  `logs/fleet-history.jsonl`, `outputs/imagine-history.jsonl` — merged by `lm timeline`, mined
+  `logs/fleet-history.jsonl`, `logs/gem-history.jsonl`, `logs/compare-history.jsonl` (one line per `see diff`), `logs/opencode-history.jsonl`, `outputs/imagine-history.jsonl` (critiques are `kind: critique` rows) — merged by `lm timeline` (q, imagine, see, fleet and gemini; not compare or opencode), mined
   weekly by `scripts/self-audit.sh` (gcc-schedule `lm-self-audit`, Sun 11:00 → digest + proposal
   on recurring failures). Fleet runs leave full records in `outputs/fleet/<ts>-<intent>/`.
 - **OpenCode:** `~/.config/opencode/opencode.jsonc` has the `ollama` provider (all local chat
@@ -65,10 +65,10 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## Key files
 
-- `bin/` — `lm q imagine warm see review probe lm-serve` · `_lib.sh` (colors/help/jsonl-history/
+- `bin/` — `lm q imagine warm see review review-pr probe lm-serve` · `_lib.sh` (colors/help/jsonl-history/
   residency/`resolve_tier`) · `config.sh` (tier vars)
 - `lib/` — orchestration internals, NOT on PATH: `fleet` (fan-out runner) · `fleet-review.py`
-  (human verdicts) · `data-profile.py` (table facts) · `repo-index` · `gemini` · `ui-verify`
+  (human verdicts) · `data-profile.py` (table facts) · `repo-index` · `gemini` (+ `gemini-stream.py`, `gemini-direct.py`) · `rag` · `websearch` · `vis-*` · `ui-verify`
 - `intents/` — the registry + schemas: `review-findings` · `ui-inventory` · `ui-verify`
 - `outputs/see/` — the vision artifact store (one folder per read: source copy as read,
   read.md, meta.json, notes.md; newest 150 kept; `see open N`)

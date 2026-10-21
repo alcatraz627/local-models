@@ -42,13 +42,13 @@ show_help() {
   printf '%s%sq%s %s— quick local LLM companion (macOS / Apple Silicon)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
   _cmd 'q "<prompt>"'           'ask a question (default intent)'
-  _cmd 'q <intent> "<prompt>"'  'intent = cmd | ask | title | commit | summarize | explain-code | describe-data | qa'
+  _cmd 'q <intent> "<prompt>"'  "intent = $(cd "$DIR/intents" && ls ./*.toml | sed 's|^\./||;s|\.toml$||' | paste -sd'|' - | sed 's/|/ | /g')"
   _cmd 'q -c [N] "<prompt>"'    'continue the last exchange (or entry N) — multi-turn'
   _cmd 'q on | off | status'    'Tier W warm toggle (= warm)'
-  _cmd 'q history [N|--json]'   'recent queries, numbered (default 15)'
+  _cmd 'q history [N] [--json]' 'recent queries, numbered (default 15); --json adds each entry number n'
   _cmd 'q show N'               'full prompt + response of entry N'
   _cmd 'q intents'              'list available intents (the registry)'
-  _cmd 'q models'               'usable models + tiers (= lm models; ★ default · ● resident)'
+  _cmd 'q models'               'usable models + tiers (= lm models; ● resident)'
   _sec EXAMPLES
   _ex 'q "how do I check disk usage"'        '# terse answer'
   _ex 'q -c "and sorted by size?"'           '# follow-up with context'
@@ -69,7 +69,7 @@ show_help() {
   _opt '--no-stats'     'hide the gray token line (text mode; machine modes always carry the counts)'
   _opt '-c, --continue [N]' 'continue last exchange / entry N'
   _opt '--big / --code' 'use the big (reasoning) / code tier for this call'
-  _opt '-m, --model M'  "model or tier alias: small | big | code | <name> (default: small)"
+  _opt '-m, --model M'  "model or tier alias: small | big | code | sweep | <name> (default: small)"
   _opt '--raw'          'no system prompt (bare model)'
   _opt '--json'         'machine mode: one JSON object on stdout, no ANSI'
   _opt '--stream-json'  'machine mode: NDJSON chunk/done/error lines'
@@ -98,7 +98,7 @@ LOG="$DIR/logs/q-history.jsonl"
 show_history() {
   # gsub flattens multiline prompts (piped diffs) to ONE display line each, so
   # displayed numbers stay equal to JSONL line numbers — the show/-c contract.
-  jsonl_history "$LOG" "${1:-15}" '"\(.ts[11:19])  \(.intent)  \(.ms)ms  \((.prompt | gsub("\\s+"; " "))[0:50])"'
+  jsonl_history "$LOG" "${1:-15}" "$JQ_LOCAL_TS"'"\(.ts | lts)  \(.intent)\(if .error then " ✗" else "" end)  \(.model // "?")  \(.ms)ms  \((.prompt | gsub("\\s+"; " "))[0:50])"'
   echo "  → q show N   for the full prompt + response of entry N"
 }
 show_entry() {
@@ -110,9 +110,9 @@ show_entry() {
 case "${1:-}" in
   -h|--help|help)        show_help; exit 0 ;;
   history)               shift
-                         if [ "${1:-}" = "--json" ]; then
-                           shift; if [ -f "$LOG" ]; then tail -n "${1:-15}" "$LOG"; fi; exit 0
-                         fi
+                         HIST_JSON=false; HIST_N=15
+                         for harg in "$@"; do case "$harg" in --json) HIST_JSON=true ;; *) HIST_N="$harg" ;; esac; done
+                         if $HIST_JSON; then jsonl_history_json "$LOG" "$HIST_N"; exit 0; fi
                          show_history "${1:-15}"; exit 0 ;;
   show)                  shift; show_entry "${1:-}"; exit 0 ;;
   intents)               list_intents; exit 0 ;;
@@ -147,6 +147,7 @@ DIY=false          # --diy: a planner pass picks intent/web/file/tier from the p
 positionals=()
 while [ $# -gt 0 ]; do
   case "$1" in
+    --) shift; positionals+=("$@"); break ;;
     --think) THINK=true; shift ;;
     --raw)   RAW=true; shift ;;
     --web)   WEB=true; shift ;;
@@ -156,28 +157,38 @@ while [ $# -gt 0 ]; do
     --stream-json) MODE=stream; shift ;;
     --big)   MODEL="$(resolve_tier big)";  USER_MODEL=true; shift ;;
     --code)  MODEL="$(resolve_tier code)"; USER_MODEL=true; shift ;;
-    --format)   FORMAT_FILE="$2"; shift 2 ;;
+    --format)   need_arg q "$1" "${2:-}"; FORMAT_FILE="$2"; shift 2 ;;
     --glow)     GLOW=true; shift ;;
-    --ctx|--file) CTX_FILE="$2"; shift 2 ;;
-    --ctx-name) CTX_NAME="$2"; shift 2 ;;
-    --sheet)    SHEET="$2"; shift 2 ;;
+    --ctx|--file) need_arg q "$1" "${2:-}"; CTX_FILE="$2"; shift 2 ;;
+    --ctx-name) need_arg q "$1" "${2:-}"; CTX_NAME="$2"; shift 2 ;;
+    --sheet)    need_arg q "$1" "${2:-}"; SHEET="$2"; shift 2 ;;
     --preflight) PREFLIGHT=true; shift ;;
     --prose) PROSE=true; shift ;;
-    --max-ctx)  MAX_CTX="$2"; shift 2 ;;
-    --timeout)  TIMEOUT="$2"; shift 2 ;;
-    --intent)   INTENT="$2"; USER_INTENT=true; shift 2 ;;
+    --max-ctx)  need_arg q "$1" "${2:-}"; MAX_CTX="$2"; shift 2 ;;
+    --timeout)  need_arg q "$1" "${2:-}"; TIMEOUT="$2"; shift 2 ;;
+    --intent)   need_arg q "$1" "${2:-}"; INTENT="$2"; USER_INTENT=true; shift 2 ;;
     -c|--continue)
       CONT=true
       if [[ "${2:-}" =~ ^[0-9]+$ ]]; then CONT_N="$2"; shift 2; else shift; fi ;;
-    -m|--model) MODEL="$(resolve_tier "$2")"; USER_MODEL=true; shift 2 ;;
+    -m|--model) need_arg q "$1" "${2:-}"; MODEL="$(resolve_tier "$2")"; USER_MODEL=true; shift 2 ;;
     -h|--help) show_help; exit 0 ;;
-    *) positionals+=("$1"); shift ;;
+    *) reject_unknown_flag q "$1"; positionals+=("$1"); shift ;;
   esac
 done
 
 # A leading intent token selects the intent (if it's a registered intent); rest is the query.
 if [ "${#positionals[@]}" -gt 0 ] && intent_exists "${positionals[0]}"; then
   INTENT="${positionals[0]}"; USER_INTENT=true; positionals=("${positionals[@]:1}")
+elif [ "${#positionals[@]}" -gt 0 ] && [[ "${positionals[0]}" =~ ^[A-Za-z][A-Za-z-]{2,}$ ]]; then
+  # A lone word one typo away from an intent is almost surely that intent; sending
+  # it as a prompt would cost a model call. `--` or `q ask ...` sends it anyway.
+  _names=$(cd "$INTENT_DIR" && ls ./*.toml 2>/dev/null | sed 's|^\./||;s|\.toml$||')
+  # shellcheck disable=SC2086
+  _guess=$(did_you_mean "${positionals[0]}" $_names)
+  if [ -n "$_guess" ]; then
+    echo "q: '${positionals[0]}' is not an intent. Did you mean '$_guess'? (q intents lists them; q ask \"${positionals[0]}\" sends it as a prompt)" >&2
+    exit 2
+  fi
 fi
 QUERY="${positionals[*]}"
 
@@ -209,7 +220,7 @@ trap 'emit_error cancelled "cancelled by client" 130' TERM INT
 # needs permission and nothing happens silently. Explicit flags always win:
 # a user-chosen intent/model/ctx is never overridden by the plan.
 if $DIY && [ "${#positionals[@]}" -gt 0 ]; then
-  _dim=""; _rs=""; [ -t 2 ] && { _dim=$'\033[2m'; _rs=$'\033[0m'; }
+  _dim=""; _rs=""; use_color_fd 2 && { _dim=$'\033[2m'; _rs=$'\033[0m'; }
   PLAN_ENV="$("$0" --json --no-stats --timeout 25 --intent diy-plan \
     --format "$INTENT_DIR/diy-plan.schema.json" "$QUERY" 2>/dev/null)" || PLAN_ENV=""
   PLAN="$(printf '%s' "$PLAN_ENV" | jq -c '.data // empty' 2>/dev/null)"
@@ -539,7 +550,7 @@ if intent_needs_ctx "$INTENT" && [ -z "$CTX" ]; then
     # --diy never hard-fails on its own routing: a doc intent that ended up
     # docless (planner optimism) degrades to ask; web results, if any, still ride.
     INTENT=ask
-    if [ "$MODE" = text ] && [ -t 2 ]; then printf '\033[2m· diy: doc-intent without a doc → ask\033[0m\n' >&2
+    if [ "$MODE" = text ] && use_color_fd 2; then printf '\033[2m· diy: doc-intent without a doc → ask\033[0m\n' >&2
     elif [ "$MODE" = text ]; then echo "· diy: doc-intent without a doc → ask" >&2; fi
   else
     hint="'$INTENT' needs a document — pass the file with --ctx <path> (or pipe it in)."
@@ -570,7 +581,7 @@ fi
 # the gray channel — never a hard failure, never silent.
 if $WEB; then
   [ -n "$WEB_QUERY" ] || WEB_QUERY="${positionals[*]}"
-  _dim=""; _rs=""; [ -t 2 ] && { _dim=$'\033[2m'; _rs=$'\033[0m'; }
+  _dim=""; _rs=""; use_color_fd 2 && { _dim=$'\033[2m'; _rs=$'\033[0m'; }
   WEB_OUT="$("$DIR/lib/websearch" "$WEB_QUERY" -n 5 --fetch 2>/dev/null)" || WEB_OUT=""
   if [ -n "$WEB_OUT" ]; then
     if [ "$MODE" = text ]; then
@@ -705,8 +716,9 @@ req = urllib.request.Request(host.rstrip("/") + "/api/chat", data=body,
                             headers={"Content-Type": "application/json"})
 t0 = time.time(); parts = []
 in_thinking = False  # thinking streams in message.thinking, separate from content
-tok_in = tok_out = 0  # filled from the final done chunk's eval counts
-dim, rs = ("\033[2m", "\033[0m") if sys.stderr.isatty() else ("", "")
+tok_in = tok_out = eval_ns = 0  # filled from the final done chunk's eval counts
+dim, rs = (("\033[2m", "\033[0m") if sys.stderr.isatty() and not __import__("os").environ.get("NO_COLOR")
+           else ("", ""))
 try:
     with urllib.request.urlopen(req) as r:
         for line in r:
@@ -717,6 +729,7 @@ try:
             if obj.get("done"):  # final chunk carries the token tallies
                 tok_in = obj.get("prompt_eval_count", 0)
                 tok_out = obj.get("eval_count", 0)
+                eval_ns = obj.get("eval_duration", 0)
             msg = obj.get("message", {})
             # The reasoning trace goes to stderr (dimmed) so stdout stays the bare
             # answer; machine modes drop it entirely.
@@ -762,15 +775,17 @@ if mode == "text":
         sys.stdout.write("\n")
     # Gray token-spend line on stderr — like the --think trace, TTY-only, muteable.
     if stats == "true" and sys.stderr.isatty():
-        tps = (tok_out / (ms / 1000)) if ms else 0
-        sys.stderr.write("%s· %s in / %s out · %d tok/s · %.1fs · q show %d%s\n"
-                         % (dim, format(tok_in, ","), format(tok_out, ","), tps, ms / 1000, n_entry, rs))
+        tps = (tok_out / (eval_ns / 1_000_000_000)) if eval_ns else 0
+        cold = " · cold" if keep == "0" else ""
+        sys.stderr.write("%s· %s%s · %s in / %s out · %d tok/s · %.1fs · q show %d%s\n"
+                         % (dim, model, cold, format(tok_in, ","), format(tok_out, ","), tps, ms / 1000, n_entry, rs))
 elif mode == "stream":
     sys.stdout.write(json.dumps({"t": "done", "model": model, "ms": ms,
                                  "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}) + "\n")
 elif mode == "json":
     envelope = {"ok": True, "text": text, "model": model, "ms": ms,
-                "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}
+                "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated,
+                "intent": intent, "entry": n_entry, "cold_load": keep == "0"}
     if fmt:  # constrained output: hand consumers the parsed object, not a string to re-parse
         try:
             envelope["data"] = json.loads(text)
