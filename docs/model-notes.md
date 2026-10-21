@@ -15,6 +15,7 @@ Newest first.
 
 | Date | Task | Checked how | Result | Note |
 |---|---|---|---|---|
+| 2026-10-21 | PR review, speedway #110 (56 files, +5962), offline pack over the direct API | each finding read against the code at head (shallow) | 5 findings: 2 held, 1 plausible, 2 false (one shared with Codex). 670K tokens in, 115s, first token at 82s | Via gemini-cli the same pack hung for 16+ min without sending; large inputs must go to the API directly. Comparison: `.claude/output/20261021-pr110-review/COMPARISON.md` |
 | 2026-10-21 | Adversarial review of i-dream, from a compressed repo pack (i-dream session) | each finding verified against the tree | 15 findings: 6 held, 2 partial, 2 false (one invented function name each), 5 stale, 1 invented figure. 199s, about 5k words, no truncation | The stale ones leaned on a 2-day-old audit over newer commits; give it the current state, not old reports. Report: `/Users/alcatraz627/Code/Claude/i-dream/.claude/output/20261021-1948-adversarial-review/indictment.md` |
 | 2026-10-21 | PR review of speedway #110 by URL, through `lm gemini` | none, it failed | No answer after 451s: it tried to read `.git` (blocked), then "Invalid stream" | The wrapper ran it read-only, with no GitHub access. Pipe `gh pr diff` in instead of passing a URL |
 | 2026-10-21 | Ideate the local-model candidate test plan (70K-char context pack) | citations scripted against the tree; fixture paths checked | 20 of 25 file:line citations exact, 2 near, 3 wrong; every fixture path real; candidates real but 2024-25 vintage | Missed the September releases. Plan: `.claude/output/20261021-argon-candidates/argon-test-plan.md` |
@@ -25,6 +26,12 @@ Newest first.
 | Date | Task | Checked how | Result | Note |
 |---|---|---|---|---|
 | 2026-10-21 | Same 170K sweep, called by the direct API | exact-answer key | 7/7, 11.1s | Through gemini-cli 0.46, requests for 3.8-flash are answered by 3.6-flash (`served` field in gem-history) |
+
+## Codex gpt-6-luna
+
+| Date | Task | Checked how | Result | Note |
+|---|---|---|---|---|
+| 2026-10-21 | PR review, speedway #110, exploring the exported tree read-only, effort high | each finding read against the code at head (shallow) | 2 findings: 1 held (the most product-relevant of either review), 1 false (shared with Argon) | gpt-6-astra and gpt-6-sol are refused on this ChatGPT login; luna is the heaviest accepted |
 
 ## Local vision (minicpm-v4.6, Qwen3-VL-8B MLX)
 
