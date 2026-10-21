@@ -333,9 +333,18 @@ def _state_of(state):
 @scorer("U04", raw=True, key=None)
 def _u04(a, truth, flags, raw):
     payload, elems = raw
+    # A model may give a row as a label element plus a separate, textless toggle
+    # element in the same region; that toggle's state belongs to the label.
+    regions = [[e for e in (r.get("elements") or []) if isinstance(e, dict)]
+               for r in (payload or {}).get("regions", []) or [] if isinstance(r, dict)]
     found = {}
     for label, want in [(x, "on") for x in truth["on"]] + [(x, "off") for x in truth["off"]]:
         states = [_state_of(e.get("state", "")) for e in elems if norm_str(label) in norm_str(e.get("text", ""))]
+        for reg in regions:
+            if any(norm_str(label) in norm_str(e.get("text", "")) for e in reg):
+                states += [_state_of(e.get("state", "")) for e in reg
+                           if not norm_str(e.get("text", "")) and re.search(r"TOGGLE|SWITCH|CHECKBOX", norm_str(e.get("type", "")))]
+        states = [s for s in states if s]
         found[label] = bool(states) and want in states and not ({"on", "off"} - {want}) & set(states)
     flags["labels"] = found
     return all(found.values()), f"toggle states {found}"
