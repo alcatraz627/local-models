@@ -20,6 +20,7 @@ import json
 import sys
 
 DIM, CYAN, YEL, RED, RST = "\033[2m", "\033[36m", "\033[33m", "\033[31m", "\033[0m"
+TICK = "\x00tick "   # a heartbeat line from follow(), never written by gemini-cli
 
 
 def events(stream):
@@ -46,7 +47,19 @@ def short(value, n=90):
 def render(stream, color):
     c = (lambda code, s: f"{code}{s}{RST}") if color else (lambda code, s: s)
     writing = False
+    ticking = False
     for ev, raw in events(stream):
+        if raw.startswith(TICK):
+            secs = int(raw[len(TICK):])
+            if color:   # one line, rewritten in place
+                print(c(DIM, f"\r  … waiting on the model, {secs // 60}m{secs % 60:02d}s since the last event "), end="", flush=True)
+                ticking = True
+            elif secs % 60 == 0:
+                print(f"  … waiting on the model, {secs // 60}m since the last event", flush=True)
+            continue
+        if ticking:
+            print(flush=True)
+            ticking = False
         if ev is None:
             if raw.startswith("[STARTUP]") or raw.startswith("Ripgrep is not available"):
                 continue
@@ -117,26 +130,40 @@ def follow(path, pid):
             return False
     with open(path, encoding="utf-8", errors="replace") as f:
         idle = 0.0
+        last_event = os.path.getmtime(path)   # watch may start long after the last event
+        caught_up = False
         while True:
             line = f.readline()
             if line:
                 idle = 0.0
+                if caught_up:   # lines replayed at start are not new events
+                    last_event = time.time()
                 yield line
                 if '"type":"result"' in line.replace(" ", ""):
                     return
                 continue
+            caught_up = True
             if not alive() and idle > 1.0:
                 return
             time.sleep(0.25)
             idle += 0.25
+            # The model sends nothing while it thinks; a tick every 5s shows
+            # the call is alive and how long it has been quiet.
+            if idle % 5 == 0:
+                yield f"{TICK}{int(time.time() - last_event)}"
 
 
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "render"
     if mode == "follow":
-        # follow FILE PID: render a call that is still running elsewhere
-        render(follow(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else None),
-               color=sys.stdout.isatty())
+        # follow FILE PID: render a call that is still running elsewhere.
+        # Ctrl-C stops watching; the call itself keeps running.
+        try:
+            render(follow(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else None),
+                   color=sys.stdout.isatty())
+        except KeyboardInterrupt:
+            print("\n  · stopped watching; the call is still running", flush=True)
+            sys.exit(130)
         sys.exit(0)
     src = open(sys.argv[2], encoding="utf-8", errors="replace") if len(sys.argv) > 2 else sys.stdin
     if mode == "render":
