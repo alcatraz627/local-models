@@ -18,7 +18,7 @@ MODELS = {
     "see-diff": {
         "gemma4:26b": {"size": "17 GB (config comment)", "cli": "see"},
         "minicpm-v4.6": {"size": "1.6 GB (config comment)", "cli": "see"},
-        "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit": {"size": "~6 GB (docs/STATE estimate)", "cli": "see", "gap": "see diff rejects MLX routing"},
+        "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit": {"size": "~6 GB (docs/STATE estimate)", "cli": "see"},
     },
     "see-read": {
         "minicpm-v4.6": {"size": "1.6 GB (config comment)", "cli": "see"},

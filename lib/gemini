@@ -38,6 +38,8 @@ SESS_DIR="$DIR/logs/gemini-sessions"
 # and corpus digests run minutes; the old flat 180s killed 8 of the first 13
 # real-workload calls). --timeout still wins over everything.
 MODE=text; TIMEOUT=""; SESSION=""; FALLBACK_LOCAL=false; GLOW=false; QUIET=false; SERVED=""
+TRANSPORT_PICK=auto; TRANSPORT=cli
+GEMINI_DIRECT_BYTES="${GEMINI_DIRECT_BYTES:-200000}"
 
 # The API key lives OUT of the global shell env: ~/.gemini/.env (chmod 600),
 # loaded here per-call so only this wrapper's process tree ever sees it. A key
@@ -68,6 +70,7 @@ show_help() {
   _opt '--fallback-local' 'if gemini is unavailable, answer via the local big tier (q -m big) instead of failing; reply is marked local'
   _opt '--glow'         'render the answer as markdown through glow (also works on show N)'
   _opt '--quiet'        'hide the live step lines a terminal shows on stderr while the call runs'
+  _opt '--direct | --cli' "force the transport: the API directly, or gemini-cli (default: direct when piped context is over $GEMINI_DIRECT_BYTES bytes, one-shot/digest only; the direct route has no tools or @image)"
   _sec NOTES
   printf '  %smodel %s (override -m, list: lm gemini models) · read-only (--approval-mode plan) · never call the gemini binary directly%s\n' "$Dm" "$GEMINI_MODEL" "$Rs"
   printf '  %sif unavailable (auth/tier): structured gemini_unavailable — FLAG to the user, fall back to claude/lm%s\n' "$Dm" "$Rs"
@@ -92,12 +95,17 @@ log_line() { # KIND TEXT_OR_CODE MS
     '{ts:$ts, kind:$kind, session:(if $sess == "" then null else $sess end),
       model:$model, prompt:$prompt, response:$r, ms:$ms, bytes_in:$bin, bytes_out:$bout}
      + (if $served != "" then {served:$served} else {} end)
-     + (if $stream != "" then {stream:$stream} else {} end)' --arg served "${SERVED:-}" --arg stream "${STREAM:-}" >> "$LOG" 2>/dev/null
+     + (if $stream != "" then {stream:$stream} else {} end)
+     + {transport:$transport}' --arg served "${SERVED:-}" --arg stream "${STREAM:-}" --arg transport "${TRANSPORT:-cli}" >> "$LOG" 2>/dev/null
 }
 
 # Run the backend with a hard wall-clock cap (kills the whole process group —
 # gemini-cli can hang on interactive prompts it wasn't told to skip).
 run_gemini() { # extra args...; PROMPT in $PROMPT; stdin passes through
+  if [ "$TRANSPORT" = direct ]; then
+    timeout -k 5 "$TIMEOUT" python3 "$DIR/lib/gemini-direct.py" "$GEMINI_MODEL" "$PROMPT"
+    return
+  fi
   perl -e '
     my $t = shift @ARGV;
     my $p = fork;
@@ -130,6 +138,8 @@ while [ $# -gt 0 ]; do
     --fallback-local) FALLBACK_LOCAL=true; shift ;;
     --glow)      GLOW=true; shift ;;
     --quiet)     QUIET=true; shift ;;
+    --direct)    TRANSPORT_PICK=direct; shift ;;
+    --cli)       TRANSPORT_PICK=cli; shift ;;
     -m|--model)  GEMINI_MODEL="$2"; shift 2 ;;
     *)           positionals+=("$1"); shift ;;
   esac
@@ -259,6 +269,15 @@ if [ -z "$TIMEOUT" ]; then
   case "$KIND" in ingest|digest|research) TIMEOUT=420 ;; *) TIMEOUT=300 ;; esac
 fi
 case "$KIND" in oneshot|digest|research) SESSIONLESS=true ;; *) SESSIONLESS=false ;; esac
+# Transport: the direct API has no session and no tools, so only one-shot and
+# digest calls can use it; research needs gemini-cli's web search.
+case "$KIND" in
+  oneshot|digest)
+    if [ "$TRANSPORT_PICK" = direct ] || { [ "$TRANSPORT_PICK" = auto ] && [ "${#CTX}" -ge "$GEMINI_DIRECT_BYTES" ]; }; then
+      TRANSPORT=direct
+    fi ;;
+  *) [ "$TRANSPORT_PICK" = direct ] && emit_error invalid_args "--direct works for one-shot and digest calls only ($KIND needs gemini-cli)" 2 ;;
+esac
 if [ "$SESSIONLESS" = false ]; then
   if [ -f "$ID_FILE" ]; then
     SESS_ARGS=(-r "$(cat "$ID_FILE")")
@@ -403,8 +422,8 @@ if [ "$MODE" = json ]; then
   jq -cn --arg t "$TEXT" --arg m "$GEMINI_MODEL" --argjson ms "$ms" \
     --arg s "$([ "$SESSIONLESS" = true ] && echo "" || echo "$SESSION")" \
     --argjson reset "$SESSION_RESET" \
-    --arg served "$SERVED" \
-    '{ok:true, text:$t, model:$m, ms:$ms, session:(if $s == "" then null else $s end)}
+    --arg served "$SERVED" --arg transport "$TRANSPORT" \
+    '{ok:true, text:$t, model:$m, ms:$ms, session:(if $s == "" then null else $s end), transport:$transport}
      + (if $served != "" then {served:$served} else {} end)
      + (if $reset then {session_reset:true, note:"session store was cleaned externally — a fresh session was created; previously ingested context is gone (re-run ingest)"} else {} end)'
 else
@@ -416,6 +435,6 @@ else
   fi
   # Stats are TTY-only; the guard must not become the script's exit code — a
   # machine caller in text mode would see exit 1 on every success.
-  [ -t 2 ] && printf '%s· %s%s · %dms · lm gemini show -1%s\n' "$Dm" "$GEMINI_MODEL" "$( [ -n "$SERVED" ] && [ "$SERVED" != "$GEMINI_MODEL" ] && printf ' (served by %s)' "$SERVED")" "$ms" "$Rs" >&2
+  [ -t 2 ] && printf '%s· %s%s · %dms%s · lm gemini show -1%s\n' "$Dm" "$GEMINI_MODEL" "$( [ -n "$SERVED" ] && [ "$SERVED" != "$GEMINI_MODEL" ] && printf ' (served by %s)' "$SERVED")" "$ms" "$( [ "$TRANSPORT" = direct ] && printf ' · direct API')" "$Rs" >&2
 fi
 exit 0

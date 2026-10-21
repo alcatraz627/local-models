@@ -67,7 +67,8 @@ def render(stream, color):
             continue
         t = ev["type"]
         if t == "init":
-            print(c(DIM, f"▸ {ev.get('model', '?')} · session {str(ev.get('session_id', ''))[:8]}"), flush=True)
+            where = "direct API" if ev.get("transport") == "direct" else f"session {str(ev.get('session_id', ''))[:8]}"
+            print(c(DIM, f"▸ {ev.get('model', '?')} · {where}"), flush=True)
         elif t == "tool_use":
             params = ev.get("parameters") or {}
             arg = next((params[k] for k in ("file_path", "dir_path", "path", "query", "url", "pattern", "command") if k in params), params)
@@ -75,6 +76,12 @@ def render(stream, color):
                 print(flush=True)
                 writing = False
             print(c(CYAN, f"  → {ev.get('tool_name', 'tool')}  {short(arg)}"), flush=True)
+        elif t == "thought":
+            # only the direct-API transport sends these (thought summaries)
+            if writing:
+                print(flush=True)
+                writing = False
+            print(c(DIM, f"  … {short(ev.get('content', ''), 160)}"), flush=True)
         elif t == "tool_result":
             status = ev.get("status", "?")
             mark = c(DIM, "    ✓") if status == "success" else c(RED, f"    ✗ {status} {short(ev.get('error') or '')}")

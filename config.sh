@@ -69,3 +69,7 @@ RAG_EMBED_MODEL="${RAG_EMBED_MODEL:-nomic-embed-text}"
 # score on the 2026-10-21 test). Pro models are excluded by owner choice.
 GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.8-flash}"
 GEMINI_MODELS="${GEMINI_MODELS:-gemini-3.8-flash gemini-4-argon}"
+# Piped context at or above this many bytes skips gemini-cli and goes straight to
+# the API (lib/gemini-direct.py): the CLI once hung 16 minutes on a 1.9 MB pack
+# that the API answered in 115s. Only one-shot and digest calls qualify (no session).
+GEMINI_DIRECT_BYTES="${GEMINI_DIRECT_BYTES:-200000}"
