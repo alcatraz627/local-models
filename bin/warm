@@ -27,12 +27,12 @@ pin() { # MODEL KEEP_ALIVE(number or "duration")
   local ka="$2" out
   [[ "$ka" =~ ^-?[0-9]+$ ]] || ka="\"$ka\""
   out="$(curl -s "$OLLAMA_HOST/api/generate" -d "{\"model\":\"$1\",\"keep_alive\":$ka}")" \
-    || { echo "failed to reach Ollama at $OLLAMA_HOST" >&2; exit 1; }
+    || { echo "failed to reach Ollama at $OLLAMA_HOST" >&2; exit 10; }
   # Ollama answers a refusal (model not pulled, bad name) with HTTP 404 and an
   # error body, which curl -s still counts as success; read the body instead.
   if [[ "$out" == *'"error"'* ]]; then
     echo "failed to load '$1': $out (is it pulled? ollama list)" >&2
-    exit 1
+    exit 11
   fi
 }
 
@@ -40,7 +40,7 @@ cmd="${1:-status}"
 case "$cmd" in
   on)
     target="${2:-}"
-    ollama_ensure || { server_down_msg; exit 1; }
+    ollama_ensure || { server_down_msg; exit 10; }
     if [ -z "$target" ]; then
       echo "warming $WARM_MODEL (keep_alive=$WARM_KEEP_ALIVE) ..."
       pin "$WARM_MODEL" "$WARM_KEEP_ALIVE"
@@ -70,7 +70,21 @@ case "$cmd" in
     ollama_cli ps || true
     ;;
   status)
-    ollama_cli ps || echo "server is down, nothing resident (it starts on demand)"
+    if [ "${2:-}" = "--json" ]; then
+      # Machine view: what is loaded and when each model expires (far-future = pinned).
+      if ps_json="$(curl -s -m 3 "$OLLAMA_HOST/api/ps")" && printf '%s' "$ps_json" | jq -e . >/dev/null 2>&1; then
+        printf '%s' "$ps_json" | jq -c '{server: "up", resident: [.models[]? | {name, size, expires_at}]}'
+      else
+        echo '{"server":"down","resident":[]}'
+      fi
+      exit 0
+    fi
+    if ps_out="$(ollama_cli ps)"; then
+      # Header only means nothing is loaded; say so like `lm status` does.
+      if [ "$(printf '%s\n' "$ps_out" | wc -l | tr -d ' ')" -le 1 ]; then echo "nothing resident (idle, ~0 RAM)"; else printf '%s\n' "$ps_out"; fi
+    else
+      echo "server is down, nothing resident (it starts on demand)"
+    fi
     ;;
   restart)
     "$0" off
@@ -84,7 +98,7 @@ case "$cmd" in
     echo "  on code [2h]     lease a tier (small/big/code) or any model, BOUNDED (default $DEFAULT_LEASE;"
     echo "                   'forever' to pin like the companion) — an opencode/agent session helper"
     echo "  off [code|all]   unload the companion, one leased model, or everything resident"
-    echo "  status           show what's resident + how long it stays (default; bare 'warm')"
+    echo "  status [--json]  show what's resident + how long it stays (default; bare 'warm')"
     echo "  restart          off -> on (companion)"
     echo
     echo "Residency is a HUMAN choice — GUI hosts get read-only visibility via"
@@ -93,7 +107,8 @@ case "$cmd" in
     echo "examples:  warm on   ·   warm on code   ·   warm on code 4h   ·   warm off all"
     ;;
   *)
-    echo "usage: warm {on [tier|model] [ttl] | off [tier|model|all] | status | restart}   (try: warm -h)"
-    exit 1
+    echo "warm: unknown verb '$cmd'" >&2
+    echo "usage: warm {on [tier|model] [ttl] | off [tier|model|all] | status | restart}   (try: warm -h)" >&2
+    exit 2
     ;;
 esac

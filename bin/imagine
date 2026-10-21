@@ -64,8 +64,8 @@ preflight_cache() {
   partials=$(find "$dir/blobs" -maxdepth 1 -name '*.incomplete' 2>/dev/null | wc -l | tr -d ' ')
 
   if [ ! -d "$dir" ] || [ "${gb:-0}" -lt "$MIN_GB" ]; then
-    printf '\033[31mimagine: %s is not fully downloaded\033[0m (%sGB cached, needs ~%sGB%s)\n' \
-      "$MODEL" "${gb:-0}" "$MIN_GB" \
+    printf '%simagine: %s is not fully downloaded%s (%sGB cached, needs ~%sGB%s)\n' \
+      "$eRed" "$MODEL" "$eRs" "${gb:-0}" "$MIN_GB" \
       "$([ "$partials" -gt 0 ] && printf '; %s interrupted partial(s)' "$partials")" >&2
     printf '\n  A generation now would NOT generate — it would silently re-enter a\n' >&2
     printf '  multi-GB fetch and look like a very slow render. Download it once,\n' >&2
@@ -105,7 +105,7 @@ enhance_prompt() {
   # guard as q: already resident -> keep resident; else load-and-unload.
   if ollama_resident "$model"; then keep=-1; else keep=0; fi
   sys="You are an image-generation prompt engineer. Rewrite the idea as ONE detailed prompt for a diffusion model: subject, composition, lighting, style, lens, mood. Output ONLY the prompt — no preamble, no quotes, under 60 words."
-  out=$(curl -s --max-time 20 http://127.0.0.1:11434/api/chat \
+  out=$(curl -s --max-time 20 "$OLLAMA_HOST/api/chat" \
     -d "$(jq -n --arg m "$model" --arg s "$sys" --arg u "$idea" --argjson k "$keep" \
       '{model:$m, messages:[{role:"system",content:$s},{role:"user",content:$u}], think:false, stream:false, keep_alive:$k, options:{temperature:0}}')" \
     | jq -r '.message.content // empty' 2>/dev/null)
@@ -150,10 +150,11 @@ show_help() {
   _opt '--open / --no-open' 'force/suppress auto-open (default: open only on a TTY)'
   _opt '-h, --help'         'show this help'
   _sec MODELS
-  _opt 'schnell  (default)'   'fast ~25s · great light · weak text/coherence'
-  _opt 'flux2    (balanced)'  'newer · better coherence · 4B, mid download'
-  _opt 'qwen     (best text)' 'legible text · strongest overall · ~1-2 min'
-  _opt 'dev'                  'high quality · gated · non-commercial · slow'
+  local d="${IMAGINE_MODEL:-schnell}"   # mark whichever model config.sh makes the default
+  _opt "schnell$([ "$d" = schnell ] && echo '  (default)')"  'fast ~46s · great light · weak text/coherence'
+  _opt "flux2$([ "$d" = flux2 ] && echo '  (default)')"     'newer · better coherence · 4B, mid download'
+  _opt "qwen$([ "$d" = qwen ] && echo '  (default)')"       'legible text · strongest overall · ~1-2 min'
+  _opt "dev$([ "$d" = dev ] && echo '  (default)')"         'high quality · gated · non-commercial · slow'
   printf '  %sdefault: config.sh IMAGINE_MODEL · per-call: -m <name> · first use downloads weights%s\n' "$Dm" "$Rs"
   _sec NOTES
   printf '  %sLocal; no network after the one-time download. No tokens/billing — "spend" is%s\n' "$Dm" "$Rs"
@@ -164,21 +165,23 @@ show_help() {
 show_history() {
   # gsub keeps multiline prompts to ONE display line, so displayed numbers
   # stay equal to JSONL line numbers (the show/redo/vary/refine contract).
-  jsonl_history "$LOG" "${1:-15}" \
-    '"\(if .star then "★" else " " end) \(.ts[11:19])  \(.steps)st  seed \(.seed)  \((.bytes/1024)|floor)KB  \((.prompt | gsub("\\s+"; " "))[0:40])"'
+  jsonl_history "$LOG" "${1:-15}" "$JQ_LOCAL_TS"'
+    (if .kind == "critique" then "  \(.ts | lts)  critique  \(.ms // 0)ms  \(.image // "?")"
+     else "\(if .star then "★" else " " end) \(.ts | lts)  \(.steps)st  seed \(.seed)  \((.bytes/1024)|floor)KB  \((.prompt | gsub("\\s+"; " "))[0:40])" end)'
   echo "  → imagine show N · redo/vary/refine N · star N · gallery"
 }
 show_entry() {
   jsonl_entry "$LOG" "${1:-}" \
-    '"#\($i)  \(.ts)\(if .star then "  ★" else "" end)\(if .parent then "  (\(.kind) of #\(.parent))" else "" end)\n  prompt : \(.prompt)\n  model  : \(.model)  steps \(.steps)  seed \(.seed)  quant \(.quant // 8)  \(.width // 1024)x\(.height // 1024)\(if .guidance then "  guidance \(.guidance)" else "" end)\n  output : \(.output)\n  size   : \((.bytes/1024)|floor)KB   time \((.ms/1000))s"'
+    'if .kind == "critique" then "#\($i)  \(.ts)  critique of \(.image)  (\(.model), \(.ms // 0)ms)\n\n\(.response)" else
+     "#\($i)  \(.ts)\(if .star then "  ★" else "" end)\(if .parent then "  (\(.kind) of #\(.parent))" else "" end)\n  prompt : \(.prompt)\n  model  : \(.model)  steps \(.steps)  seed \(.seed)  quant \(.quant // 8)  \(.width // 1024)x\(.height // 1024)\(if .guidance then "  guidance \(.guidance)" else "" end)\n  output : \(.output)\n  size   : \((.bytes/1024)|floor)KB   time \((.ms/1000))s" end'
 }
 
 # Toggle the star flag on history entry N (line replaced by file surgery —
 # NOT awk -v, which C-escape-mangles JSON containing \" or \n).
 star_entry() {
   local i="$1" line updated total
-  [[ "$i" =~ ^[0-9]+$ ]] || { echo "usage: imagine star <N>"; return 1; }
-  line=$(sed -n "${i}p" "$LOG"); [ -n "$line" ] || { echo "no entry #$i"; return 1; }
+  [[ "$i" =~ ^[0-9]+$ ]] || { echo "usage: imagine star <N>" >&2; return 2; }
+  line=$(sed -n "${i}p" "$LOG"); [ -n "$line" ] || { echo "no entry #$i" >&2; return 12; }
   updated=$(printf '%s' "$line" | jq -c '.star = ((.star // false) | not)')
   total=$(wc -l < "$LOG" | tr -d ' ')
   {
@@ -204,8 +207,8 @@ prune_outputs() {
     count=$((count+1))
     if $yes; then trash "$f" && echo "  trashed $f" || echo "  FAILED   $f"; else echo "  $f"; fi
   done < <(comm -23 \
-      <(jq -r 'select((.star // false) | not) | .output' "$LOG" | sort -u) \
-      <(jq -r 'select(.star // false) | .output' "$LOG" | sort -u))
+      <(jq -r 'select(.output and ((.star // false) | not)) | .output' "$LOG" | sort -u) \
+      <(jq -r 'select(.output and (.star // false)) | .output' "$LOG" | sort -u))
   if [ "$count" -eq 0 ]; then echo "nothing to prune (all outputs starred or already gone)"; return; fi
   $yes || echo "→ imagine prune -y   to move these $count to Trash (starred entries are kept)"
 }
@@ -217,7 +220,7 @@ make_gallery() {
   local out="$DIR/outputs/index.html" cards
   # Images that live in outputs/ get a relative src; -o paths elsewhere fall
   # back to file:// so they still render instead of silently breaking.
-  cards=$(jq -r -s --arg outdir "$DIR/outputs/" 'to_entries | reverse | .[] | (.key + 1) as $n | .value |
+  cards=$(jq -r -s --arg outdir "$DIR/outputs/" 'to_entries | reverse | .[] | (.key + 1) as $n | .value | select(.kind != "critique") |
     "<figure class=\"\(if .star then "starred" else "" end)\">" +
     "<img loading=\"lazy\" src=\"\(if (.output | startswith($outdir)) then (.output | split("/") | last) else ("file://" + .output) end)\" alt=\"\">" +
     "<figcaption><span class=\"n\">#\($n)\(if .star then " ★" else "" end)</span> " +
@@ -265,8 +268,10 @@ HTML
 # Load history entry N into E_* vars (defaults cover pre-full-config entries).
 load_entry() {
   local i="$1" line
-  [[ "$i" =~ ^[0-9]+$ ]] || { echo "usage: imagine $VERB <N> [...]"; return 1; }
-  line=$(sed -n "${i}p" "$LOG"); [ -n "$line" ] || { echo "no entry #$i"; return 1; }
+  [[ "$i" =~ ^[0-9]+$ ]] || { echo "usage: imagine $VERB <N> [...]" >&2; return 2; }
+  line=$(sed -n "${i}p" "$LOG"); [ -n "$line" ] || { echo "no entry #$i" >&2; return 12; }
+  [ "$(printf '%s' "$line" | jq -r '.kind // ""')" != critique ] \
+    || { echo "entry #$i is a critique, not a generation (nothing to $VERB)" >&2; return 12; }
   E_PROMPT=$(printf '%s' "$line" | jq -r '.prompt')
   E_MODEL=$(printf '%s' "$line" | jq -r '.model')
   E_STEPS=$(printf '%s' "$line" | jq -r '.steps')
@@ -283,8 +288,9 @@ load_entry() {
 # Critique an image with a local vision model (gemma4) — the generate->critique->refine loop.
 # Optional trailing text is the INTENDED result, so it critiques against your goal.
 critique_image() {
-  local img="$1"; shift; local goal="$*"
-  [ -f "$img" ] || { echo "no such image: $img"; return 1; }
+  [ -n "${1:-}" ] || { echo "usage: imagine critique IMG [\"goal\"]" >&2; return 2; }
+  local img; img="$(expand_tilde "$1")"; shift; local goal="$*"
+  [ -f "$img" ] || { echo "no such image: $img" >&2; return 12; }
   local model="${IMAGINE_CRITIC_MODEL:-gemma4:26b}" tmp task
   tmp=$(mktemp); base64 -i "$img" | tr -d '\n' > "$tmp"
   if [ -n "$goal" ]; then
@@ -292,24 +298,39 @@ critique_image() {
   else
     task="Examine the image and report concisely: (1) WHAT IT IS (style/subject/composition), (2) STRENGTHS, (3) WEAKNESSES/artifacts, (4) FIXES to improve it. Be direct."
   fi
-  echo "  ${Dm}(critiquing $img with $model — loads on demand)${Rs}"
-  jq -n --arg m "$model" \
+  echo "  ${eDm}(critiquing $img with $model — loads on demand)${eRs}" >&2
+  # Same residency contract as q: server must be up, and an already-resident
+  # model stays pinned (keep_alive -1) instead of being unloaded by a default of 0.
+  ollama_ensure || { server_down_msg; rm -f "$tmp"; return 10; }
+  local keep=0 t0 resp text ms
+  ollama_resident "$model" && keep=-1
+  t0=$(python3 -c 'import time; print(int(time.time()*1000))')
+  resp=$(jq -n --arg m "$model" --argjson k "$keep" \
         --arg s "You are an honest, concise art critic examining a generated image." \
         --arg p "$task" --rawfile img "$tmp" \
-        '{model:$m, messages:[{role:"system",content:$s},{role:"user",content:$p,images:[$img]}], stream:false, think:false, options:{temperature:0}}' \
-    | curl -s --max-time 240 http://127.0.0.1:11434/api/chat -d @- \
-    | jq -r '.message.content // .error // "(no response)"'
+        '{model:$m, messages:[{role:"system",content:$s},{role:"user",content:$p,images:[$img]}], stream:false, think:false, keep_alive:$k, options:{temperature:0}}' \
+    | curl -s --max-time 240 "$OLLAMA_HOST/api/chat" -d @-) || true
   rm -f "$tmp"
+  text=$(printf '%s' "$resp" | jq -r '.message.content // .error // "(no response)"' 2>/dev/null) || text="(no response)"
+  ms=$(( $(python3 -c 'import time; print(int(time.time()*1000))') - t0 ))
+  printf '%s\n' "$text"
+  # One history line per critique (kind=critique) so it shows in timeline and history.
+  # The path goes in .image, never .output, so prune cannot mistake it for a generation.
+  jq -cn --arg ts "$(date -u +%FT%TZ)" --arg image "$img" --arg goal "$goal" --arg model "$model" \
+     --arg r "$text" --argjson ms "$ms" \
+     '{ts:$ts, kind:"critique", image:$image, prompt:(if $goal == "" then null else $goal end), model:$model, ms:$ms, response:$r}' \
+     >> "$LOG" 2>/dev/null || true
+  case "$text" in "(no response)") return 1 ;; esac
 }
 
 VERB=""
 case "${1:-}" in
   -h|--help|help|'') show_help; exit 0 ;;
   history)           shift
-                     if [ "${1:-}" = "--json" ]; then
-                       shift; if [ -f "$LOG" ]; then tail -n "${1:-15}" "$LOG"; fi; exit 0
-                     fi
-                     show_history "${1:-15}"; exit 0 ;;
+                     HIST_JSON=false; HIST_N=15
+                     for harg in "$@"; do case "$harg" in --json) HIST_JSON=true ;; *) HIST_N="$harg" ;; esac; done
+                     if $HIST_JSON; then jsonl_history_json "$LOG" "$HIST_N"; exit 0; fi
+                     show_history "$HIST_N"; exit 0 ;;
   show)              shift; show_entry "${1:-}"; exit 0 ;;
   star)              shift; star_entry "${1:-}"; exit $? ;;
   prune)             shift; prune_outputs "${1:-}"; exit $? ;;
@@ -325,7 +346,7 @@ AUTO_OPEN=auto   # auto = open only on a TTY; --open/--no-open force it
 
 # Verbs seed every knob from the recorded entry; flags below still override.
 if [ -n "$VERB" ]; then
-  load_entry "${1:-}" || exit 1
+  load_entry "${1:-}" || exit $?
   PARENT="$1"; KIND="$VERB"; shift
   MODEL="$E_MODEL"; STEPS="$E_STEPS"; SEED="$E_SEED"; GUIDANCE="$E_GUIDANCE"
   QUANT="$E_QUANT"; WIDTH="$E_WIDTH"; HEIGHT="$E_HEIGHT"
@@ -336,29 +357,30 @@ args=()
 while [ $# -gt 0 ]; do
   case "$1" in
     -e|--enhance) ENHANCE=true; shift ;;
-    --from)       FROM="$2"; shift 2 ;;
-    --strength)   STRENGTH="$2"; shift 2 ;;
-    --style)      STYLE="$2"; shift 2 ;;
-    --neg|--negative) NEG="$2"; shift 2 ;;
-    -m|--model)   MODEL="$2"; shift 2 ;;
-    -s|--steps)   STEPS="$2"; shift 2 ;;
-    --guidance)   GUIDANCE="$2"; shift 2 ;;
-    -q|--quant)   QUANT="$2"; shift 2 ;;
-    -o|--output)  OUT="$2"; shift 2 ;;
-    --seed)       SEED="$2"; USER_SEED=true; shift 2 ;;
+    --from)       need_arg imagine "$1" "${2:-}"; FROM="$2"; shift 2 ;;
+    --strength)   need_arg imagine "$1" "${2:-}"; STRENGTH="$2"; shift 2 ;;
+    --style)      need_arg imagine "$1" "${2:-}"; STYLE="$2"; shift 2 ;;
+    --neg|--negative) need_arg imagine "$1" "${2:-}"; NEG="$2"; shift 2 ;;
+    -m|--model)   need_arg imagine "$1" "${2:-}"; MODEL="$2"; shift 2 ;;
+    -s|--steps)   need_arg imagine "$1" "${2:-}"; STEPS="$2"; shift 2 ;;
+    --guidance)   need_arg imagine "$1" "${2:-}"; GUIDANCE="$2"; shift 2 ;;
+    -q|--quant)   need_arg imagine "$1" "${2:-}"; QUANT="$2"; shift 2 ;;
+    -o|--output)  need_arg imagine "$1" "${2:-}"; OUT="$2"; shift 2 ;;
+    --seed)       need_arg imagine "$1" "${2:-}"; SEED="$2"; USER_SEED=true; shift 2 ;;
     --stepwise)   STEPWISE=true; shift ;;
-    -W|--width)   WIDTH="$2"; shift 2 ;;
-    -H|--height)  HEIGHT="$2"; shift 2 ;;
+    -W|--width)   need_arg imagine "$1" "${2:-}"; WIDTH="$2"; shift 2 ;;
+    -H|--height)  need_arg imagine "$1" "${2:-}"; HEIGHT="$2"; shift 2 ;;
     --open)       AUTO_OPEN=yes; shift ;;
     --no-open)    AUTO_OPEN=no; shift ;;
     -h|--help)    show_help; exit 0 ;;
-    *) args+=("$1"); shift ;;
+    --) shift; args+=("$@"); break ;;
+    *) reject_unknown_flag imagine "$1"; args+=("$1"); shift ;;
   esac
 done
 
 if [ -n "$VERB" ]; then
   case "$VERB" in
-    refine) [ "${#args[@]}" -gt 0 ] || { echo "usage: imagine refine N \"what to change\""; exit 1; }
+    refine) [ "${#args[@]}" -gt 0 ] || { echo "usage: imagine refine N \"what to change\"" >&2; exit 2; }
             PROMPT="$E_PROMPT, ${args[*]}" ;;
     *)      PROMPT="$E_PROMPT" ;;
   esac
@@ -367,7 +389,7 @@ if [ -n "$VERB" ]; then
   # Enhance/style shape NEW prompts; on a verb they'd silently mutate the
   # recorded one — warn-and-drop, same convention as the --neg guard.
   if $ENHANCE || [ -n "$STYLE" ]; then
-    echo "  ${Y}note:${Rs} --enhance/--style shape new prompts — ignored with '$VERB'"
+    echo "  ${eY}note:${eRs} --enhance/--style shape new prompts — ignored with '$VERB'" >&2
     ENHANCE=false; STYLE=""
   fi
   RAW_IDEA="$PROMPT"
@@ -392,7 +414,7 @@ preflight_cache          # fail fast on a half-downloaded model — never hang i
 if [ -n "$NEG" ]; then
   case "$MODEL" in
     dev|qwen) : ;;
-    *) echo "  ${Y}note:${Rs} --neg needs a dev/qwen model — ignored for '$MODEL'"; NEG="" ;;
+    *) echo "  ${eY}note:${eRs} --neg needs a dev/qwen model — ignored for '$MODEL'" >&2; NEG="" ;;
   esac
 fi
 
@@ -457,5 +479,5 @@ if [ "$rc" -eq 0 ] && [ -f "$OUT" ]; then
     auto) [ -t 1 ] && command -v open >/dev/null && open "$OUT" ;;
   esac
 else
-  _sec FAILED; echo "  generation did not produce $OUT (exit $rc)"; exit 1
+  _sec FAILED; echo "  generation did not produce $OUT (exit $rc)" >&2; exit 1
 fi

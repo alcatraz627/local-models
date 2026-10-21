@@ -17,6 +17,7 @@ not its thoughts. Lines that are not JSON (startup noise, errors) are passed
 through by render and ignored by text and meta.
 """
 import json
+import os
 import sys
 
 DIM, CYAN, YEL, RED, RST = "\033[2m", "\033[36m", "\033[33m", "\033[31m", "\033[0m"
@@ -167,14 +168,14 @@ if __name__ == "__main__":
         # Ctrl-C stops watching; the call itself keeps running.
         try:
             render(follow(sys.argv[2], int(sys.argv[3]) if len(sys.argv) > 3 else None),
-                   color=sys.stdout.isatty())
+                   color=sys.stdout.isatty() and not os.environ.get("NO_COLOR"))
         except KeyboardInterrupt:
             print("\n  · stopped watching; the call is still running", flush=True)
             sys.exit(130)
         sys.exit(0)
     src = open(sys.argv[2], encoding="utf-8", errors="replace") if len(sys.argv) > 2 else sys.stdin
     if mode == "render":
-        render(src, color=sys.stdout.isatty() or "--color" in sys.argv)
+        render(src, color=(sys.stdout.isatty() and not os.environ.get("NO_COLOR")) or "--color" in sys.argv)
     elif mode == "text":
         text(src)
     elif mode == "meta":
