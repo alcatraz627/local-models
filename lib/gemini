@@ -37,7 +37,7 @@ SESS_DIR="$DIR/logs/gemini-sessions"
 # Timeout is workload-aware and set AFTER the verb is known (agentic web lookups
 # and corpus digests run minutes; the old flat 180s killed 8 of the first 13
 # real-workload calls). --timeout still wins over everything.
-MODE=text; TIMEOUT=""; SESSION=""; FALLBACK_LOCAL=false
+MODE=text; TIMEOUT=""; SESSION=""; FALLBACK_LOCAL=false; GLOW=false; QUIET=false; SERVED=""
 
 # The API key lives OUT of the global shell env: ~/.gemini/.env (chmod 600),
 # loaded here per-call so only this wrapper's process tree ever sees it. A key
@@ -59,12 +59,15 @@ show_help() {
   _cmd 'lm gemini research "question"'   'web-shaped lookup -> JSON with null-when-unsure; long default timeout'
   _cmd 'lm gemini history [N] · show N' 'past calls, numbered (-1 = latest)'
   _cmd 'lm gemini models'            'list the model pick-list and which is the default'
+  _cmd 'lm gemini watch [N]'         'follow a call running in another terminal: tools it uses, the answer as it arrives (N = older calls)'
   _sec OPTIONS
   _opt '-m, --model M'  'gemini model for this call (default: $GEMINI_MODEL; run `lm gemini models` to list, set the default in config.sh)'
   _opt '--json'         'machine mode: {ok, text, model, ms, session} on stdout'
   _opt '--session NAME' 'explicit session (default: the project dir name; sessions are per-project)'
   _opt '--timeout N'    'wall-clock cap in seconds (defaults: oneshot/ask 300 · ingest/digest/research 420; one auto-retry at 1.5x on timeout)'
   _opt '--fallback-local' 'if gemini is unavailable, answer via the local big tier (q -m big) instead of failing; reply is marked local'
+  _opt '--glow'         'render the answer as markdown through glow (also works on show N)'
+  _opt '--quiet'        'hide the live step lines a terminal shows on stderr while the call runs'
   _sec NOTES
   printf '  %smodel %s (override -m, list: lm gemini models) · read-only (--approval-mode plan) · never call the gemini binary directly%s\n' "$Dm" "$GEMINI_MODEL" "$Rs"
   printf '  %sif unavailable (auth/tier): structured gemini_unavailable — FLAG to the user, fall back to claude/lm%s\n' "$Dm" "$Rs"
@@ -87,7 +90,9 @@ log_line() { # KIND TEXT_OR_CODE MS
     --arg model "$GEMINI_MODEL" --arg prompt "${PROMPT:-}" --arg r "$2" --argjson ms "${3:-0}" \
     --argjson bin "$(( ${#PROMPT} + ${#CTX} ))" --argjson bout "${#2}" \
     '{ts:$ts, kind:$kind, session:(if $sess == "" then null else $sess end),
-      model:$model, prompt:$prompt, response:$r, ms:$ms, bytes_in:$bin, bytes_out:$bout}' >> "$LOG" 2>/dev/null
+      model:$model, prompt:$prompt, response:$r, ms:$ms, bytes_in:$bin, bytes_out:$bout}
+     + (if $served != "" then {served:$served} else {} end)
+     + (if $stream != "" then {stream:$stream} else {} end)' --arg served "${SERVED:-}" --arg stream "${STREAM:-}" >> "$LOG" 2>/dev/null
 }
 
 # Run the backend with a hard wall-clock cap (kills the whole process group —
@@ -99,7 +104,19 @@ run_gemini() { # extra args...; PROMPT in $PROMPT; stdin passes through
     if ($p == 0) { setpgrp(0,0); exec(@ARGV) or exit 127 }
     local $SIG{ALRM} = sub { kill "KILL", -$p; exit 124 };
     alarm $t; waitpid($p, 0); exit($? >> 8);
-  ' "$TIMEOUT" gemini -m "$GEMINI_MODEL" --skip-trust --approval-mode plan "$@" -p "$PROMPT"
+  ' "$TIMEOUT" gemini -m "$GEMINI_MODEL" --skip-trust --approval-mode plan -o stream-json "$@" -p "$PROMPT"
+}
+
+# Every call writes its event stream to logs/gemini-live/<time>-<pid>.jsonl as it
+# runs, so `lm gemini watch` can follow it from another terminal, and the answer
+# and stats are read back from it afterwards. The newest 30 are kept.
+STREAM_DIR="$DIR/logs/gemini-live"
+STREAM_PY="$DIR/lib/gemini-stream.py"
+new_stream_file() {
+  mkdir -p "$STREAM_DIR"
+  STREAM="$STREAM_DIR/$(date -u +%Y%m%dT%H%M%SZ)-$$.jsonl"
+  : > "$STREAM"
+  ls -t "$STREAM_DIR"/*.jsonl 2>/dev/null | tail -n +31 | while IFS= read -r old; do rm -f "$old"; done
 }
 
 # ── Parse ──
@@ -111,6 +128,8 @@ while [ $# -gt 0 ]; do
     --session)   SESSION="$2"; shift 2 ;;
     --timeout)   TIMEOUT="$2"; shift 2 ;;
     --fallback-local) FALLBACK_LOCAL=true; shift ;;
+    --glow)      GLOW=true; shift ;;
+    --quiet)     QUIET=true; shift ;;
     -m|--model)  GEMINI_MODEL="$2"; shift 2 ;;
     *)           positionals+=("$1"); shift ;;
   esac
@@ -121,8 +140,16 @@ CMD="${positionals[0]:-}"
 case "$CMD" in
   history) jsonl_history "$LOG" "${positionals[1]:-15}" \
              '"\(.ts[11:19])  \(.kind)  \(.ms)ms  \((.prompt // "") | gsub("\\s+"; " ") | .[0:50])"'; exit 0 ;;
-  show)    jsonl_entry "$LOG" "${positionals[1]:-}" \
-             '"# lm gemini \(.kind)  ·  \(.ts)  ·  \(.model)\(if .session then "  ·  session: " + .session else "" end)\n\n\(.response)"'; exit $? ;;
+  show)    SHOWN="$(jsonl_entry "$LOG" "${positionals[1]:-}" \
+             '"# lm gemini \(.kind)  ·  \(.ts)  ·  \(.model)\(if .served and .served != .model then " (served by " + .served + ")" else "" end)\(if .session then "  ·  session: " + .session else "" end)\n\n\(.response)"')" || exit $?
+           if $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then printf '%s\n' "$SHOWN" | glow -; else printf '%s\n' "$SHOWN"; fi
+           exit 0 ;;
+  watch)   # newest call by default; `watch 2` = the one before it
+           W="$(ls -t "$STREAM_DIR"/*.jsonl 2>/dev/null | sed -n "${positionals[1]:-1}p")"
+           [ -n "$W" ] || { echo "lm gemini: no calls recorded yet in $STREAM_DIR (calls started before this feature are not watchable)" >&2; exit 12; }
+           WPID="$(basename "$W" .jsonl)"; WPID="${WPID##*-}"
+           printf '%s· following %s%s\n' "$Dm" "$(basename "$W")" "$Rs" >&2
+           exec python3 "$STREAM_PY" follow "$W" "$WPID" ;;
   models)  if [ "$MODE" = json ]; then
              jq -cn --arg d "$GEMINI_DEFAULT" --arg l "$GEMINI_MODELS" '{ok:true, default:$d, models:($l|split(" "))}'
            else
@@ -242,15 +269,32 @@ if [ "$SESSIONLESS" = false ]; then
   fi
 fi
 
-run_once() { # one backend attempt with the current SESS_ARGS; sets OUT + rc
+# Live step lines go to stderr when a person is watching this terminal; agents and
+# --json callers get the same quiet output as before.
+LIVE=false
+[ "$MODE" = text ] && ! $QUIET && [ -t 2 ] && LIVE=true
+
+run_once() { # one backend attempt with the current SESS_ARGS; sets STREAM, OUT + rc
+  new_stream_file
   set +e
+  if $LIVE; then
+    python3 "$STREAM_PY" follow "$STREAM" "$$" >&2 &
+    RENDER_PID=$!
+  fi
   if [ -n "$CTX" ]; then
-    OUT="$(printf '%s' "$CTX" | run_gemini "${SESS_ARGS[@]}" 2>&1)"
+    printf '%s' "$CTX" | run_gemini "${SESS_ARGS[@]}" > "$STREAM" 2>&1
   else
-    OUT="$(run_gemini "${SESS_ARGS[@]}" </dev/null 2>&1)"
+    run_gemini "${SESS_ARGS[@]}" </dev/null > "$STREAM" 2>&1
   fi
   rc=$?
+  if $LIVE; then
+    # The renderer stops on the result event; give it a moment to print it.
+    for _ in 1 2 3 4 5 6 7 8; do kill -0 "$RENDER_PID" 2>/dev/null || break; sleep 0.25; done
+    kill "$RENDER_PID" 2>/dev/null || true
+    wait "$RENDER_PID" 2>/dev/null || true
+  fi
   set -e
+  OUT="$(cat "$STREAM")"
 }
 
 t0=$(date +%s)
@@ -307,6 +351,21 @@ if [ "$rc" -ne 0 ]; then
   emit_error gemini_error "$(printf '%s' "$OUT" | tail -2 | tr '\n' ' ' | cut -c1-200)" 10
 fi
 
+# A call can exit 0 and still fail: gemini-cli ends some broken turns with an
+# "[ERROR] Invalid stream" line and no answer. The stream's result event and the
+# answer text decide, not the exit code.
+META="$(python3 "$STREAM_PY" meta "$STREAM" 2>/dev/null || echo '{}')"
+SERVED="$(printf '%s' "$META" | jq -r '(.served_by // []) | join(",")' 2>/dev/null || true)"
+STATUS="$(printf '%s' "$META" | jq -r '.status // empty' 2>/dev/null || true)"
+STREAM_TEXT="$(python3 "$STREAM_PY" text "$STREAM" 2>/dev/null || true)"
+if [ "$(printf '%s' "$META" | jq -r '.events // 0' 2>/dev/null)" -gt 0 ]; then
+  if [ -z "$STREAM_TEXT" ] || { [ -n "$STATUS" ] && [ "$STATUS" != success ]; }; then
+    ERRLINE="$(rg -m1 -o '\[ERROR\].*|Error executing tool.*' "$STREAM" 2>/dev/null || true)"
+    emit_error gemini_error "gemini ended without an answer (${STATUS:-no result}${ERRLINE:+: $ERRLINE}); the steps it took: python3 $STREAM_PY render $STREAM" 10
+  fi
+  OUT="$STREAM_TEXT"
+fi
+
 # gemini-cli leaks housekeeping lines onto stdout ("Ripgrep is not available…",
 # "[STARTUP] Cannot measure phase…", node deprecation warnings, and "Error
 # stating path …" when plan-mode gemini tries to read a file mentioned in the
@@ -344,13 +403,19 @@ if [ "$MODE" = json ]; then
   jq -cn --arg t "$TEXT" --arg m "$GEMINI_MODEL" --argjson ms "$ms" \
     --arg s "$([ "$SESSIONLESS" = true ] && echo "" || echo "$SESSION")" \
     --argjson reset "$SESSION_RESET" \
+    --arg served "$SERVED" \
     '{ok:true, text:$t, model:$m, ms:$ms, session:(if $s == "" then null else $s end)}
+     + (if $served != "" then {served:$served} else {} end)
      + (if $reset then {session_reset:true, note:"session store was cleaned externally — a fresh session was created; previously ingested context is gone (re-run ingest)"} else {} end)'
 else
   [ "$SESSION_RESET" = true ] && printf 'lm gemini: note — the session store was cleaned externally; started a fresh session (ingested context is gone, re-run ingest)\n' >&2
-  printf '%s\n' "$TEXT"
+  if $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then
+    printf '%s\n' "$TEXT" | glow - || printf '%s\n' "$TEXT"
+  else
+    printf '%s\n' "$TEXT"
+  fi
   # Stats are TTY-only; the guard must not become the script's exit code — a
   # machine caller in text mode would see exit 1 on every success.
-  [ -t 2 ] && printf '%s· %s · %dms · lm gemini show -1%s\n' "$Dm" "$GEMINI_MODEL" "$ms" "$Rs" >&2
+  [ -t 2 ] && printf '%s· %s%s · %dms · lm gemini show -1%s\n' "$Dm" "$GEMINI_MODEL" "$( [ -n "$SERVED" ] && [ "$SERVED" != "$GEMINI_MODEL" ] && printf ' (served by %s)' "$SERVED")" "$ms" "$Rs" >&2
 fi
 exit 0
