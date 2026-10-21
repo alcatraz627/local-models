@@ -17,24 +17,26 @@ source "$BIN/_lib.sh"
 overview() {
   printf '%s%slm%s %s— local-model toolkit with an optional connected Gemini lane%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   printf '\n%sCOMMANDS%s\n' "$Y" "$Rs"
-  printf '  %s%-20s%s %squick local LLM — answers, macOS cmds, titles, file Q&A; size tiers%s\n' "$C" 'lm q "..."' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %slocal image generation (Flux/Qwen on the GPU)%s\n' "$C" 'lm imagine "..."' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %sread an image/screenshot into text (local VLM)%s\n' "$C" 'lm see <img>' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %sreview a PR / files / folder / diff (local coder)%s\n' "$C" 'lm review <x>' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %sjudge if a local model is trustworthy — reliability/judgment eval%s\n' "$C" 'lm probe <model>' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %sfan one intent across N files (envelope gate; optional content judge)%s\n' "$C" 'lm fleet <intent> …' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %sopencode on the local code model — auto pin/unpin around the session%s\n' "$C" 'lm opencode [args]' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %srepo symbol map — build once, "where is X" instantly%s\n' "$C" 'lm index [find X]' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %sthe gemini lane — huge-context ingestion, ideation (wrapper-only)%s\n' "$C" 'lm gemini "..."' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %scheck enumerable UI claims against a screenshot (local verify gate)%s\n' "$C" 'lm ui-verify <img> …' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %slist usable models (★ default · ● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %ssmoke-check the whole toolkit (server, models, venv, PATH)%s\n' "$C" 'lm doctor' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %smerged q + imagine history, one timeline%s\n' "$C" 'lm timeline [N]' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %scolored, comprehensive showcase of the whole suite%s\n' "$C" 'lm examples' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %sshort route from a job to the right command%s\n' "$C" 'lm help <job>' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-20s%s %srun a fixed behavior and latency fixture set%s\n' "$C" 'lm bench <set>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %squick local LLM — answers, macOS cmds, titles, file Q&A; size tiers%s\n' "$C" 'lm q "..."' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %slocal image generation (Flux/Qwen on the GPU)%s\n' "$C" 'lm imagine "..."' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %sread an image/screenshot into text (local VLM)%s\n' "$C" 'lm see <img>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %sreview a PR / files / folder / diff (local coder)%s\n' "$C" 'lm review <x>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %sjudge if a local model is trustworthy — reliability/judgment eval%s\n' "$C" 'lm probe <model>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %sfan one intent across N files (envelope gate; optional content judge)%s\n' "$C" 'lm fleet <intent> ...' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %sopencode on the local code model — auto pin/unpin around the session%s\n' "$C" 'lm opencode [args]' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %srepo symbol map — build once, "where is X" instantly%s\n' "$C" 'lm index [find X]' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %sthe gemini lane — huge-context ingestion, ideation (wrapper-only)%s\n' "$C" 'lm gemini "..."' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %scheck enumerable UI claims against a screenshot (local verify gate)%s\n' "$C" 'lm ui-verify <img> ...' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %slocal vector retrieval: index docs, search by meaning%s\n' "$C" 'lm rag index|search' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %slist usable models and tiers (● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %ssmoke-check the toolkit (deps, tiers, vision, venv, PATH; --json)%s\n' "$C" 'lm doctor' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %smerged q/imagine/see/fleet/gemini history (--errors, --tool T, --json)%s\n' "$C" 'lm timeline [N]' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %sopen the newest history entry in full (optionally of one tool)%s\n' "$C" 'lm last [tool]' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %scolored, comprehensive showcase of the whole suite%s\n' "$C" 'lm examples' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %sshort route from a job to the right command%s\n' "$C" 'lm help <job>' "$Rs" "$Dm" "$Rs"
+  printf '  %s%-22s%s %srun a fixed behavior and latency fixture set%s\n' "$C" 'lm bench <set>' "$Rs" "$Dm" "$Rs"
   printf '\n%sEXAMPLES%s\n' "$Y" "$Rs"
   printf '  %s$%s lm q cmd "free up port 3001"            %s# one macOS command%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
   printf '  %s$%s lm q summarize --file report.pdf        %s# read a local file (no cloud)%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
@@ -45,7 +47,7 @@ overview() {
   printf '  %s$%s lm models   ·   lm status   ·   lm doctor %s# what is installed / running / healthy%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
   printf '  %s$%s lm warm on                                %s# pin the small model — q is then sub-second%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
   printf '\n%sMORE%s\n' "$Y" "$Rs"
-  printf '  per-command help (every flag + examples):  %sq -h%s · %simagine -h%s · %swarm -h%s\n' "$C" "$Rs" "$C" "$Rs" "$C" "$Rs"
+  printf '  per-command help (every flag + examples):  %slm help <verb>%s, or %s<verb> -h%s for q, see, imagine, review, warm, gemini, fleet\n' "$C" "$Rs" "$C" "$Rs"
   printf '  the full menu with examples:  %sglow ~/Code/local-models/docs/CAPABILITIES.md%s\n' "$C" "$Rs"
   printf '  %sdocs: ~/Code/local-models/docs/  (STATE · CAPABILITIES · q-spec · 03-tool-orchestration-decision · research)%s\n' "$Dm" "$Rs"
 }
@@ -66,7 +68,7 @@ help_job() {
       help_example 'lm help batch' 'one question across independent files'
       help_example 'lm help retrieval' 'exact search, then local vectors'
       help_example 'lm help research' 'connected Gemini broad sweep'
-      help_note 'For the full pasteable menu: lm examples' ;;
+      help_note 'Tool help: lm help q|see|imagine|review|warm|probe|ui-verify|index|bench. Full menu: lm examples' ;;
     table|describe-data)
       help_title 'table' 'exact rows, missing values, and numeric ranges'
       help_section 'START'
@@ -110,7 +112,15 @@ help_job() {
       help_example 'lm gemini ingest-repo .' 'give Gemini a bounded repo corpus'
       help_example 'lm gemini ask "List source paths and exact evidence for each candidate"' 'request checkable leads'
       help_note 'Gemini is an external service. Supply an output contract and sample-check its leads.' ;;
-    *) printf 'unknown job: %s\n' "$1" >&2; return 2 ;;
+    # A tool name routes to that tool's own help, so `lm help see` works like `see -h`.
+    q|see|imagine|review|warm|probe) exec "$BIN/$1" -h ;;
+    ui-verify) exec "$DIR/lib/ui-verify" -h ;;
+    index)     exec "$DIR/lib/repo-index" -h ;;
+    bench)     exec python3 "$DIR/scripts/bench.py" -h ;;
+    opencode)  printf 'lm opencode [args]: run opencode on the local code tier; the model is leased for the session and released on exit\n' ;;
+    *) local g; g="$(did_you_mean "$1" table document screenshot compare batch retrieval research q see imagine review warm probe fleet gemini rag index ui-verify bench opencode)"
+       printf "lm help: unknown job '%s'%s\n  jobs: table document screenshot compare batch retrieval research\n  tools: q see imagine review warm probe fleet gemini rag index ui-verify bench opencode\n" \
+         "$1" "${g:+ (did you mean '$g'?)}" >&2; return 2 ;;
   esac
 }
 
@@ -171,7 +181,7 @@ examples_table() {
   _r 'lm fleet audit outputs/fleet/<run>'            'separate envelope, judge, and human gates'
 
   _s 'CONNECTED GEMINI — external service, wrapper-only'
-  _r 'lm gemini models'                              'the model pick-list (★ = default)'
+  _r 'lm gemini models'                              'the model pick-list (* = default)'
   _r 'lm gemini -m gemini-3.8-flash "…"'             'pick a model for one call'
   _r 'lm gemini ingest-repo . && lm gemini ask "where is retry handled?"' 'whole-repo Q&A'
   _r 'lm gemini research "current state of X" --json' 'web-shaped, null-when-unsure'
@@ -190,7 +200,9 @@ examples_table() {
   _r 'lm status   ·   lm models   ·   lm doctor'     'running / installed / healthy'
   _r 'LM_PROGRESS=1 see --mlx shot.png'              'show load/step progress lines'
   _r '.venv/bin/python scripts/mem-guard.py --once'  'memory pressure + would-kill target'
-  _r 'lm timeline 30'                                'merged history: q · see · imagine · fleet'
+  _r 'lm timeline 30'                                'merged history: q, see, imagine, fleet, gemini'
+  _r 'lm timeline --errors --tool see'               'only the failed reads, with tool#N to open them'
+  _r 'lm last gemini'                                'the newest gemini call, in full'
   _r 'lm bench quick'                                'fixed correctness, latency, disk workload'
 
   printf '\n%severy command has -h · full menu: glow ~/Code/local-models/docs/CAPABILITIES.md%s\n' "$Dm" "$Rs"
@@ -224,6 +236,19 @@ lm_status_json() {
       latency_class: $lat, toolkit_version: $tv}'
 }
 
+# Which tier alias (small/big/code/sweep) or role a model name fills, or nothing.
+# Exact name or name:tag, like resolve_tier users everywhere else.
+tier_label() { # MODEL
+  local n="$1" t m
+  for t in small big code sweep; do
+    m="$(resolve_tier "$t")"
+    if [ "$n" = "$m" ] || [[ "$n" == "$m":* ]]; then echo "$t"; return; fi
+  done
+  m="${VISION_MODEL:-minicpm-v4.6}"; if [ "$n" = "$m" ] || [[ "$n" == "$m":* ]]; then echo vision; return; fi
+  m="${RAG_EMBED_MODEL:-nomic-embed-text}"; if [ "$n" = "$m" ] || [[ "$n" == "$m":* ]]; then echo embed; return; fi
+  return 0
+}
+
 lm_status() {
   printf '%sserver%s   ' "$Y" "$Rs"
   if ollama_up; then
@@ -231,54 +256,116 @@ lm_status() {
   else
     echo "down (starts on demand, stops after idle) — start now: launchctl kickstart gui/$(id -u)/$LM_LAUNCHD_LABEL"
   fi
-  printf '%sloaded%s   resident models (warm)\n' "$Y" "$Rs"
-  ollama_cli ps 2>/dev/null | sed '1d;s/^/  /' | grep -q . && ollama_cli ps 2>/dev/null | sed '1d;s/^/  /' || echo "  none (idle, ~0 RAM)"
+  printf '%sloaded%s   resident models (warm) · how long they stay · which tier they are\n' "$Y" "$Rs"
+  local ps_out col l name until size tier
+  ps_out="$(ollama_cli ps 2>/dev/null || true)"
+  if [ "$(printf '%s\n' "$ps_out" | sed '1d' | grep -c .)" -gt 0 ]; then
+    col="$(printf '%s\n' "$ps_out" | awk 'NR==1 {print index($0, "UNTIL")}')"
+    printf '%s\n' "$ps_out" | sed '1d' | while IFS= read -r l; do
+      [ -n "$l" ] || continue
+      name="${l%% *}"; until="${l:$((col - 1))}"; size="$(printf '%s' "$l" | awk '{print $3 " " $4}')"
+      tier="$(tier_label "$name")"
+      printf '  %-28s %-9s until %-22s tier %s\n' "$name" "$size" "$until" "${tier:--}"
+    done
+  else
+    echo "  none (idle, ~0 RAM)"
+  fi
   printf '%smodels%s   on disk\n' "$Y" "$Rs"
-  ollama_cli list 2>/dev/null | sed '1d;s/^/  /' | head -8 || echo "  (listed once the server is up)"
+  local list
+  if list="$(ollama_cli list 2>/dev/null)"; then
+    printf '%s\n' "$list" | sed '1d' | while IFS= read -r l; do
+      [ -n "$l" ] || continue
+      tier="$(tier_label "${l%% *}")"
+      printf '  %s%s\n' "$l" "${tier:+   ${Dm}tier $tier${Rs}}"
+    done
+  else
+    echo "  (listed once the server is up)"
+  fi
 }
 
 # One pass/fail line per dependency the toolkit stands on. Exit 1 if any fail.
+# --json prints {ok, failed, checks:[{label, ok, optional}]} instead of the text lines.
 lm_doctor() {
-  local fails=0
+  local fails=0 json=false rows=""
+  [ "${1:-}" = "--json" ] && json=true
+  local TAGS_JSON; TAGS_JSON="$(curl -s -m 3 "$OLLAMA_HOST/api/tags" 2>/dev/null || true)"
+  model_on_disk() { printf '%s' "$TAGS_JSON" | jq -e --arg m "$1" 'any(.models[]?; .name == $m or (.name | startswith($m + ":")))' >/dev/null 2>&1; }
+  # The PATH entry must reach THIS checkout: a symlink to it, or a wrapper script that execs it.
+  path_hits() { local p; p="$(command -v "$1" 2>/dev/null)" || return 1; [ "$p" = "$BIN/$1" ] || { [ -f "$p" ] && grep -qF "$BIN/$1" "$p"; }; }
+  gemini_key_set() { [ -n "${GEMINI_API_KEY:-}" ] || grep -qs '^GEMINI_API_KEY=' "$HOME/.gemini/.env"; }
+  add_row() { # LABEL OK OPTIONAL
+    rows+="$(jq -cn --arg l "$1" --argjson ok "$2" --argjson opt "$3" '{label:$l, ok:$ok, optional:$opt}')"$'\n'
+  }
   check() { # LABEL CMD...
     local label="$1"; shift
-    if "$@" >/dev/null 2>&1; then printf '  %sok%s   %s\n' "$G" "$Rs" "$label"
-    else printf '  %sFAIL%s %s\n' "$Y" "$Rs" "$label"; fails=$((fails+1)); fi
+    if "$@" >/dev/null 2>&1; then
+      add_row "$label" true false
+      $json || printf '  %sok%s   %s\n' "$G" "$Rs" "$label"
+    else
+      add_row "$label" false false
+      $json || printf '  %sFAIL%s %s\n' "$Y" "$Rs" "$label"
+      fails=$((fails+1))
+    fi
   }
   check "jq installed"                       command -v jq
+  check "yq installed (every q intent reads its TOML through it)" command -v yq
   check "ollama installed"                   command -v ollama
   check "server up ($OLLAMA_HOST)"           ollama_up
   check "LaunchAgent loaded ($LM_LAUNCHD_LABEL)" launchctl print "gui/$(id -u)/$LM_LAUNCHD_LABEL"
-  check "warm model built (${WARM_MODEL:-gemma4-e4b-warm})" \
-        sh -c "curl -s -m 3 '$OLLAMA_HOST/api/tags' | grep -q '\"${WARM_MODEL:-gemma4-e4b-warm}'"
+  local t
+  for t in small big code sweep; do
+    check "tier $t on disk ($(resolve_tier "$t"))" model_on_disk "$(resolve_tier "$t")"
+  done
+  check "vision model on disk (${VISION_MODEL:-minicpm-v4.6})"  model_on_disk "${VISION_MODEL:-minicpm-v4.6}"
+  check "embed model on disk (${RAG_EMBED_MODEL:-nomic-embed-text})" model_on_disk "${RAG_EMBED_MODEL:-nomic-embed-text}"
+  local mlx_repo="${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"
+  local mlx_dir="${HF_HOME:-$HOME/.cache/huggingface}/hub/models--${mlx_repo//\//--}"
+  check "mlx vision cache (see --ui default: $mlx_repo)" \
+        sh -c "ls '$mlx_dir'/snapshots/*/config.json"
   check "mflux venv ($DIR/.venv)"            test -x "$DIR/.venv/bin/mflux-generate"
   local c; for c in lm q imagine warm see review; do
-    check "on PATH: $c -> $BIN/$c"           sh -c "command -v $c | grep -q ."
+    check "on PATH: $c -> $BIN/$c"           path_hits "$c"
   done
   check "logs dir writable"                  sh -c "mkdir -p '$DIR/logs' && touch '$DIR/logs/.w' && rm -f '$DIR/logs/.w'"
-  # Optional extras — each unlocks one capability; missing ones inform, never fail.
+  # Optional extras: each unlocks one capability; missing ones inform, never fail.
   opt() { # BIN CAPABILITY INSTALL_HINT
-    if command -v "$1" >/dev/null 2>&1; then printf '  %sok%s   optional: %s (%s)\n' "$G" "$Rs" "$1" "$2"
-    else printf '  %s--%s   optional: %s missing — %s (unlocks %s)\n' "$Dm" "$Rs" "$1" "$3" "$2"; fi
+    if command -v "$1" >/dev/null 2>&1; then
+      add_row "optional: $1 ($2)" true true
+      $json || printf '  %sok%s   optional: %s (%s)\n' "$G" "$Rs" "$1" "$2"
+    else
+      add_row "optional: $1 missing, $3 (unlocks $2)" false true
+      $json || printf '  %s--%s   optional: %s missing — %s (unlocks %s)\n' "$Dm" "$Rs" "$1" "$3" "$2"
+    fi
   }
   opt mac-ocr "see --ocr exact text"            "npm install -g mac-ocr"
   opt ax      "ui-verify --app AX-tree reads"   "cargo install --git https://github.com/watzon/ax-cli"
   opt repomix "lm gemini ingest-repo packing"   "npm install -g repomix"
   opt glow    "--glow pretty rendering"         "brew install glow"
   opt gemini  "the lm gemini side lane"         "brew install gemini-cli + key in ~/.gemini/.env"
-  if [ "$fails" -eq 0 ]; then echo "all checks passed"; else echo "$fails check(s) failed"; exit 1; fi
+  if gemini_key_set; then
+    add_row "optional: gemini API key" true true
+    $json || printf '  %sok%s   optional: gemini API key (GEMINI_API_KEY or ~/.gemini/.env)\n' "$G" "$Rs"
+  else
+    add_row "optional: gemini API key missing" false true
+    $json || printf '  %s--%s   optional: gemini API key missing — put GEMINI_API_KEY=... in ~/.gemini/.env (unlocks lm gemini calls)\n' "$Dm" "$Rs"
+  fi
+  if $json; then
+    printf '%s' "$rows" | jq -cs --argjson f "$fails" '{ok: ($f == 0), failed: $f, checks: .}'
+  elif [ "$fails" -eq 0 ]; then echo "all checks passed"; else echo "$fails check(s) failed"; fi
+  [ "$fails" -eq 0 ] || exit 1
 }
 
 # What models can q/imagine actually use right now: on-disk (Ollama), which is
 # resident, and which is the configured default. --json for machine consumers.
 lm_models() {
   local model="${WARM_MODEL:-gemma4-e4b-warm}" big="${BIG_MODEL:-gemma4:26b}" code="${CODE_MODEL:-qwen3.6:35b-a3b}" tags ps resident avail
+  local sweep vision; sweep="$(resolve_tier sweep)"; vision="${VISION_MODEL:-minicpm-v4.6}"
   tags=$(curl -s -m 2 "$OLLAMA_HOST/api/tags" 2>/dev/null) \
-    || { echo "server down — start: launchctl kickstart -k gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2; return 1; }
+    || { echo "server down — start: launchctl kickstart -k gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2; return 10; }
   # A reachable-but-erroring server (HTTP 500 body) makes curl exit 0 with non-JSON;
   # validate before the jq pipes, which would otherwise abort under `set -e`.
   printf '%s' "$tags" | jq -e . >/dev/null 2>&1 \
-    || { echo "server reachable but returned no model list" >&2; return 1; }
+    || { echo "server reachable but returned no model list" >&2; return 10; }
   ps=$(curl -s -m 2 "$OLLAMA_HOST/api/ps" 2>/dev/null)
   resident=$(printf '%s' "$ps" | jq -c '[.models[]?.name]' 2>/dev/null || echo '[]')
   # tiers (the aliases `q -m` accepts) and gemini are the contract for other
@@ -295,34 +382,83 @@ lm_models() {
     return
   fi
   printf '%smodels on disk%s  (● resident · tier = q -m <tier>)\n' "$Y" "$Rs"
-  printf '%s' "$tags" | jq -r --arg sm "$model" --arg bg "$big" --arg cd "$code" --argjson r "${resident:-[]}" '
-    .models[]? | .name as $n | (((.size // 0)/1073741824*10|floor)/10) as $gb
+  # Sizes are written the way `ollama list` and `lm status` write them (decimal units).
+  printf '%s' "$tags" | jq -r --arg sm "$model" --arg bg "$big" --arg cd "$code" --arg sw "$sweep" --arg vi "$vision" --argjson r "${resident:-[]}" '
+    .models[]? | .name as $n | (.size // 0) as $b
+    | (if $b < 1000000000 then "\($b/1000000|floor) MB" elif $b < 10000000000 then "\(($b/100000000|round)/10) GB" else "\($b/1000000000|floor) GB" end) as $gb
     | (if ($r | any(. == $n)) then "●" else " " end) as $res
-    | (def m($a): $n == $a or ($n | startswith($a + ":"));   # exact or name:tag — not bare prefix
-       if   m($sm) then "small" elif m($bg) then "big" elif m($cd) then "code" else "" end) as $tier
-    | $res + " " + ($n | (. + "                            ")[0:28]) + " " + (($gb|tostring) + "GB" | (. + "      ")[0:7]) + " " + $tier' \
+    | (def m($a): $n == $a or ($n | startswith($a + ":"));   # exact or name:tag, not bare prefix
+       if   m($sm) then "small" elif m($bg) then "big" elif m($cd) then "code" elif m($sw) then "sweep" elif m($vi) then "vision" else "" end) as $tier
+    | $res + " " + ($n | (. + "                            ")[0:28]) + " " + ($gb | (. + "         ")[0:9]) + " " + $tier' \
     | sed 's/^/  /'
-  printf '%stiers%s   small=%s · big=%s · code=%s  %s(q --big / q -m code / q -m <literal>)%s\n' \
-    "$Y" "$Rs" "$model" "$big" "$code" "$Dm" "$Rs"
+  printf '%stiers%s   small=%s · big=%s · code=%s · sweep=%s · vision=%s  %s(q --big / q -m code / q -m <literal>)%s\n' \
+    "$Y" "$Rs" "$model" "$big" "$code" "$sweep" "$vision" "$Dm" "$Rs"
 }
 
-# Merged q + imagine history, newest last — one timeline across both tools.
+# Merged history of q, imagine, see, fleet and gemini, newest last. Each row leads
+# with tool#N so it points straight at `<tool> show N` (lm last opens it).
+#   lm timeline [N] [--errors] [--tool q|see|imagine|fleet|gemini] [--json]
 lm_timeline() {
-  local n="${1:-20}"
-  # gsub: multiline prompts (piped diffs) must stay one row, or sort scatters
-  # their continuation lines through the timeline.
-  {
-    [ -f "$DIR/logs/q-history.jsonl" ] && \
-      jq -r '"\(.ts)  q        \(.intent)\(if .error then " ✗" else "" end)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/logs/q-history.jsonl"
-    [ -f "$DIR/outputs/imagine-history.jsonl" ] && \
-      jq -r '"\(.ts)  imagine  \(.kind // "gen")\(if .star then " ★" else "" end)  \((.prompt | gsub("\\s+"; " "))[0:56])"' "$DIR/outputs/imagine-history.jsonl"
-    [ -f "$DIR/logs/see-history.jsonl" ] && \
-      jq -r '"\(.ts)  see      \(.img | split("/") | last)  \(((.prompt // "describe") | gsub("\\s+"; " "))[0:40])"' "$DIR/logs/see-history.jsonl"
-    [ -f "$DIR/logs/fleet-history.jsonl" ] && \
-      jq -r '"\(.ts)  fleet    \(.intent) ×\(.items)  \(.pass)✓/\(.fail)✗"' "$DIR/logs/fleet-history.jsonl"
-    [ -f "$DIR/logs/gem-history.jsonl" ] && \
-      jq -r '"\(.ts)  gemini   \(.kind)\(if .kind == "error" then " ✗" else "" end)  \(((.prompt // "") | gsub("\\s+"; " "))[0:50])"' "$DIR/logs/gem-history.jsonl"
-  } | sort | tail -n "$n"
+  local n=20 errors=false json=false tool=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --errors) errors=true; shift ;;
+      --json)   json=true; shift ;;
+      --tool)   need_arg "lm timeline" "$1" "${2:-}"; tool="$2"; shift 2 ;;
+      *) if [[ "$1" =~ ^[0-9]+$ ]]; then n="$1"; shift
+         else reject_unknown_flag "lm timeline" "$1"; echo "lm timeline: unexpected '$1' (lm timeline [N] [--errors] [--tool T] [--json])" >&2; exit 2; fi ;;
+    esac
+  done
+  case "$tool" in
+    gem) tool=gemini ;; img) tool=imagine ;;
+    ''|q|see|imagine|fleet|gemini) : ;;
+    *) local g; g="$(did_you_mean "$tool" q see imagine fleet gemini)"
+       echo "lm timeline: unknown tool '$tool'${g:+ (did you mean '$g'?)}; one of q see imagine fleet gemini" >&2; exit 2 ;;
+  esac
+  # Only the newest N lines of each log can hold the newest N rows overall, so tail
+  # first: parsing a 12 MB history for 20 rows took 40 seconds. A filter can need to
+  # look further back, so it scans the newest 5000 entries of each log.
+  local win="$n"; { $errors || [ -n "$tool" ]; } && win=5000
+  # gsub runs on a 200-char slice, never the whole prompt (some hold whole documents).
+  local pre='def flat($s; $k): ((($s // "")[0:200]) | gsub("\\s+"; " "))[0:$k];
+    def row($kind; $err; $text): {ts, tool: $tool, n: (input_line_number + $off), kind: $kind, err: $err, text: $text};'
+  tl_src() { # TOOL FILE JQ_BODY
+    [ -f "$2" ] || return 0
+    { [ -z "$tool" ] || [ "$tool" = "$1" ]; } || return 0
+    local total cnt; total="$(wc -l < "$2" | tr -d ' ')"
+    cnt="$win"; [ "$total" -lt "$cnt" ] && cnt="$total"
+    tail -n "$cnt" "$2" | jq -c --arg tool "$1" --argjson off "$(( total - cnt ))" "$pre $3"
+  }
+  local rows
+  rows="$({
+    tl_src q       "$DIR/logs/q-history.jsonl"          'row(.intent; (.error != null); flat(.prompt; 56))'
+    tl_src imagine "$DIR/outputs/imagine-history.jsonl" 'row((.kind // "gen") + (if .star then " ★" else "" end); false; flat(.prompt // .image; 56))'
+    tl_src see     "$DIR/logs/see-history.jsonl"        'row(.mode // "read"; (.error != null or ((.response // "") | startswith("(visual read failed"))); ((.img // "?") | split("/") | last) + "  " + flat(.prompt // "describe"; 40))'
+    tl_src fleet   "$DIR/logs/fleet-history.jsonl"      'row(.intent; ((.fail // 0) > 0); "×\(.items)  \(.pass)✓/\(.fail)✗")'
+    tl_src gemini  "$DIR/logs/gem-history.jsonl"        'row(.kind; (.kind == "error"); flat(.prompt; 50))'
+  } | jq -cs --argjson n "$n" --argjson errors "$errors" "$JQ_LOCAL_TS"'
+    map(select(if $errors then .err else true end)) | sort_by(.ts) | .[-$n:] | map(. + {time: (.ts | lts)})')"
+  [ -n "$rows" ] || rows='[]'
+  if $json; then printf '%s\n' "$rows"; return; fi
+  printf '%s' "$rows" | jq -r '.[] |
+    def pad($w): (. + "              ")[0:$w];
+    "\(.time)  \("\(.tool)#\(.n)" | pad(11))  \(.kind)\(if .err then " ✗" else "" end)  \(.text)"'
+}
+
+# Open the newest history entry (optionally of one tool) in full: the tool's own `show N`.
+lm_last() {
+  local tool="${1:-}" row n
+  if [ -n "$tool" ]; then row="$(lm_timeline 1 --tool "$tool" --json)"; else row="$(lm_timeline 1 --json)"; fi
+  tool="$(printf '%s' "$row" | jq -r '.[0].tool // empty')"; n="$(printf '%s' "$row" | jq -r '.[0].n // empty')"
+  [ -n "$tool" ] || { echo "lm last: no history yet" >&2; exit 12; }
+  printf '%s%s#%s%s\n' "$Dm" "$tool" "$n" "$Rs" >&2
+  case "$tool" in
+    q)       exec "$BIN/q" show "$n" ;;
+    see)     exec "$BIN/see" show "$n" ;;
+    imagine) exec "$BIN/imagine" show "$n" ;;
+    gemini)  exec "$DIR/lib/gemini" show "$n" ;;
+    fleet)   sed -n "${n}p" "$DIR/logs/fleet-history.jsonl" | jq . ;;
+  esac
 }
 
 case "${1:-}" in
@@ -344,7 +480,7 @@ case "${1:-}" in
     # lease the model for the session (bounded — self-heals if we die hard),
     # release when opencode exits. NOT exec — the trap must outlive the child.
     shift
-    command -v opencode >/dev/null 2>&1 || { echo "lm: opencode not installed (brew install opencode)"; exit 1; }
+    command -v opencode >/dev/null 2>&1 || { echo "lm: opencode not installed (brew install opencode)" >&2; exit 12; }
     "$BIN/warm" on code "${LM_OPENCODE_LEASE:-4h}" >&2
     trap '"$BIN/warm" off code >/dev/null 2>&1 || true' EXIT INT TERM
     # Sessions log like everything else here (histories are the API) — this was
@@ -359,8 +495,11 @@ case "${1:-}" in
   warm)     shift; exec "$BIN/warm" "$@" ;;
   status)   shift; if [ "${1:-}" = "--json" ]; then lm_status_json; else lm_status; fi ;;
   models)   shift; lm_models "${1:-}" ;;
-  doctor)   lm_doctor ;;
-  timeline) shift; lm_timeline "${1:-20}" ;;
+  doctor)   shift; lm_doctor "${1:-}" ;;
+  timeline) shift; lm_timeline "$@" ;;
+  last)     shift; lm_last "${1:-}" ;;
   examples) examples_table ;;
-  *) echo "lm: unknown '$1' — try: lm · lm q · lm imagine · lm warm · lm status · lm models · lm doctor · lm timeline · lm examples"; exit 1 ;;
+  --version|-V|version) echo "lm ${LM_VERSION:-unknown}" ;;
+  *) g="$(did_you_mean "$1" help q imagine see review probe fleet index gemini ui-verify rag bench opencode warm status models doctor timeline last examples version)"
+     echo "lm: unknown verb '$1'${g:+ (did you mean '$g'?)}; run lm for the full list" >&2; exit 2 ;;
 esac
