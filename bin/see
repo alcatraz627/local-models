@@ -71,6 +71,7 @@ show_help() {
   _ex 'see diff logo-a.png logo-b.png --json'  '# full evidence pack in .evidence + judged prose'
   _ex 'see diff a.png b.png --only E5 --grid 32' '# refine one extractor, get the delta (no model)'
   _ex 'see diff a.png b.png --no-read --json'  '# loop rounds: evidence pack only, VLM prose seat skipped'
+  _ex 'see diff a.png b.png --mlx'             '# judged read by Qwen3-VL on MLX instead of the 17GB gemma tier'
   _ex 'see --menubar "which app is focused?"'  '# grab + read the top strip (crop-first beats full-screen)'
   _ex 'see panel.png --ui --json | jq .data'   '# structured elements array for an agent'
   _sec OPTIONS
@@ -254,7 +255,7 @@ if [ "${positionals[0]}" = "diff" ]; then
   DIFF=true
   IMG="$(expand_tilde "${positionals[1]:-}")"; IMG_B="$(expand_tilde "${positionals[2]:-}")"; QUERY="${positionals[*]:3}"
   { [ -n "$IMG" ] && [ -n "$IMG_B" ]; } || emit_error invalid_args 'diff needs two images: see diff <ref> <candidate> ["focus"]' 2
-  { $UI || $OCR || $MENUBAR || $MLX; } && emit_error invalid_args "diff runs on the ollama evidence pipeline — drop --ui/--ocr/--menubar/--mlx" 2
+  { $UI || $OCR || $MENUBAR; } && emit_error invalid_args "diff runs its own evidence pipeline — drop --ui/--ocr/--menubar" 2
   [ -n "$CROP$REGION" ] && emit_error invalid_args "diff compares whole frames — crop the inputs first if needed" 2
   for f in "$IMG" "$IMG_B"; do
     [ -f "$f" ] || emit_error img_unreadable "no such file: $f" 12
@@ -551,11 +552,13 @@ elif $MLX; then
     disown 2>/dev/null || true
   fi
   [ -n "$FMT" ] && echo "see: note — the mlx backend does not enforce the JSON schema; .data is best-effort and may be null if the model breaks format" >&2
-  _mlx_max=768; $UI && _mlx_max=1400
-  lm_step mlx "load $MLX_MODEL + read $(basename "$ORIG_IMG") ($($UI && echo ui || echo read), fresh mlx load ~4-8s)"
+  _mlx_max=768; $UI && _mlx_max=1400; $DIFF && _mlx_max=1400
+  # diff sends both images in order (A first, B second), same as the ollama path
+  _mlx_imgs=("$IMG"); $DIFF && _mlx_imgs+=("$IMG_B")
+  lm_step mlx "load $MLX_MODEL + read $(basename "$ORIG_IMG") ($($DIFF && echo diff || { $UI && echo ui || echo read; }), fresh mlx load ~4-8s)"
   set +e
   TEXT="$("$DIR/.venv/bin/python" -m mlx_vlm.generate --model "$MLX_MODEL" \
-      --image "$IMG" --prompt "$SYS
+      --image "${_mlx_imgs[@]}" --prompt "$SYS
 
 $USER" --max-tokens "$_mlx_max" 2>"$SEE_TMP/mlx.err")"
   rc=$?
@@ -564,7 +567,15 @@ $USER" --max-tokens "$_mlx_max" 2>"$SEE_TMP/mlx.err")"
   case "$TEXT" in *"=========="*) TEXT="${TEXT##*==========}" ;; esac
   TEXT="$(printf '%s' "$TEXT" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   if [ "$rc" -ne 0 ] || [ -z "$TEXT" ]; then
-    emit_error mlx_failed "mlx-vlm read failed: $(head -c 200 "$SEE_TMP/mlx.err" 2>/dev/null)" 10
+    if $DIFF; then
+      # soft for diff, like the ollama path: keep the $0 evidence pack
+      echo "see: mlx-vlm read failed — evidence pack only ($(tail -n 1 "$SEE_TMP/mlx.err" 2>/dev/null | head -c 160))" >&2
+      VLM_FAILED=true
+      TEXT="(visual read failed — the deterministic evidence pack below is complete)"
+      rc=0
+    else
+      emit_error mlx_failed "mlx-vlm read failed: $(head -c 200 "$SEE_TMP/mlx.err" 2>/dev/null)" 10
+    fi
   fi
   MODEL="mlx:$MLX_MODEL"
 else
@@ -632,10 +643,11 @@ if $DIFF && [ -n "$EVIDENCE" ]; then
   _vf=false; $VLM_FAILED && _vf=true
   _om=false; $OCR_MISSING && _om=true
   _nr=false; $NO_READ && _nr=true
-  EVIDENCE="$(printf '%s' "$EVIDENCE" | jq -c --arg m "$MODEL" --argjson vms "$ms" --argjson vf "$_vf" --argjson om "$_om" --argjson nr "$_nr" \
+  _vfix="start ollama, or ignore — the evidence layer is model-independent"
+  $MLX && _vfix="mlx-vlm failed ($(tail -n 1 "$SEE_TMP/mlx.err" 2>/dev/null | head -c 160)); check the repo id, or ignore — the evidence layer is model-independent"
+  EVIDENCE="$(printf '%s' "$EVIDENCE" | jq -c --arg m "$MODEL" --argjson vms "$ms" --argjson vf "$_vf" --argjson om "$_om" --argjson nr "$_nr" --arg vfix "$_vfix" \
     'if $nr then .   # --no-read: deliberate skip — no model call, no failure entry
-     elif $vf then (.failures += [{stage:"vlm", code:"vlm_unavailable", retriable:true,
-                                 fix:"start ollama, or ignore — the evidence layer is model-independent"}])
+     elif $vf then (.failures += [{stage:"vlm", code:"vlm_unavailable", retriable:true, fix:$vfix}])
      else (.cost.model_calls = [{seat:"local-read", model:$m, ms:$vms}]) end
      | (if $om then (.failures += [{stage:"E1", code:"ocr_missing", retriable:true,
                                     fix:"npm install -g mac-ocr"}]) else . end)

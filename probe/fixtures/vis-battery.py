@@ -110,8 +110,12 @@ check("F6 chart: E5 localizes the taller bar (cols 9-11)", bool(topcols & {9, 10
       "cols=%s" % sorted(topcols))
 if "text_diff" in p:
     td = p["text_diff"]
+    # Apple Vision may read the axis as one line ("Q1 Q2 Q3 Q4") or as separate
+    # labels, so judge by token: Q3 leaves, Q5 arrives, and Q5 is not on A's side.
+    rm_tok = {t for line in td["removed"] for t in line.split()}
+    add_tok = {t for line in td["added"] for t in line.split()}
     check("F6 chart: E1 catches Q3→Q5 relabel",
-          "Q3" in td["removed"] and "Q5" in td["added"], "td=%s" % td)
+          "Q3" in rm_tok and "Q5" in add_tok and "Q5" not in rm_tok, "td=%s" % td)
 
 # F7 · slice rerun — a full run seeds the cache, --only re-runs one extractor at
 # a new grid and returns a delta (not the whole pack); the cached pack is patched
