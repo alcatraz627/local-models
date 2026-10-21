@@ -313,11 +313,17 @@ lm_doctor() {
   check "server up ($OLLAMA_HOST)"           ollama_up
   check "LaunchAgent loaded ($LM_LAUNCHD_LABEL)" launchctl print "gui/$(id -u)/$LM_LAUNCHD_LABEL"
   local t
-  for t in small big code sweep; do
-    check "tier $t on disk ($(resolve_tier "$t"))" model_on_disk "$(resolve_tier "$t")"
-  done
-  check "vision model on disk (${VISION_MODEL:-minicpm-v4.6})"  model_on_disk "${VISION_MODEL:-minicpm-v4.6}"
-  check "embed model on disk (${RAG_EMBED_MODEL:-nomic-embed-text})" model_on_disk "${RAG_EMBED_MODEL:-nomic-embed-text}"
+  if ollama_up; then
+    for t in small big code sweep; do
+      check "tier $t on disk ($(resolve_tier "$t"))" model_on_disk "$(resolve_tier "$t")"
+    done
+    check "vision model on disk (${VISION_MODEL:-minicpm-v4.6})"  model_on_disk "${VISION_MODEL:-minicpm-v4.6}"
+    check "embed model on disk (${RAG_EMBED_MODEL:-nomic-embed-text})" model_on_disk "${RAG_EMBED_MODEL:-nomic-embed-text}"
+  else
+    # with the server down every disk check would also fail, burying the one real cause
+    add_row "model checks skipped: server down" false true
+    $json || printf '  %sskip%s model-on-disk checks (needs the server; fix the line above first)\n' "$Dm" "$Rs"
+  fi
   local mlx_repo="${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"
   local mlx_dir="${HF_HOME:-$HOME/.cache/huggingface}/hub/models--${mlx_repo//\//--}"
   check "mlx vision cache (see --ui default: $mlx_repo)" \
@@ -405,7 +411,7 @@ lm_timeline() {
       --errors) errors=true; shift ;;
       --json)   json=true; shift ;;
       --tool)   need_arg "lm timeline" "$1" "${2:-}"; tool="$2"; shift 2 ;;
-      *) if [[ "$1" =~ ^[0-9]+$ ]]; then n="$1"; shift
+      *) if [[ "$1" =~ ^[1-9][0-9]*$ ]]; then n="$1"; shift
          else reject_unknown_flag "lm timeline" "$1"; echo "lm timeline: unexpected '$1' (lm timeline [N] [--errors] [--tool T] [--json])" >&2; exit 2; fi ;;
     esac
   done
@@ -427,7 +433,8 @@ lm_timeline() {
     { [ -z "$tool" ] || [ "$tool" = "$1" ]; } || return 0
     local total cnt; total="$(wc -l < "$2" | tr -d ' ')"
     cnt="$win"; [ "$total" -lt "$cnt" ] && cnt="$total"
-    tail -n "$cnt" "$2" | jq -c --arg tool "$1" --argjson off "$(( total - cnt ))" "$pre $3"
+    # raw lines + fromjson? so one torn line is dropped instead of hiding every newer row
+    tail -n "$cnt" "$2" | jq -cR --arg tool "$1" --argjson off "$(( total - cnt ))" "$pre fromjson? | $3"
   }
   local rows
   rows="$({
@@ -451,7 +458,7 @@ lm_last() {
   if [ -n "$tool" ]; then row="$(lm_timeline 1 --tool "$tool" --json)"; else row="$(lm_timeline 1 --json)"; fi
   tool="$(printf '%s' "$row" | jq -r '.[0].tool // empty')"; n="$(printf '%s' "$row" | jq -r '.[0].n // empty')"
   [ -n "$tool" ] || { echo "lm last: no history yet" >&2; exit 12; }
-  printf '%s%s#%s%s\n' "$Dm" "$tool" "$n" "$Rs" >&2
+  printf '%s%s#%s%s\n' "$eDm" "$tool" "$n" "$eRs" >&2
   case "$tool" in
     q)       exec "$BIN/q" show "$n" ;;
     see)     exec "$BIN/see" show "$n" ;;
@@ -493,11 +500,15 @@ case "${1:-}" in
     exit "$_oc_rc"
     ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
-  status)   shift; if [ "${1:-}" = "--json" ]; then lm_status_json; else lm_status; fi ;;
-  models)   shift; lm_models "${1:-}" ;;
-  doctor)   shift; lm_doctor "${1:-}" ;;
+  status)   v=status; shift; jf="$(json_only "lm $v" "$@")" || exit 2
+            if [ -n "$jf" ]; then lm_status_json; else lm_status; fi ;;
+  models|doctor)
+            v="$1"; shift; jf="$(json_only "lm $v" "$@")" || exit 2
+            "lm_$v" "$jf" ;;
   timeline) shift; lm_timeline "$@" ;;
-  last)     shift; lm_last "${1:-}" ;;
+  last)     shift
+            case "${1:-}" in -h|--help) echo "usage: lm last [q|see|imagine|fleet|gemini]"; exit 0 ;; -*) reject_unknown_flag "lm last" "$1" ;; esac
+            lm_last "${1:-}" ;;
   examples) examples_table ;;
   --version|-V|version) echo "lm ${LM_VERSION:-unknown}" ;;
   *) g="$(did_you_mean "$1" help q imagine see review probe fleet index gemini ui-verify rag bench opencode warm status models doctor timeline last examples version)"

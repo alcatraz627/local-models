@@ -45,6 +45,8 @@ pin() { # MODEL KEEP_ALIVE(number or "duration")
 }
 
 cmd="${1:-status}"
+# bare `warm --json` means the status view, like bare `warm`
+[ "$cmd" = --json ] && set -- status --json && cmd=status
 case "$cmd" in
   on)
     target="${2:-}"

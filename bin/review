@@ -68,7 +68,8 @@ if [ "$FINDINGS" = 1 ] && [ "$MODEL_SET" = 0 ]; then MODEL=small; fi
 # Reviews are logged to q-history (review is a q intent). Thin history aliases.
 # review_rows prints one JSON line per review entry with its q-history line number n.
 LOG="$DIR/logs/q-history.jsonl"
-review_rows() { [ -f "$LOG" ] && jq -c 'select(.intent == "review") | . + {n: input_line_number}' "$LOG"; }
+# Read raw lines so one torn line is skipped instead of aborting the whole scan.
+review_rows() { [ -f "$LOG" ] && jq -cR 'fromjson? | select(.intent == "review") | . + {n: input_line_number}' "$LOG"; }
 if [ "${args[0]:-}" = "history" ]; then
   HIST_JSON=false; HIST_N=15
   [ ${#JSON[@]} -gt 0 ] && HIST_JSON=true   # the flag parser above already consumed --json
@@ -84,8 +85,9 @@ if [ "${args[0]:-}" = "show" ]; then
   want="${args[1]:-}"
   if [[ "$want" =~ ^-[0-9]+$ ]]; then
     # -1 is the latest REVIEW, not the latest q call: count back through review rows only.
-    want="$(review_rows | tail -n "${want#-}" | head -n 1 | jq -r '.n // empty')"
-    [ -n "$want" ] || { echo "review: no such review" >&2; exit 12; }
+    # one jq pass: tail|head SIGPIPEs under pipefail once the rows outgrow the pipe buffer
+    want="$(review_rows | jq -rs --argjson k "${want#-}" 'if $k >= 1 and length >= $k then .[-$k].n else empty end')"
+    [ -n "$want" ] || { echo "review: no such review ($(review_rows | jq -s length) reviews logged)" >&2; exit 12; }
   fi
   exec "$DIR/bin/q" show "$want"
 fi

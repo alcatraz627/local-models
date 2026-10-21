@@ -18,8 +18,8 @@ else Y= C= G= Dm= Rs= Bd= ; fi
 # The same palette for text written to STDERR, decided by stderr's own TTY: the set above
 # follows stdout, so using it on a stderr line leaked escape codes into redirected logs.
 if [ -t 2 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
-  eY=$'\033[1;33m'; eC=$'\033[36m'; eDm=$'\033[2m'; eRs=$'\033[0m'; eRed=$'\033[31m'
-else eY= eC= eDm= eRs= eRed= ; fi
+  eY=$'\033[1;33m'; eC=$'\033[36m'; eDm=$'\033[2m'; eRs=$'\033[0m'; eRed=$'\033[31m'; eG=$'\033[32m'; eBd=$'\033[1m'
+else eY= eC= eDm= eRs= eRed= eG= eBd= ; fi
 
 # ── Help rendering (conventions/cli-help-design.md) ──
 _sec() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
@@ -36,35 +36,63 @@ jsonl_history() { # LOG N LINE_JQ
   [ -f "$log" ] || { echo "no history yet ($log)"; return; }
   local total start; total=$(wc -l < "$log" | tr -d ' ')
   start=$(( total - n + 1 )); (( start < 1 )) && start=1
-  tail -n "$n" "$log" | jq -r "$fmt" | nl -ba -v "$start" -w4 -s'  '
+  # one torn line must not hide every newer row, so unparseable lines become a marker
+  tail -n "$n" "$log" | jq -rR "(fromjson? | $fmt) // \"(unreadable history line)\"" | nl -ba -v "$start" -w4 -s'  '
 }
 jsonl_entry() { # LOG N ENTRY_JQ ($i bound to N in jq). N>0 = stable line no; N<0 counts from the end (-1 = latest)
   local log="$1" i="$2" fmt="$3"
-  [ -f "$log" ] || { echo "no history yet"; return 1; }
+  # Exit codes follow the table in docs/CAPABILITIES.md: 2 bad usage, 12 missing entry.
+  [ -f "$log" ] || { echo "no history yet" >&2; return 12; }
   local total; total=$(wc -l < "$log" | tr -d ' ')
   [[ "$i" =~ ^-[0-9]+$ ]] && i=$(( total + i + 1 ))   # -1 -> latest, -2 -> second-latest
-  [[ "$i" =~ ^[0-9]+$ ]] && (( i >= 1 )) || { echo "usage: show <N>   (N from 'history', or -1 for the latest)"; return 1; }
+  [[ "$i" =~ ^[0-9]+$ ]] || { echo "usage: show <N>   (N from 'history', or -1 for the latest)" >&2; return 2; }
+  (( i >= 1 )) || { echo "no entry #$2 (there are $total)" >&2; return 12; }
   local line; line=$(sed -n "${i}p" "$log")
-  [ -n "$line" ] || { echo "no entry #$i"; return 1; }
-  printf '%s' "$line" | jq -r --arg i "$i" "$fmt"
+  [ -n "$line" ] || { echo "no entry #$i (there are $total)" >&2; return 12; }
+  printf '%s' "$line" | jq -r --arg i "$i" "$fmt" 2>/dev/null \
+    || { echo "entry #$i is not valid JSON (a torn write?); the raw line: ${line:0:200}" >&2; return 12; }
 }
 
 # ── Shared arg-parse helpers: same messages and exit code (2) in every tool ──
 # A flag that takes a value must have one; without this `shift 2` fails under
 # set -e and the tool exits 1 with no message at all.
 need_arg() { # TOOL FLAG [VALUE]
-  [ "$#" -ge 3 ] && [ -n "${3:-}" ] || {
-    printf '%s: %s needs a value\n' "$1" "$2" >&2
-    exit 2
-  }
+  [ "$#" -ge 3 ] && [ -n "${3:-}" ] || usage_fail "$1" "$2 needs a value"
 }
 
-# Call from the parser's catch-all branch. Only a flag-shaped word (-x, --xyz)
-# is refused; "-", "-1" and prompts with spaces ("- fix this") stay positionals.
+# For flags where an empty value is meaningful (--neg ""): only a missing word
+# fails. Pass the parser's remaining argument count.
+need_arg_present() { # TOOL FLAG ARGC
+  [ "$3" -ge 2 ] || usage_fail "$1" "$2 needs a value"
+}
+
+# A usage error, exit 2. Machine callers (MODE=json in the calling tool) also get
+# the {ok:false, code} envelope on stdout, as every other error in that mode does.
+usage_fail() { # TOOL MESSAGE
+  printf '%s: %s\n' "$1" "$2" >&2
+  case "${MODE:-}" in
+    json)   jq -cn --arg m "$2" '{ok:false, code:"invalid_args", message:$m}' ;;
+    stream) jq -cn --arg m "$2" '{t:"error", code:"invalid_args", message:$m}' ;;
+  esac
+  exit 2
+}
+
+# For verbs whose only option is --json, in any position: prints --json when given,
+# refuses anything else. Use as: jf="$(json_only "lm doctor" "$@")" || exit 2
+json_only() { # TOOL ARG...
+  local tool="$1" out=""; shift
+  for a in "$@"; do
+    case "$a" in --json) out=--json ;; *) usage_fail "$tool" "unexpected '$a' (the only option is --json)" ;; esac
+  done
+  printf '%s' "$out"
+}
+
+# Call from the parser's catch-all branch. Only a flag-shaped word (-x, --xyz,
+# --xyz=value) is refused; "-", "-1" and prompts with spaces ("- fix this") stay
+# positionals.
 reject_unknown_flag() { # TOOL ARG
-  if [[ "$2" =~ ^--?[A-Za-z][A-Za-z0-9_-]*$ ]]; then
-    printf "%s: unknown flag '%s' (run %s -h to list flags); use -- before a prompt that starts with -\n" "$1" "$2" "$1" >&2
-    exit 2
+  if [[ "$2" =~ ^--?[A-Za-z][A-Za-z0-9_-]*(=.*)?$ ]]; then
+    usage_fail "$1" "unknown flag '$2' (run $1 -h to list flags). If it is part of your prompt, quote the prompt, or put -- before it"
   fi
 }
 

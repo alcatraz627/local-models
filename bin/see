@@ -108,7 +108,11 @@ emit_error() { # CODE MESSAGE EXIT
     json) jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}' ;;
     *)    echo "see: $2" >&2 ;;
   esac
-  [ "$3" = 2 ] || { mkdir -p "$DIR/logs" 2>/dev/null; log_fail "$1" "$2"; }
+  # a mistyped path is a usage slip, not a failed read, so it stays out of history too
+  case "$3:$1" in
+    2:*|*:img_unreadable|*:not_an_image) : ;;
+    *) mkdir -p "$DIR/logs" 2>/dev/null; log_fail "$1" "$2" ;;
+  esac
   exit "$3"
 }
 

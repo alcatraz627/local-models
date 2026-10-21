@@ -288,7 +288,9 @@ load_entry() {
 # Critique an image with a local vision model (gemma4) — the generate->critique->refine loop.
 # Optional trailing text is the INTENDED result, so it critiques against your goal.
 critique_image() {
-  [ -n "${1:-}" ] || { echo "usage: imagine critique IMG [\"goal\"]" >&2; return 2; }
+  case "${1:-}" in
+    ''|-h|--help) echo "usage: imagine critique IMG [\"goal\"]" >&2; [ -n "${1:-}" ] && return 0; return 2 ;;
+  esac
   local img; img="$(expand_tilde "$1")"; shift; local goal="$*"
   [ -f "$img" ] || { echo "no such image: $img" >&2; return 12; }
   local model="${IMAGINE_CRITIC_MODEL:-gemma4:26b}" tmp task
@@ -360,7 +362,7 @@ while [ $# -gt 0 ]; do
     --from)       need_arg imagine "$1" "${2:-}"; FROM="$2"; shift 2 ;;
     --strength)   need_arg imagine "$1" "${2:-}"; STRENGTH="$2"; shift 2 ;;
     --style)      need_arg imagine "$1" "${2:-}"; STYLE="$2"; shift 2 ;;
-    --neg|--negative) need_arg imagine "$1" "${2:-}"; NEG="$2"; shift 2 ;;
+    --neg|--negative) need_arg_present imagine "$1" "$#"; NEG="$2"; shift 2 ;;
     -m|--model)   need_arg imagine "$1" "${2:-}"; MODEL="$2"; shift 2 ;;
     -s|--steps)   need_arg imagine "$1" "${2:-}"; STEPS="$2"; shift 2 ;;
     --guidance)   need_arg imagine "$1" "${2:-}"; GUIDANCE="$2"; shift 2 ;;

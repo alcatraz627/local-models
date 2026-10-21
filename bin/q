@@ -147,7 +147,7 @@ DIY=false          # --diy: a planner pass picks intent/web/file/tier from the p
 positionals=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --) shift; positionals+=("$@"); break ;;
+    --) shift; positionals+=("$@"); SAW_DD=true; break ;;
     --think) THINK=true; shift ;;
     --raw)   RAW=true; shift ;;
     --web)   WEB=true; shift ;;
@@ -160,7 +160,7 @@ while [ $# -gt 0 ]; do
     --format)   need_arg q "$1" "${2:-}"; FORMAT_FILE="$2"; shift 2 ;;
     --glow)     GLOW=true; shift ;;
     --ctx|--file) need_arg q "$1" "${2:-}"; CTX_FILE="$2"; shift 2 ;;
-    --ctx-name) need_arg q "$1" "${2:-}"; CTX_NAME="$2"; shift 2 ;;
+    --ctx-name) need_arg_present q "$1" "$#"; CTX_NAME="$2"; shift 2 ;;
     --sheet)    need_arg q "$1" "${2:-}"; SHEET="$2"; shift 2 ;;
     --preflight) PREFLIGHT=true; shift ;;
     --prose) PROSE=true; shift ;;
@@ -179,7 +179,7 @@ done
 # A leading intent token selects the intent (if it's a registered intent); rest is the query.
 if [ "${#positionals[@]}" -gt 0 ] && intent_exists "${positionals[0]}"; then
   INTENT="${positionals[0]}"; USER_INTENT=true; positionals=("${positionals[@]:1}")
-elif [ "${#positionals[@]}" -gt 0 ] && [[ "${positionals[0]}" =~ ^[A-Za-z][A-Za-z-]{2,}$ ]]; then
+elif [ "${#positionals[@]}" -eq 1 ] && [ -z "${SAW_DD:-}" ] && [[ "${positionals[0]}" =~ ^[A-Za-z][A-Za-z-]{2,}$ ]]; then
   # A lone word one typo away from an intent is almost surely that intent; sending
   # it as a prompt would cost a model call. `--` or `q ask ...` sends it anyway.
   _names=$(cd "$INTENT_DIR" && ls ./*.toml 2>/dev/null | sed 's|^\./||;s|\.toml$||')

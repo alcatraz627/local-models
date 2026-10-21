@@ -177,7 +177,7 @@ else
   printf '%s' "$RESULTS" | jq -r '.[] |
     (if .verdict == "pass" then "✓" elif .verdict == "fail" then "✗" else "?" end)
     + " " + .claim + "\n    └ " + .evidence'
-  printf '%s%d pass · %d fail · %d unsure → %s%s\n' "$Dm" "$PASS" "$FAIL" "$UNSURE" "$VERDICT" "$Rs" >&2 || true
-  [ -n "$ARTIFACT" ] && printf '%sevidence: %s%s\n' "$Dm" "$ARTIFACT" "$Rs" >&2 || true
+  printf '%s%d pass · %d fail · %d unsure → %s%s\n' "$eDm" "$PASS" "$FAIL" "$UNSURE" "$VERDICT" "$eRs" >&2 || true
+  [ -n "$ARTIFACT" ] && printf '%sevidence: %s%s\n' "$eDm" "$ARTIFACT" "$eRs" >&2 || true
 fi
 [ "$VERDICT" = pass ] && exit 0 || exit 1

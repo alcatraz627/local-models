@@ -167,7 +167,7 @@ export FLEET_Q="$DIR/bin/q" FLEET_INTENT="$INTENT" FLEET_MODEL="$MODEL" \
        FLEET_PROMPT="$PROMPT" FLEET_TIMEOUT="$TIMEOUT" FLEET_OUT="$OUT"
 FLEET_QUIET=$([ "$MODE" = json ] && echo true || echo false); export FLEET_QUIET
 
-[ "$MODE" = json ] || printf '%sfleet%s %s × %d items · %s · -j %d\n' "$Bd" "$Rs" "$INTENT" "${#items[@]}" "$MODEL" "$JOBS" >&2
+[ "$MODE" = json ] || printf '%sfleet%s %s × %d items · %s · -j %d\n' "$eBd" "$eRs" "$INTENT" "${#items[@]}" "$MODEL" "$JOBS" >&2
 i=0
 for f in "${items[@]}"; do i=$((i+1)); printf '%d|%s\0' "$i" "$f"; done \
   | xargs -0 -P "$JOBS" -n 1 bash -c 'fleet_worker "$1"' _
@@ -208,8 +208,8 @@ if [ "$MODE" = json ]; then
   cat "$OUT/index.jsonl"
 else
   printf '%s%d %s pass · %d fail%s of %d · %ds wall · %s\n' \
-    "$([ "$FAIL" -eq 0 ] && printf '%s' "$G" || printf '%s' "$Y")" \
-    "$PASS" "$([ -n "$JUDGE" ] && echo judge || echo envelope)" "$FAIL" "$Rs" "${#items[@]}" "$SECONDS" "$OUT" >&2
+    "$([ "$FAIL" -eq 0 ] && printf '%s' "$eG" || printf '%s' "$eY")" \
+    "$PASS" "$([ -n "$JUDGE" ] && echo judge || echo envelope)" "$FAIL" "$eRs" "${#items[@]}" "$SECONDS" "$OUT" >&2
   [ "$FAIL" -gt 0 ] && jq -r 'select(.gate != "pass") | "  ✗ \(.item)  (\(.gate))"' "$OUT/index.jsonl" >&2
 fi
 [ "$FAIL" -eq 0 ]
