@@ -176,7 +176,7 @@ cat snippet.ts | review                         # piped code
 review --findings 214                           # schema-constrained: .data.findings =
                                                 #   [{file, line, severity, finding, suggestion}]
 review --glow                                   # human-pretty render
-review history · review show -1                 # reviews live in q-history
+review history · review show -1                 # reviews live in q-history; -1 is the latest REVIEW
 ```
 
 ## 5 · Image generation — `imagine`
@@ -258,7 +258,7 @@ warm on code                   # LEASE the code tier — bounded 60m, self-heals
 warm on code 4h                # longer session · 'forever' opts out of the bound
 warm on gemma4:26b 30m         # lease any model
 warm off code · warm off all   # release one / sweep everything resident
-warm status                    # what's resident + how long it stays
+warm status [--json]           # what's resident + how long it stays
 ```
 
 Automation: `lm fleet` and `lm opencode` lease automatically and release on exit. Scheduled:
@@ -267,10 +267,13 @@ calendar-visible). After 3 cold loads of the same big model in 5 minutes, `q` pr
 lease suggestion (never auto-pins — residency is yours).
 
 ```bash
-lm status                      # server · resident · on-disk at a glance
+lm status                      # server, resident (size, time left, tier), on-disk with tier labels
 lm status --json               # <150ms machine probe: warm/latency_class/models
-lm models                      # ● resident, tier labels, sizes
-lm doctor                      # 11-point smoke check of the whole toolkit
+lm models                      # ● resident, tier labels (small big code sweep vision), sizes
+lm doctor [--json]             # smoke check: deps (jq yq ollama), every tier + vision + embed model on disk,
+                               #   the MLX vision cache, mflux venv, PATH wrappers that reach THIS checkout,
+                               #   plus optional extras (the gemini line checks the API key too)
+lm --version                   # toolkit version
 lm examples                    # colored, comprehensive showcase: every capability, grouped, paste-ready
 lm help table                  # colored short path for a table job; also document/screenshot/compare/batch/retrieval/research
 lm bench quick                 # fixed table, answer, visual-evidence cases; JSON report on disk
@@ -339,8 +342,13 @@ repo is newer than the map — freshness is real mtimes, never a TTL.
 Every command logs; the histories are the API for everything downstream.
 
 ```bash
-lm timeline 30                 # one merged timeline: q (✗ on failures) · imagine · see · fleet
-q history · see history · review history · imagine history     # per-tool, numbered
+lm timeline 30                 # one merged timeline: q, imagine, see, fleet, gemini; local time, and
+                               #   each row leads with tool#N (q#3542) so it points at `<tool> show N`
+lm timeline --errors           # only failures; scans the newest 5000 entries of each log
+lm timeline --tool see --json  # one tool, as JSON rows {ts, time, tool, n, kind, err, text}
+lm last [tool]                 # the newest entry in full (opens it with that tool's show)
+q history · see history · review history · imagine history · lm gemini history   # per-tool, numbered, local time
+q history 20 --json            # the same rows as JSON, each with its entry number n (feeds `q show n`)
 q show -1 | glow -             # any past answer, rendered
 bash scripts/self-audit.sh     # the weekly digest, on demand: volume, failure codes × model,
                                #   latency by model, fleet pass rates → logs/self-audit/
@@ -349,6 +357,23 @@ bash scripts/self-audit.sh     # the weekly digest, on demand: volume, failure c
 The self-audit runs Sundays 11:00 (gcc-schedule `lm-self-audit`): it digests the week and files
 ONE gcc proposal if a failure code recurs ≥5× — propose, never auto-fix. `q` failures (timeout,
 server-down, cancelled, model-missing) are history lines too, so patterns are minable.
+
+### Exit codes (one table for every tool)
+
+| Code | Meaning | Used by |
+|---|---|---|
+| 0 | success | all |
+| 1 | the work ran and failed, or a check failed (generation failed, a `doctor` check failed, a `ui-verify` claim did not pass) | imagine, lm doctor, ui-verify, review |
+| 2 | bad usage: unknown flag, flag missing its value, bad argument, unknown verb | all |
+| 3 | `review --findings` produced no structured findings after one retry | review |
+| 10 | the Ollama server is down or unreachable, or a backend call failed | q, see, warm, imagine, lm models, lm gemini |
+| 11 | the model or backend is not available (model not pulled, gemini unavailable) | q, see, warm, lm gemini |
+| 12 | input unreadable or missing: file, image, history entry, optional dependency | q, see, imagine, review, lm gemini, lm |
+| 13 | wall-clock timeout | q, see, lm gemini |
+| 127 | a required program is not installed | q |
+| 130 | cancelled by the caller | q |
+
+Machine modes (`--json`) carry the same failure as a `code` string; branch on the code, not on the text.
 
 ## 12 · Rendering — `--glow`
 
