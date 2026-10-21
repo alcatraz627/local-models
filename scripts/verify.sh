@@ -116,6 +116,7 @@ else
   bad "vis-compare battery — failing assertions:"
   printf '%s\n' "$VB" | awk '/FAIL/ {print "       " $0}'
 fi
+./.venv/bin/python probe/vision/selftest.py >/dev/null 2>&1 && ok "vision harness selftest (probe/vision, model-free)" || bad "vision harness selftest failing: run probe/vision/selftest.py"
 
 echo "── findings-gate: mechanical review-findings gate ──"
 FG="$(./.venv/bin/python lib/findings-gate.py --self-test 2>&1)" \
