@@ -93,18 +93,32 @@ show_help() {
   printf '  %s--menubar reads black while a fullscreen app is frontmost (macOS hides the menu bar then)%s\n' "$Dm" "$Rs"
 }
 
+# Runtime failures (exit != 2) land in history as error rows, like q's, so a
+# failed read is visible to `see history` and `lm timeline`. Usage errors do not.
+log_fail() { # CODE MESSAGE
+  jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg img "${ORIG_IMG:-${IMG:-}}" \
+     --arg p "${QUERY:-}" --arg m "${MODEL:-}" --arg rm "${READ_MODE:-${DIFF:+diff}}" --arg c "$1" --arg msg "$2" --arg caller "$PWD" \
+     '{ts:$ts, img:$img, img2:null, prompt:(if $p == "" then null else $p end), mode:(if $rm == "" then null else $rm end),
+       crop:null, model:$m, ms:0, caller:$caller, artifact:null, error:$c, response:("[error: " + $c + "] " + $msg)}' \
+     >> "$LOG" 2>/dev/null || true
+}
 emit_error() { # CODE MESSAGE EXIT
   case "$MODE" in
     json) jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}' ;;
     *)    echo "see: $2" >&2 ;;
   esac
+  [ "$3" = 2 ] || { mkdir -p "$DIR/logs" 2>/dev/null; log_fail "$1" "$2"; }
   exit "$3"
 }
 
 # History subcommands (same numbering contract as q: stable JSONL line numbers).
 case "${1:-}" in
-  history) jsonl_history "$LOG" "${2:-15}" \
-             '"\(.ts[11:19])  \(.model)  \(.ms)ms  \(.img)  \((.prompt // "describe") | gsub("\\s+"; " ") | .[0:40])"'
+  history) shift
+           HIST_JSON=false; HIST_N=15
+           for harg in "$@"; do case "$harg" in --json) HIST_JSON=true ;; *) HIST_N="$harg" ;; esac; done
+           if $HIST_JSON; then jsonl_history_json "$LOG" "$HIST_N"; exit 0; fi
+           jsonl_history "$LOG" "$HIST_N" \
+             "$JQ_LOCAL_TS"'"\(.ts | lts)  \(.mode // "read")\(if .error or ((.response // "") | startswith("(visual read failed")) then " ✗" else "" end)  \(.model)  \(.ms)ms  \(.img)  \((.prompt // "describe") | gsub("\\s+"; " ") | .[0:40])"'
            exit 0 ;;
   show)    jsonl_entry "$LOG" "${2:-}" \
              '"# see \(.img)  ·  \(.ts)  ·  \(.model)  ·  \(.ms)ms\n\n\(.response)"'
@@ -186,14 +200,15 @@ while [ $# -gt 0 ]; do
     --no-read)  NO_READ=true; shift ;;
     --menubar)  MENUBAR=true; UI=true; shift ;;
     --mlx)      MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MODEL_SET=true; shift ;;
-    --crop)     CROP="$2"; shift 2 ;;
-    --region)   REGION="$2"; shift 2 ;;
-    --only)     ONLY="$2"; shift 2 ;;
-    --grid)     GRID="$2"; shift 2 ;;
+    --crop)     need_arg see "$1" "${2:-}"; CROP="$2"; shift 2 ;;
+    --region)   need_arg see "$1" "${2:-}"; REGION="$2"; shift 2 ;;
+    --only)     need_arg see "$1" "${2:-}"; ONLY="$2"; shift 2 ;;
+    --grid)     need_arg see "$1" "${2:-}"; GRID="$2"; shift 2 ;;
     --glow)     GLOW=true; shift ;;
-    -m|--model) MODEL="$2"; MODEL_SET=true; shift 2 ;;
+    -m|--model) need_arg see "$1" "${2:-}"; MODEL="$2"; MODEL_SET=true; shift 2 ;;
     -h|--help)  show_help; exit 0 ;;
-    *)          positionals+=("$1"); shift ;;
+    --)         shift; positionals+=("$@"); break ;;
+    *)          reject_unknown_flag see "$1"; positionals+=("$1"); shift ;;
   esac
 done
 
@@ -703,14 +718,17 @@ if mkdir -p "$ART_ROOT" 2>/dev/null; then
   fi
 fi
 mkdir -p "$DIR/logs"
+# A soft-failed diff read still ships its pack, but history must not call it a clean read.
+HERR=""; $VLM_FAILED && HERR=vlm_unavailable
 jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg img2 "${IMG_B:-}" --arg p "$QUERY" \
    --arg m "$HMODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
-   --arg crop "$CROP_DESC" --arg art "$ART" --arg caller "$PWD" \
+   --arg crop "$CROP_DESC" --arg art "$ART" --arg caller "$PWD" --arg err "$HERR" \
    '{ts:$ts, img:$img, img2:(if $img2 == "" then null else $img2 end),
      prompt:(if $p == "" then null else $p end), mode:$rm,
      crop:(if $crop == "" then null else $crop end), model:$m, ms:$ms,
      caller:$caller,
-     artifact:(if $art == "" then null else $art end), response:$r}' \
+     artifact:(if $art == "" then null else $art end), response:$r}
+    + (if $err == "" then {} else {error:$err} end)' \
    >> "$LOG" 2>/dev/null || true
 
 # compare-history: one line per diff run (successes AND failures) — the stream
