@@ -19,9 +19,11 @@ set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 PASS=0; FAIL=0
-ok()   { PASS=$((PASS+1)); printf '  \033[32mok\033[0m   %s\n' "$1"; }
-bad()  { FAIL=$((FAIL+1)); printf '  \033[31mFAIL\033[0m %s\n' "$1"; }
-skip() { printf '  \033[2mskip\033[0m %s\n' "$1"; }
+# colour only on a terminal, so a captured or piped run stays plain text
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then cG=$'\033[32m'; cR=$'\033[31m'; cD=$'\033[2m'; c0=$'\033[0m'; else cG= cR= cD= c0=; fi
+ok()   { PASS=$((PASS+1)); printf '  %sok%s   %s\n' "$cG" "$c0" "$1"; }
+bad()  { FAIL=$((FAIL+1)); printf '  %sFAIL%s %s\n' "$cR" "$c0" "$1"; }
+skip() { printf '  %sskip%s %s\n' "$cD" "$c0" "$1"; }
 
 echo "── syntax ──"
 SYN_FAIL=0
@@ -233,5 +235,5 @@ echo "── residency (informational) ──"
 ./bin/warm status 2>/dev/null | sed 1d | grep -q . && echo "  note: models resident (fine if you warmed deliberately)" || echo "  note: zero-idle"
 
 echo
-if [ "$FAIL" -eq 0 ]; then printf '\033[32m%d checks passed, 0 failed\033[0m\n' "$PASS"; exit 0
-else printf '\033[31m%d passed, %d FAILED\033[0m\n' "$PASS" "$FAIL"; exit 1; fi
+if [ "$FAIL" -eq 0 ]; then printf '%s%d checks passed, 0 failed%s\n' "$cG" "$PASS" "$c0"; exit 0
+else printf '%s%d passed, %d FAILED%s\n' "$cR" "$PASS" "$FAIL" "$c0"; exit 1; fi
