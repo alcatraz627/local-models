@@ -71,6 +71,7 @@ LOG="$DIR/logs/q-history.jsonl"
 review_rows() { [ -f "$LOG" ] && jq -c 'select(.intent == "review") | . + {n: input_line_number}' "$LOG"; }
 if [ "${args[0]:-}" = "history" ]; then
   HIST_JSON=false; HIST_N=15
+  [ ${#JSON[@]} -gt 0 ] && HIST_JSON=true   # the flag parser above already consumed --json
   for harg in "${args[@]:1}"; do case "$harg" in --json) HIST_JSON=true ;; *) HIST_N="$harg" ;; esac; done
   [[ "$HIST_N" =~ ^[0-9]+$ ]] || HIST_N=15
   if $HIST_JSON; then review_rows | tail -n "$HIST_N"; exit 0; fi

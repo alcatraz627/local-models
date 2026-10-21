@@ -96,8 +96,9 @@ show_help() {
 # Runtime failures (exit != 2) land in history as error rows, like q's, so a
 # failed read is visible to `see history` and `lm timeline`. Usage errors do not.
 log_fail() { # CODE MESSAGE
+  local _mode="${READ_MODE:-}"; [ -z "$_mode" ] && [ "${DIFF:-false}" = true ] && _mode=diff
   jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg img "${ORIG_IMG:-${IMG:-}}" \
-     --arg p "${QUERY:-}" --arg m "${MODEL:-}" --arg rm "${READ_MODE:-${DIFF:+diff}}" --arg c "$1" --arg msg "$2" --arg caller "$PWD" \
+     --arg p "${QUERY:-}" --arg m "${MODEL:-}" --arg rm "$_mode" --arg c "$1" --arg msg "$2" --arg caller "$PWD" \
      '{ts:$ts, img:$img, img2:null, prompt:(if $p == "" then null else $p end), mode:(if $rm == "" then null else $rm end),
        crop:null, model:$m, ms:0, caller:$caller, artifact:null, error:$c, response:("[error: " + $c + "] " + $msg)}' \
      >> "$LOG" 2>/dev/null || true
