@@ -290,8 +290,8 @@ lm opencode run "fix the failing test"          # headless one-shot
 
 ### The gemini lane — `lm gemini` (wrapper-only, never the binary directly)
 
-Throughput + huge-context work on a separate, abundant budget (model pinned
-`gemini-3.5-flash`; read-only posture — it generates text, never edits or executes).
+Throughput + huge-context work on a separate, abundant budget (default
+`gemini-3.8-flash`, opt-in `-m gemini-4-argon`; read-only posture — it generates text, never edits or executes).
 
 ```bash
 lm gemini "brainstorm 20 names for this tool"    # one-shot

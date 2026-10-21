@@ -64,8 +64,8 @@ RAG_EMBED_MODEL="${RAG_EMBED_MODEL:-nomic-embed-text}"
 # Gemini lane (`lm gemini`) — the abundant-context complement (wrapper-only, read-only).
 # GEMINI_MODEL is the default model; `lm gemini -m <model>` overrides per call.
 # GEMINI_MODELS is the pick-list `lm gemini` validates against and shows, so a typo
-# errors early instead of burning a call. Default kept at the verified-working
-# gemini-3.5-flash; the latest is gemini-3.8-flash — set GEMINI_MODEL to it here once
-# your gemini-cli confirms it. Add any model your install supports to GEMINI_MODELS.
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash}"
-GEMINI_MODELS="${GEMINI_MODELS:-gemini-3.8-flash gemini-3.8-pro gemini-3.5-flash gemini-3.5-pro}"
+# errors early instead of burning a call. One Flash (the newest) is the default; Argon
+# is the opt-in stronger seat for high-stakes digests (about 5x the cost, same sweep
+# score on the 2026-10-21 test). Pro models are excluded by owner choice.
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.8-flash}"
+GEMINI_MODELS="${GEMINI_MODELS:-gemini-3.8-flash gemini-4-argon}"

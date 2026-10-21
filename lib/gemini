@@ -18,8 +18,8 @@
 #   lm gemini research "question"     web-shaped lookup → JSON, null-when-unsure, long timeout
 #   lm gemini history [N] · show N    past calls (gem-history.jsonl, q-style numbering)
 #
-# Contract: model pinned to gemini-3.5-flash (user decision — other gemini models
-# unreliable); read-only posture (--approval-mode plan: gemini can generate text,
+# Contract: default model is the newest Flash, gemini-4-argon is the opt-in pick (user
+# decision; Pro models excluded); read-only posture (--approval-mode plan: gemini can generate text,
 # never edit/execute here); auth/tier failures are a STRUCTURED gemini_unavailable
 # error the calling agent must FLAG to the user before falling back to claude/lm.
 set -eo pipefail
@@ -29,8 +29,8 @@ source "$DIR/config.sh" 2>/dev/null || true
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"
 
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash}"
-GEMINI_MODELS="${GEMINI_MODELS:-gemini-3.8-flash gemini-3.8-pro gemini-3.5-flash gemini-3.5-pro}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.8-flash}"
+GEMINI_MODELS="${GEMINI_MODELS:-gemini-3.8-flash gemini-4-argon}"
 GEMINI_DEFAULT="$GEMINI_MODEL"   # the config/env default, before any -m override — shown in the bad-model error
 LOG="$DIR/logs/gem-history.jsonl"
 SESS_DIR="$DIR/logs/gemini-sessions"

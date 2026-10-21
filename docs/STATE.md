@@ -31,7 +31,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 | `lm bench <set>` | fixed correctness and latency workload with disk and command-process memory record | `lm bench -h` |
 | `lm index [find X]` | repo symbol map — "where is X" with live staleness | `lm index -h` |
 | `lm opencode [args]` | opencode on the local code tier — auto lease/release around the session | — |
-| `lm gemini "..."` | the gemini lane (pinned gemini-3.5-flash, wrapper-only, read-only posture); `ingest`/`ask` per-project sessions (UUID create/resume); structured `gemini_unavailable` fallback. **VERIFIED end-to-end 2026-07-07** — auth = API key in `~/.gemini/.env` (600, wrapper-loaded; settings selectedType=gemini-api-key). Note: plan-mode gemini can READ the workspace it runs in — don't point it at dirs holding secrets | `lm gemini -h` |
+| `lm gemini "..."` | the gemini lane (default gemini-3.8-flash, opt-in gemini-4-argon, wrapper-only, read-only posture); `ingest`/`ask` per-project sessions (UUID create/resume); structured `gemini_unavailable` fallback. **VERIFIED end-to-end 2026-07-07** — auth = API key in `~/.gemini/.env` (600, wrapper-loaded; settings selectedType=gemini-api-key). Note: plan-mode gemini can READ the workspace it runs in — don't point it at dirs holding secrets | `lm gemini -h` |
 | `warm on\|off [tier\|model] [ttl]` | companion pin (forever) or **bounded lease** for big tiers; `warm off all` sweeps | `warm -h` |
 | `lm status` / `models` / `doctor` / `timeline` | server + resident + on-disk · tiers · smoke-check · merged history (q/imagine/see/fleet) | `lm` |
 
