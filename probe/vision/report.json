@@ -3,6 +3,7 @@
     "apple-vision",
     "gemma4:26b",
     "gemma4-e4b-warm",
+    "measure",
     "minicpm-v4.6",
     "mlx:mlx-community/Qwen3.5-9B-MLX-4bit",
     "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit",
@@ -646,6 +647,57 @@
         "format_fail": 0,
         "n": 3,
         "rate": 0.0
+      },
+      "O04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      }
+    },
+    "measure": {
+      "C01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "C02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "C03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
       },
       "O04": {
         "pass": 0,
@@ -2161,6 +2213,14 @@
       "rate": 0.6964285714285714,
       "median_wall_s": 2.2
     },
+    "measure": {
+      "pass": 18,
+      "fail": 1,
+      "format_fail": 0,
+      "n": 19,
+      "rate": 0.9473684210526315,
+      "median_wall_s": 0.3
+    },
     "minicpm-v4.6": {
       "pass": 74,
       "fail": 34,
@@ -2461,6 +2521,28 @@
         "cases": 2
       },
       "text binding": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    },
+    "measure": {
+      "color": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "counting": {
+        "rate": 1.0,
+        "cases": 3
+      },
+      "odd-one-out": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "real art": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "rotation": {
         "rate": 1.0,
         "cases": 1
       }
@@ -3462,6 +3544,7 @@
       "autocorrected": 1,
       "band_trap": 1
     },
+    "measure": {},
     "minicpm-v4.6": {},
     "mlx:mlx-community/Qwen3.5-9B-MLX-4bit": {},
     "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
