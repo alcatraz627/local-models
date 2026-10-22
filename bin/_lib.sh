@@ -141,7 +141,7 @@ mine_line() { # LOG K
   [ -f "$log" ] || return 1
   [ -n "$LM_TTY$LM_SESSION" ] || return 1
   local hits
-  hits="$(rg -n -e "\"tty\": ?\"$LM_TTY\"" ${LM_SESSION:+-e "\"session\": ?\"$LM_SESSION\""} "$log" 2>/dev/null | tail -n "$k" | sed 's/:.*//')"
+  hits="$(rg -n -e "\"tty\": ?\"$LM_TTY\"" ${LM_SESSION:+-e "\"session\": ?\"$LM_SESSION\""} "$log" 2>/dev/null | tail -n "$k" | sed 's/:.*//')" || true
   [ "$(printf '%s\n' "$hits" | grep -c .)" -ge "$k" ] || return 1
   printf '%s' "$hits" | head -n 1
 }

@@ -191,6 +191,7 @@ case "${1:-}" in
   # paste = the image on the clipboard; latest = the newest screenshot file. Both end in a
   # normal read, so every other flag and a trailing question work as usual.
   paste)   shift
+           for _a in "$@"; do case "$_a" in -h|--help) show_help; exit 0 ;; --json) MODE=json ;; esac; done   # help and the JSON error shape come before any clipboard or disk access
            command -v osascript >/dev/null 2>&1 || { echo "see: paste needs macOS (osascript)" >&2; exit 12; }
            SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
            PASTE_IMG="$SEE_TMP/clipboard.png"
@@ -203,6 +204,7 @@ case "${1:-}" in
            _rc=0; "$0" "$PASTE_IMG" "$@" || _rc=$?
            exit "$_rc" ;;
   latest)  shift
+           for _a in "$@"; do case "$_a" in -h|--help) show_help; exit 0 ;; --json) MODE=json ;; esac; done   # help and the JSON error shape come before any clipboard or disk access
            SHOT_DIR="${SEE_SCREENSHOT_DIR:-$(defaults read com.apple.screencapture location 2>/dev/null || true)}"
            [ -n "$SHOT_DIR" ] || SHOT_DIR="$HOME/Desktop"
            SHOT_DIR="$(expand_tilde "$SHOT_DIR")"
@@ -777,7 +779,7 @@ $USER" --max-tokens "$_mlx_max" 2>"$SEE_TMP/mlx.err")"
   case "$TEXT" in *"=========="*) TEXT="${TEXT##*==========}" ;; esac
   TEXT="$(printf '%s' "$TEXT" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   if [ "$rc" -ne 0 ] || [ -z "$TEXT" ]; then
-    _mlx_cause="$(rg -i -N 'error' "$SEE_TMP/mlx.err" 2>/dev/null | tail -n 1 | head -c 160)"   # the cause, not the traceback's first lines
+    _mlx_cause="$(rg -i -N 'error' "$SEE_TMP/mlx.err" 2>/dev/null | tail -n 1 | head -c 160)" || true   # the cause, not the traceback's first lines; no match must not abort under pipefail
     [ -n "$_mlx_cause" ] || _mlx_cause="$(tail -n 1 "$SEE_TMP/mlx.err" 2>/dev/null | head -c 160)"
     if $MLX_AUTO; then
       fallback_read "the mlx read failed ($_mlx_cause)"

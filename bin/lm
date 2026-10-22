@@ -604,7 +604,7 @@ lm_timeline() {
       local total cnt; total="$(wc -l < "$2" | tr -d ' ')"
       cnt="$win"; [ "$total" -lt "$cnt" ] && cnt="$total"
       # raw lines + fromjson? so one torn line is dropped instead of hiding every newer row
-      tail -n "$cnt" "$2" | jq -cR --arg tool "$1" --argjson off "$(( total - cnt ))" "$JQ_HIST $JQ_ROW (input_line_number + \$off) as \$ln | fromjson? | $3"
+      tail -n "$cnt" "$2" | jq -cR --arg tool "$1" --argjson off "$(( total - cnt ))" "$JQ_HIST $JQ_ROW (input_line_number + \$off) as \$ln | fromjson? | $3" || true
     else
       $have_id || return 0
       rg -n "${pats[@]}" "$2" 2>/dev/null | tail -n "$win" \
