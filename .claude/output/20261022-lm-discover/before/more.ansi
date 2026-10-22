@@ -1,0 +1,38 @@
+^D[1m[36mlm[0m [2m— local-model toolkit with an optional connected Gemini lane[0m
+
+[1;33mCOMMANDS[0m
+  [36mlm q "..."            [0m [2mquick local LLM — answers, macOS cmds, titles, file Q&A; size tiers[0m
+  [36mlm imagine "..."      [0m [2mlocal image generation (Flux/Qwen on the GPU)[0m
+  [36mlm see <img>          [0m [2mread an image/screenshot into text (local VLM)[0m
+  [36mlm review <x>         [0m [2mreview a PR / files / folder / diff (local coder)[0m
+  [36mlm probe <model>      [0m [2mjudge if a local model is trustworthy — reliability/judgment eval[0m
+  [36mlm fleet <intent> ... [0m [2mfan one intent across N files (envelope gate; optional content judge)[0m
+  [36mlm opencode [args]    [0m [2mopencode on the local code model — auto pin/unpin around the session[0m
+  [36mlm index [find X]     [0m [2mrepo symbol map — build once, "where is X" instantly[0m
+  [36mlm gemini "..."       [0m [2mthe gemini lane — huge-context ingestion, ideation (wrapper-only)[0m
+  [36mlm ui-verify <img> ...[0m [2mcheck enumerable UI claims against a screenshot (local verify gate)[0m
+  [36mlm rag index|search   [0m [2mlocal vector retrieval: index docs, search by meaning[0m
+  [36mlm warm on|off        [0m [2mwarm-model toggle (snappy on / zero-idle off)[0m
+  [36mlm status             [0m [2mserver + warm + models at a glance[0m
+  [36mlm models             [0m [2mlist usable models and tiers (● resident; --json)[0m
+  [36mlm doctor             [0m [2msmoke-check the toolkit (deps, tiers, vision, venv, PATH; --json)[0m
+  [36mlm timeline [N]       [0m [2mmerged q/imagine/see/fleet/gemini history (--errors, --tool T, --json)[0m
+  [36mlm last [tool]        [0m [2mopen the newest history entry in full (optionally of one tool)[0m
+  [36mlm examples           [0m [2mcolored, comprehensive showcase of the whole suite[0m
+  [36mlm help <job>         [0m [2mshort route from a job to the right command[0m
+  [36mlm bench <set>        [0m [2mrun a fixed behavior and latency fixture set[0m
+
+[1;33mEXAMPLES[0m
+  [2m$[0m lm q cmd "free up port 3001"            [2m# one macOS command[0m
+  [2m$[0m lm q summarize --file report.pdf        [2m# read a local file (no cloud)[0m
+  [2m$[0m lm q --big "reason through this"         [2m# heavier on-demand model[0m
+  [2m$[0m git diff | lm q commit                   [2m# commit message from the diff[0m
+  [2m$[0m lm imagine --enhance "a cozy reading nook"
+  [2m$[0m lm imagine refine 12 "warmer light"      [2m# iterate on generation 12[0m
+  [2m$[0m lm models   ·   lm status   ·   lm doctor [2m# what is installed / running / healthy[0m
+  [2m$[0m lm warm on                                [2m# pin the small model — q is then sub-second[0m
+
+[1;33mMORE[0m
+  per-command help (every flag + examples):  [36mlm help <verb>[0m, or [36m<verb> -h[0m for q, see, imagine, review, warm, gemini, fleet
+  the full menu with examples:  [36mglow ~/Code/local-models/docs/CAPABILITIES.md[0m
+  [2mdocs: ~/Code/local-models/docs/  (STATE · CAPABILITIES · q-spec · 03-tool-orchestration-decision · research)[0m

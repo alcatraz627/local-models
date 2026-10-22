@@ -1,0 +1,61 @@
+FAIL registry parses  [[Errno 2] No such file or directory: '/Users/alcatraz627/Code/local-models-disc/lib/verbs.toml']
+PASS lm (no tty) exits 0
+FAIL screen verb 'lm fast' is in the registry
+FAIL screen verb 'lm read' is in the registry
+FAIL screen verb 'lm help' is in the registry
+FAIL screen verb 'lm find' is in the registry
+FAIL screen verb 'lm review' is in the registry
+FAIL screen verb 'lm diff' is in the registry
+FAIL screen verb 'lm cmd' is in the registry
+FAIL screen verb 'lm doc' is in the registry
+FAIL screen verb 'lm more' is in the registry
+FAIL screen verb 'lm status' is in the registry
+FAIL screen verb 'lm ask' is in the registry
+FAIL screen verb 'lm again' is in the registry
+PASS lm more (no tty) exits 0
+PASS more verb 'lm q' is in the registry
+FAIL more verb 'lm imagine' is in the registry
+PASS more verb 'lm see' is in the registry
+FAIL more verb 'lm review' is in the registry
+FAIL more verb 'lm probe' is in the registry
+FAIL more verb 'lm fleet' is in the registry
+PASS more verb 'lm opencode' is in the registry
+FAIL more verb 'lm index' is in the registry
+FAIL more verb 'lm gemini' is in the registry
+FAIL more verb 'lm ui-verify' is in the registry
+FAIL more verb 'lm rag' is in the registry
+PASS more verb 'lm warm' is in the registry
+FAIL more verb 'lm status' is in the registry
+FAIL more verb 'lm models' is in the registry
+FAIL more verb 'lm doctor' is in the registry
+FAIL more verb 'lm timeline' is in the registry
+FAIL more verb 'lm last' is in the registry
+FAIL more verb 'lm examples' is in the registry
+FAIL more verb 'lm help' is in the registry
+FAIL more verb 'lm bench' is in the registry
+PASS -h left logs/ and outputs/ untouched
+FAIL gen --out succeeds  [/Users/alcatraz627/Code/local-models-disc/.venv/bin/python: can't open file '/Users/alcatraz627/Code/local-models-disc/lib/verbs.py': [Errno 2] No such file or directory
+]
+FAIL gen writes completion, man, tldr and a doc block  [[]]
+FAIL lm --capabilities --json is JSON  [q: unknown flag '--capabilities' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- bef]
+FAIL lm --capabilities <job> --json is one job
+FAIL lm --capabilities (text) lists jobs
+FAIL how 'text from my last screenshot' -> read  [{'ok': False, 'code': 'invalid_args', 'message': "unknown flag '--no-model' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- before it"}]
+FAIL how 'redo that on a bigger model' -> again  [{'ok': False, 'code': 'invalid_args', 'message': "unknown flag '--no-model' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- before it"}]
+FAIL how 'what is using memory' -> status  [{'ok': False, 'code': 'invalid_args', 'message': "unknown flag '--no-model' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- before it"}]
+FAIL how 'what changed between these two screenshots' -> diff  [{'ok': False, 'code': 'invalid_args', 'message': "unknown flag '--no-model' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- before it"}]
+FAIL how 'find the answer I got yesterday about docker' -> find  [{'ok': False, 'code': 'invalid_args', 'message': "unknown flag '--no-model' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- before it"}]
+FAIL how 'keep the model loaded so answers are instant' -> fast  [{'ok': False, 'code': 'invalid_args', 'message': "unknown flag '--no-model' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- before it"}]
+FAIL how: a cloud lane only when the words ask for it  [{'ok': False, 'code': 'invalid_args', 'message': "unknown flag '--no-model' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- ]
+FAIL how: never a cloud lane unprompted  [{'ok': False, 'code': 'invalid_args', 'message': "unknown flag '--no-model' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- ]
+FAIL how --no-model with no match exits 12 with code no_match  [{'ok': False, 'code': 'invalid_args', 'message': "unknown flag '--no-model' (run q -h to list flags). If it is part of your prompt, quote the prompt, or put -- ]
+FAIL q --json error has remedy and next  [{'ok': False, 'code': 'ctx_unreadable', 'message': 'no such file: /nonexistent/none.txt'}]
+PASS q --json error keeps code and message
+FAIL see --json error has remedy and next  [{'ok': False, 'code': 'img_unreadable', 'message': 'no such file: /nonexistent/none.png'}]
+PASS see --json error keeps code and message
+FAIL hint small_answer is lm again --big
+PASS lm: coloured on a terminal
+PASS help read: coloured on a terminal
+PASS more: coloured on a terminal
+PASS lm piped: no escape codes
+13/59 checks passed

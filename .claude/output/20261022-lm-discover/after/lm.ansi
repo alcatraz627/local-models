@@ -1,0 +1,24 @@
+^D[1m[36mlm[0m [2m— local models on this Mac (nothing leaves the machine unless marked ☁)[0m
+
+[1;33mJOBS[0m
+  [36mlm "question"                   [0m [2manswer; an image path, a file or "gemini ..." in it routes itself[0m
+  [36mlm cmd "task"                   [0m [2mone shell command, checked against the tool's own --help[0m
+  [36mlm read <img|paste|latest> ["q"][0m [2mtext or an answer from an image (exact text is read first)[0m
+  [36mlm diff A B                     [0m [2mwhat changed between two images, and where[0m
+  [36mlm doc <file> ["q"]             [0m [2mask about or summarize a file (says how much of it was read)[0m
+  [36mlm again [--big|--web]          [0m [2mredo your last question on a stronger model (--web leaves this[0m
+                                   [2mMac ☁)[0m
+  [36mlm find "words"                 [0m [2msearch your past answers[0m
+  [36mlm review                       [0m [2mreview your uncommitted changes (a few minutes, on the code[0m
+                                   [2mmodel)[0m
+
+[1;33mKEEP IT HANDY[0m
+  [36mlm status                       [0m [2mwhat is loaded, free memory, when it unloads[0m
+  [36mlm fast 1h                      [0m [2mkeep answers instant for an hour (lm fast off to free the memory)[0m
+  [36mlm how "what I want"            [0m [2mfind the command for it, without running anything (--go runs it)[0m
+  [36mlm help <job>                   [0m [2mthe steps for one job: ask, cmd, doc, read, diff, count, again,[0m
+                                   [2mfind, web, fast, failed[0m
+  [36mlm more                         [0m [2meverything else: gemini ☁, fleet, rag, index, imagine, probe,[0m
+                                   [2mbench, ui-verify[0m
+
+  [2m☁ marks a call that leaves this Mac. Every command takes -h.[0m

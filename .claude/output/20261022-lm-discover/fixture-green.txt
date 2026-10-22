@@ -1,0 +1,401 @@
+PASS registry parses
+PASS registry has jobs
+PASS job ask: required fields
+PASS job ask: examples are {cmd, says}
+PASS job cmd: required fields
+PASS job cmd: examples are {cmd, says}
+PASS job read: required fields
+PASS job read: examples are {cmd, says}
+PASS job diff: required fields
+PASS job diff: examples are {cmd, says}
+PASS job doc: required fields
+PASS job doc: examples are {cmd, says}
+PASS job again: required fields
+PASS job again: examples are {cmd, says}
+PASS job find: required fields
+PASS job find: examples are {cmd, says}
+PASS job review: required fields
+PASS job review: examples are {cmd, says}
+PASS job status: required fields
+PASS job status: examples are {cmd, says}
+PASS job fast: required fields
+PASS job fast: examples are {cmd, says}
+PASS job help: required fields
+PASS job help: examples are {cmd, says}
+PASS job more: required fields
+PASS job more: examples are {cmd, says}
+PASS job how: required fields
+PASS job how: examples are {cmd, says}
+PASS job count: required fields
+PASS job count: examples are {cmd, says}
+PASS job web: required fields
+PASS job web: examples are {cmd, says}
+PASS job failed: required fields
+PASS job failed: examples are {cmd, says}
+PASS job json: required fields
+PASS job json: examples are {cmd, says}
+PASS job table: required fields
+PASS job table: examples are {cmd, says}
+PASS job gemini: required fields
+PASS job gemini: examples are {cmd, says}
+PASS job fleet: required fields
+PASS job fleet: examples are {cmd, says}
+PASS job rag: required fields
+PASS job rag: examples are {cmd, says}
+PASS job index: required fields
+PASS job index: examples are {cmd, says}
+PASS job imagine: required fields
+PASS job imagine: examples are {cmd, says}
+PASS job probe: required fields
+PASS job probe: examples are {cmd, says}
+PASS job bench: required fields
+PASS job bench: examples are {cmd, says}
+PASS job ui-verify: required fields
+PASS job ui-verify: examples are {cmd, says}
+PASS job opencode: required fields
+PASS job opencode: examples are {cmd, says}
+PASS job timeline: required fields
+PASS job timeline: examples are {cmd, says}
+PASS job last: required fields
+PASS job last: examples are {cmd, says}
+PASS job models: required fields
+PASS job models: examples are {cmd, says}
+PASS job doctor: required fields
+PASS job doctor: examples are {cmd, says}
+PASS job examples: required fields
+PASS job examples: examples are {cmd, says}
+PASS job q: required fields
+PASS job q: examples are {cmd, says}
+PASS job see: required fields
+PASS job see: examples are {cmd, says}
+PASS job warm: required fields
+PASS job warm: examples are {cmd, says}
+PASS job ask is registered
+PASS job cmd is registered
+PASS job read is registered
+PASS job diff is registered
+PASS job doc is registered
+PASS job again is registered
+PASS job find is registered
+PASS job review is registered
+PASS job status is registered
+PASS job fast is registered
+PASS job count is registered
+PASS job web is registered
+PASS job failed is registered
+PASS job more is registered
+PASS job gemini is registered
+PASS job fleet is registered
+PASS job rag is registered
+PASS job index is registered
+PASS job imagine is registered
+PASS job probe is registered
+PASS job bench is registered
+PASS job ui-verify is registered
+PASS job timeline is registered
+PASS job last is registered
+PASS job models is registered
+PASS job doctor is registered
+PASS job examples is registered
+PASS lm (no tty) exits 0
+PASS screen verb 'lm fast' is in the registry
+PASS screen verb 'lm review' is in the registry
+PASS screen verb 'lm read' is in the registry
+PASS screen verb 'lm find' is in the registry
+PASS screen verb 'lm more' is in the registry
+PASS screen verb 'lm cmd' is in the registry
+PASS screen verb 'lm how' is in the registry
+PASS screen verb 'lm again' is in the registry
+PASS screen verb 'lm help' is in the registry
+PASS screen verb 'lm status' is in the registry
+PASS screen verb 'lm diff' is in the registry
+PASS screen verb 'lm doc' is in the registry
+PASS screen verb 'lm ask' is in the registry
+PASS registry job ask is on the lm screen
+PASS registry job cmd is on the lm screen
+PASS registry job read is on the lm screen
+PASS registry job diff is on the lm screen
+PASS registry job doc is on the lm screen
+PASS registry job again is on the lm screen
+PASS registry job find is on the lm screen
+PASS registry job review is on the lm screen
+PASS registry job status is on the lm screen
+PASS registry job fast is on the lm screen
+PASS registry job how is on the lm screen
+PASS registry job help is on the lm screen
+PASS registry job more is on the lm screen
+PASS screen list entry ask exists
+PASS screen list entry cmd exists
+PASS screen list entry read exists
+PASS screen list entry diff exists
+PASS screen list entry doc exists
+PASS screen list entry again exists
+PASS screen list entry find exists
+PASS screen list entry review exists
+PASS screen list entry status exists
+PASS screen list entry fast exists
+PASS screen list entry how exists
+PASS screen list entry help exists
+PASS screen list entry more exists
+PASS screen list entry q exists
+PASS screen list entry imagine exists
+PASS screen list entry see exists
+PASS screen list entry review exists
+PASS screen list entry probe exists
+PASS screen list entry fleet exists
+PASS screen list entry opencode exists
+PASS screen list entry index exists
+PASS screen list entry gemini exists
+PASS screen list entry ui-verify exists
+PASS screen list entry rag exists
+PASS screen list entry warm exists
+PASS screen list entry status exists
+PASS screen list entry models exists
+PASS screen list entry doctor exists
+PASS screen list entry timeline exists
+PASS screen list entry last exists
+PASS screen list entry examples exists
+PASS screen list entry how exists
+PASS screen list entry help exists
+PASS screen list entry bench exists
+PASS screen list entry ask exists
+PASS screen list entry cmd exists
+PASS screen list entry doc exists
+PASS screen list entry read exists
+PASS screen list entry diff exists
+PASS screen list entry count exists
+PASS screen list entry again exists
+PASS screen list entry find exists
+PASS screen list entry web exists
+PASS screen list entry fast exists
+PASS screen list entry status exists
+PASS screen list entry failed exists
+PASS lm more (no tty) exits 0
+PASS more verb 'lm q' is in the registry
+PASS more verb 'lm imagine' is in the registry
+PASS more verb 'lm see' is in the registry
+PASS more verb 'lm review' is in the registry
+PASS more verb 'lm probe' is in the registry
+PASS more verb 'lm fleet' is in the registry
+PASS more verb 'lm opencode' is in the registry
+PASS more verb 'lm index' is in the registry
+PASS more verb 'lm gemini' is in the registry
+PASS more verb 'lm ui-verify' is in the registry
+PASS more verb 'lm rag' is in the registry
+PASS more verb 'lm warm' is in the registry
+PASS more verb 'lm status' is in the registry
+PASS more verb 'lm models' is in the registry
+PASS more verb 'lm doctor' is in the registry
+PASS more verb 'lm timeline' is in the registry
+PASS more verb 'lm last' is in the registry
+PASS more verb 'lm examples' is in the registry
+PASS more verb 'lm how' is in the registry
+PASS more verb 'lm help' is in the registry
+PASS more verb 'lm bench' is in the registry
+PASS example verb ok: lm "how do I see what is using port 5432"
+PASS example verb ok: lm fast 1h
+PASS example verb ok: lm "what text is in ~/Desktop/shot.png"
+PASS example verb ok: lm cmd "list the 5 largest files in ~/Downloads"
+PASS example verb ok: q check "ls -lah --sort=size"
+PASS example verb ok: lm read shot.png
+PASS example verb ok: lm read shot.png "what is the build id?"
+PASS example verb ok: lm read paste
+PASS example verb ok: lm read latest
+PASS example verb ok: see shot.png --ocr
+PASS example verb ok: see shot.png --ui --json
+PASS example verb ok: lm ui-verify shot.png "Save is disabled"
+PASS example verb ok: lm diff before.png after.png
+PASS example verb ok: see diff a.png b.png --no-read --json
+PASS example verb ok: lm doc report.pdf
+PASS example verb ok: lm doc report.pdf "what is the decision?"
+PASS example verb ok: q --preflight --ctx report.pdf
+PASS example verb ok: lm again
+PASS example verb ok: lm again --big
+PASS example verb ok: lm again --code
+PASS example verb ok: lm again --web
+PASS example verb ok: q -c "and sorted by size?"
+PASS example verb ok: lm find "port 5432"
+PASS example verb ok: lm timeline 15
+PASS example verb ok: lm timeline --all
+PASS example verb ok: lm last
+PASS example verb ok: lm review
+PASS example verb ok: review 214
+PASS example verb ok: lm status
+PASS example verb ok: lm models
+PASS example verb ok: lm doctor
+PASS example verb ok: lm fast 1h
+PASS example verb ok: lm fast off
+PASS example verb ok: lm status
+PASS example verb ok: lm help
+PASS example verb ok: lm help read
+PASS example verb ok: lm --capabilities
+PASS example verb ok: lm more
+PASS example verb ok: lm how "text from my last screenshot"
+PASS example verb ok: lm how "what is using memory" --go
+PASS example verb ok: lm how "redo that on a bigger model" --json
+PASS example verb ok: see count dots.png
+PASS example verb ok: see count squares.png --color blue
+PASS example verb ok: see odd grid.png
+PASS example verb ok: q --web "current node LTS version?"
+PASS example verb ok: lm gemini research "state of X"
+PASS example verb ok: lm timeline 10 --errors
+PASS example verb ok: lm last
+PASS example verb ok: lm doctor
+PASS example verb ok: q --json "is 91 a prime number? answer yes or no"
+PASS example verb ok: q --json --format schema.json "classify: ..."
+PASS example verb ok: q describe-data --ctx data.csv --json
+PASS example verb ok: q --preflight --ctx data.xlsx --json
+PASS example verb ok: q describe-data --ctx data.xlsx --sheet Summary --json
+PASS example verb ok: lm gemini --file big.md "summarize the risks"
+PASS example verb ok: lm gemini research "state of X"
+PASS example verb ok: lm gemini ingest-repo .
+PASS example verb ok: lm fleet qa --prompt "who owns this?" docs/*.md
+PASS example verb ok: lm fleet sample <run-dir>
+PASS example verb ok: rg -n "term" docs/
+PASS example verb ok: lm rag index docs/
+PASS example verb ok: lm rag search "concept"
+PASS example verb ok: lm index find fleet_worker
+PASS example verb ok: imagine "a cozy reading nook"
+PASS example verb ok: imagine refine 12 "warmer light"
+PASS example verb ok: lm probe gemma4:26b
+PASS example verb ok: lm bench quick
+PASS example verb ok: lm ui-verify shot.png "the CTA is disabled"
+PASS example verb ok: lm ui-verify --app Finder "there is a Trash item"
+PASS example verb ok: lm opencode
+PASS example verb ok: lm timeline
+PASS example verb ok: lm timeline --errors
+PASS example verb ok: lm timeline --all
+PASS example verb ok: lm last
+PASS example verb ok: lm last gemini
+PASS example verb ok: lm models
+PASS example verb ok: lm models --json
+PASS example verb ok: lm doctor
+PASS example verb ok: lm doctor --json
+PASS example verb ok: lm examples
+PASS example verb ok: q "how do I check disk usage"
+PASS example verb ok: q cmd "kill everything on port 3001"
+PASS example verb ok: git diff | q commit
+PASS example verb ok: q summarize --file report.pdf
+PASS example verb ok: q --big "reason through this tradeoff"
+PASS example verb ok: q intents
+PASS example verb ok: q show -1
+PASS example verb ok: see ~/Desktop/shot.png "what is the build id?"
+PASS example verb ok: see paste "what does the error say?"
+PASS example verb ok: see latest
+PASS example verb ok: see shot.png --ocr
+PASS example verb ok: see dashboard.png --ui
+PASS example verb ok: see count squares.png --color red
+PASS example verb ok: see diff a.png b.png --no-read --json
+PASS example verb ok: warm on 1h
+PASS example verb ok: warm on code 4h
+PASS example verb ok: warm status
+PASS example verb ok: warm status --json
+PASS example verb ok: warm off
+PASS example verb ok: warm off all
+PASS ask -h exits 0
+PASS cmd -h exits 0
+PASS read -h exits 0
+PASS diff -h exits 0
+PASS doc -h exits 0
+PASS again -h exits 0
+PASS find -h exits 0
+PASS review -h exits 0
+PASS status -h exits 0
+PASS fast -h exits 0
+PASS help -h exits 0
+PASS more -h exits 0
+PASS how -h exits 0
+PASS help count exits 0
+PASS help web exits 0
+PASS help failed exits 0
+PASS help json exits 0
+PASS help table exits 0
+PASS gemini -h exits 0
+PASS fleet -h exits 0
+PASS rag -h exits 0
+PASS index -h exits 0
+PASS imagine -h exits 0
+PASS probe -h exits 0
+PASS bench -h exits 0
+PASS ui-verify -h exits 0
+PASS opencode -h exits 0
+PASS timeline -h exits 0
+PASS last -h exits 0
+PASS models -h exits 0
+PASS doctor -h exits 0
+PASS examples -h exits 0
+PASS q -h exits 0
+PASS see -h exits 0
+PASS warm -h exits 0
+PASS -h left logs/ and outputs/ untouched
+PASS gen --out succeeds
+PASS gen writes completion, man, tldr and a doc block
+PASS docs/CAPABILITIES.md block equals a fresh generation
+PASS share/man/man1/lm.1 equals a fresh generation
+PASS share/man/man1/warm.1 equals a fresh generation
+PASS share/man/man1/see.1 equals a fresh generation
+PASS share/man/man1/q.1 equals a fresh generation
+PASS share/tldr/see.page.md equals a fresh generation
+PASS share/tldr/lm.page.md equals a fresh generation
+PASS share/tldr/warm.page.md equals a fresh generation
+PASS share/tldr/q.page.md equals a fresh generation
+PASS share/zsh/_lm equals a fresh generation
+PASS share/zsh/_q equals a fresh generation
+PASS share/zsh/_see equals a fresh generation
+PASS share/zsh/_warm equals a fresh generation
+PASS lm --capabilities --json is JSON
+PASS capabilities: version and conventions
+PASS capabilities: jobs equal the registry
+PASS capabilities: each job carries every registry field
+PASS lm --capabilities <job> --json is one job
+PASS lm --capabilities (text) lists jobs
+PASS how 'quick answer' -> ask
+PASS how 'shell command' -> cmd
+PASS how 'text from a screenshot' -> read
+PASS how 'what changed between two images' -> diff
+PASS how 'summarize a file' -> doc
+PASS how 'redo' -> again
+PASS how 'find an answer i got before' -> find
+PASS how 'review my changes' -> review
+PASS how 'what is using memory' -> status
+PASS how 'keep the model loaded' -> fast
+PASS how 'help with a job' -> help
+PASS how 'which command' -> how
+PASS how: at least 12 keyword phrasings checked
+PASS how 'text from my last screenshot' -> read
+PASS how 'redo that on a bigger model' -> again
+PASS how 'what is using memory' -> status
+PASS how 'what changed between these two screenshots' -> diff
+PASS how 'find the answer I got yesterday about docker' -> find
+PASS how 'keep the model loaded so answers are instant' -> fast
+PASS how: a cloud lane only when the words ask for it
+PASS how: never a cloud lane unprompted
+PASS how --no-model with no match exits 12 with code no_match
+PASS q --json error has remedy and next
+PASS q --json error keeps code and message
+PASS see --json error has remedy and next
+PASS see --json error keeps code and message
+PASS timeline remedy table is readable
+PASS timeline remedy for server_down matches the registry
+PASS timeline remedy for model_missing matches the registry
+PASS timeline remedy for timeout matches the registry
+PASS timeline remedy for ctx_required matches the registry
+PASS timeline remedy for ctx_unreadable matches the registry
+PASS timeline remedy for ctx_binary matches the registry
+PASS timeline remedy for ctx_too_large matches the registry
+PASS timeline remedy for cancelled matches the registry
+PASS timeline remedy for mlx_failed matches the registry
+PASS timeline remedy for model_error matches the registry
+PASS timeline remedy for ocr_missing matches the registry
+PASS timeline remedy for vlm_unavailable matches the registry
+PASS timeline remedy for gemini_unavailable matches the registry
+PASS timeline remedy for gemini_error matches the registry
+PASS hint small_answer is lm again --big
+PASS lm: coloured on a terminal
+PASS help read: coloured on a terminal
+PASS more: coloured on a terminal
+PASS lm piped: no escape codes
+PASS bare lm on a terminal suggests lm read latest after a fresh screenshot
+PASS LM_HINTS=0 silences the suggestion
+PASS lm piped never suggests
+400/400 checks passed

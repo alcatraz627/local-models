@@ -1,0 +1,12 @@
+^D[1m[36mlm help read[0m [2m— text or an answer out of an image[0m
+
+[1;33mSTART[0m
+  [36mlm read shot.png                            [0m [2mwhat is in the image[0m
+  [36mlm read shot.png "what is the build id?"    [0m [2masks for text, IDs and numbers are read exactly first[0m
+  [36mlm read paste                               [0m [2mthe screenshot on your clipboard (Cmd-Ctrl-Shift-4)[0m
+  [36mlm read latest                              [0m [2myour newest screenshot file[0m
+  [36msee shot.png --ocr                          [0m [2mjust the exact text, about a second[0m
+  [36msee shot.png --ui --json                    [0m [2ma structured list of the buttons and labels[0m
+  [36mlm ui-verify shot.png "Save is disabled"    [0m [2mcheck one claim about a screenshot[0m
+
+  [2mExact readers (text, counts) run first; the vision model only adds what they cannot see.[0m
