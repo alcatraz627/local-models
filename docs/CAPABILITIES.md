@@ -73,7 +73,7 @@ A local VLM reads images/screenshots into text. Structural read by default; grou
 when you ask one. Text is good-but-verify (don't trust exact strings blindly).
 
 ```bash
-see ~/Desktop/shot.png                          # verbatim text + UI + layout + anomalies
+see ~/Desktop/shot.png                          # verbatim text + UI + layout (Qwen3-VL-8B on MLX; minicpm if MLX can't run)
 see chart.png "is the trend up or down?"        # grounded answer
 see dashboard.png --ui                          # UI inventory (Qwen3-VL-8B via mlx by default): KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE
 see menu.png --ui "which item is enabled?"      # UI inventory + a focused answer

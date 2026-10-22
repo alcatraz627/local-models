@@ -54,6 +54,13 @@ UI_VISION_MLX="${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"
 # revert `see --ui` to the ollama UI_VISION_MODEL.
 UI_DEFAULT_MLX="${UI_DEFAULT_MLX:-1}"
 
+# Plain `see` reads (no --ui, no diff, no explicit -m) also go to the MLX Qwen3-VL
+# model: it passed 101 of 112 vision checks against minicpm-v4.6's 74
+# (docs/20261022-model-comparison.md; owner approved 2026-10-22). VISION_MODEL stays
+# the fallback: `see` re-runs on it when a big ollama model is resident (the co-load
+# OOM risk) or the MLX read fails. Set READ_DEFAULT_MLX=0 to read with VISION_MODEL.
+READ_DEFAULT_MLX="${READ_DEFAULT_MLX:-1}"
+
 # Sweep/grunt model for high-throughput batch work (lm fleet). granite4:tiny-h is
 # ~1.5x faster than the warm companion (1B active), but chatty as a free agent — only
 # trustworthy behind constrained decoding + the fleet Judge gate (2026-09-11 survey).

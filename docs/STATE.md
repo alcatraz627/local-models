@@ -47,7 +47,9 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   and `lm fleet` / `lm opencode` lease automatically. Only an explicit `forever` pins. There is
   no morning warm-up; `warm-evening-off` (daily 19:00 `off all`, inside gcc-cron) is the backstop.
 - **Tiers (config.sh):** small=`gemma4-e4b-warm` · big=`gemma4:26b` · code=`qwen3.6:35b-a3b`
-  (probe-gated 9/9) · vision=`minicpm-v4.6`. `see --ui` uses Qwen3-VL-8B through MLX by default.
+  (probe-gated 9/9). Every `see` read (plain and `--ui`) uses Qwen3-VL-8B through MLX by default;
+  vision=`minicpm-v4.6` is the automatic fallback when a big ollama model is resident or the MLX
+  read fails (the envelope then carries `.fallback`). `see diff` keeps gemma4:26b.
 - **Intents are data:** `intents/<name>.toml` (including ask/cmd/title/commit/summarize/
   explain-code/describe-data/qa/review/complete/code-dispatch/diy-plan). `describe-data` names
   a deterministic table handler; the other intents route to a model. Adding a handler requires
@@ -221,7 +223,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ### Next round (queued 2026-10-22)
 
-- **Owner decision: plain `see` default.** Switch `VISION_MODEL` from minicpm-v4.6 to Qwen3-VL-8B on MLX? Evidence and trade-offs: `docs/20261022-model-comparison.md`.
+- **Plain `see` default: DONE 2026-10-22** (owner approved). Qwen3-VL-8B on MLX, minicpm-v4.6 as the automatic fallback (`READ_DEFAULT_MLX` in config.sh).
 - **Odd-one-out and counting lane for `see`:** the vision run confirms it. Script baselines hit every seed on many-small-dots counting, odd colour out, and changed-cell location (C02, O03, D07), and most models missed them. The Affinity column-profile prototype is in `.claude/output/20261021-argon-candidates/report.md`.
 - **Qwen3.6-27B (MLX, 16 GB):** not run, because Hugging Face downloads stalled at about 170 KB/s. Pull it again on a good connection and run `probe/vision/run.py` on it.
 - **Older candidate suite** (`probe/candidates/`): stages 1 to 3 still need runners (granite-docling, image tools, MiniCPM5-2B). The vision harness supersedes its stage 0 and stage 1 reads.

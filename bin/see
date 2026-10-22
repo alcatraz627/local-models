@@ -41,6 +41,8 @@ ONLY=""            # diff --only E5,E6 → slice rerun (no model), returns the d
 NO_READ=false      # diff --no-read → skip the VLM prose seat (loop-round default)
 GRID=""            # diff --grid N → override the grid resolution (4–64)
 positionals=()
+ORIG_ARGS=("$@")   # kept so a default MLX read can re-run itself on the fallback model
+MLX_AUTO=false     # true when the MLX model was picked by default, not by -m/--mlx
 LOG="$DIR/logs/see-history.jsonl"
 ART_ROOT="$DIR/outputs/see"
 ART_KEEP=150   # newest artifact folders kept; older ones pruned each run
@@ -84,7 +86,7 @@ show_help() {
   _opt '--grid N'      'diff only: grid resolution 4-64 for E5/E6 (default 8 icons / 16 UIs)'
   _opt '--json'        'one JSON object on stdout, no ANSI; with --ui adds parsed .data (schema-constrained)'
   _opt '--glow'        'render the read through glow (TTY-only, no-op without glow)'
-  _opt '-m, --model M' "vision model (default: \$VISION_MODEL = $MODEL); -m mlx:<hf-repo> uses the mlx-vlm backend"
+  _opt '-m, --model M' "vision model (default: Qwen3-VL on MLX, falling back to \$VISION_MODEL = $MODEL when a big ollama model is resident or MLX fails); -m mlx:<hf-repo> uses the mlx-vlm backend"
   _opt '--mlx'         "route to the mlx-vlm backend outside ollama (Qwen3-VL, higher UI-structure accuracy) = \$UI_VISION_MLX"
   _opt '-h, --help'    'this help'
   _sec NOTES
@@ -221,8 +223,21 @@ done
 # routine UI-read path does not load the 17GB gemma4:26b tier (memory reclaim). Runs
 # BEFORE the mlx: detection so the detection picks it up. Toggle: UI_DEFAULT_MLX=0.
 if $UI && ! $MODEL_SET && [ "${UI_DEFAULT_MLX:-1}" = 1 ]; then
-  MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MODEL_SET=true
+  MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MODEL_SET=true; MLX_AUTO=true
 fi
+# Plain reads default to the same MLX model (READ_DEFAULT_MLX); diff keeps its own
+# default and --ocr is model-free. MODEL_SET stays false so nothing else re-routes it.
+if ! $UI && ! $OCR && ! $MODEL_SET && [ "${READ_DEFAULT_MLX:-1}" = 1 ] && [ "${positionals[0]:-}" != diff ]; then
+  MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MLX_AUTO=true
+fi
+# The fallback: re-run this same command on VISION_MODEL (minicpm). Used when MLX
+# would load beside a big resident ollama model, or when the MLX read fails.
+fallback_read() { # REASON
+  echo "see: $1, so reading with ${VISION_MODEL:-minicpm-v4.6} instead" >&2
+  # exec skips the EXIT trap; the re-run recaptures or recrops from the original args
+  [ -n "${SEE_TMP:-}" ] && rm -rf "$SEE_TMP" 2>/dev/null
+  SEE_FALLBACK="$1" exec "$0" "${ORIG_ARGS[@]}" -m "${VISION_MODEL:-minicpm-v4.6}"
+}
 
 # --mlx / -m mlx:<repo>: route to the mlx-vlm backend instead of ollama. The image
 # never leaves the box either way; mlx-vlm runs in .venv and loads fresh per call
@@ -565,6 +580,9 @@ elif $MLX; then
   # then ensure the mem-guard backstop is up (idempotent; it is single-instance-locked).
   if ollama_up; then
     _big="$(ollama_cli ps 2>/dev/null | awk 'NR>1 && $4=="GB" && $3+0>=8 {print $1}')"
+    if [ -n "$_big" ] && $MLX_AUTO; then
+      fallback_read "a large ollama model is resident ($_big) and mlx beside it can run the machine out of memory"
+    fi
     [ -n "$_big" ] && echo "see: WARNING — a large ollama model is resident ($_big); running mlx-vlm alongside it can OOM the machine. Free it first: ollama stop $_big" >&2
   fi
   if ! pgrep -f "scripts/mem-guard.py" >/dev/null 2>&1; then
@@ -593,6 +611,9 @@ $USER" --max-tokens "$_mlx_max" 2>"$SEE_TMP/mlx.err")"
       VLM_FAILED=true
       TEXT="(visual read failed — the deterministic evidence pack below is complete)"
       rc=0
+    elif $MLX_AUTO; then
+      # the last line naming an error, not the traceback's trailing help link
+      fallback_read "the mlx read failed ($(rg -i -N 'error' "$SEE_TMP/mlx.err" 2>/dev/null | tail -n 1 | head -c 140))"
     else
       emit_error mlx_failed "mlx-vlm read failed: $(head -c 200 "$SEE_TMP/mlx.err" 2>/dev/null)" 10
     fi
@@ -751,7 +772,9 @@ if [ "$MODE" = json ]; then
   # --ui --json: hand consumers the parsed object in .data (null if the model
   # somehow broke schema), not a JSON string to re-parse. Mirrors q --format.
   # artifact = the read's folder (source copy + read.md), for evidence trails.
-  if [ -n "$FMT" ]; then
+  # A read that fell back from the default MLX model says so in .fallback.
+  _fb() { if [ -n "${SEE_FALLBACK:-}" ]; then jq -c --arg fb "$SEE_FALLBACK" '. + {fallback:$fb}'; else cat; fi; }
+  { if [ -n "$FMT" ]; then
     jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
        '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end),
          # the mlx path is not schema-constrained and some models wrap the JSON in
@@ -772,7 +795,7 @@ if [ "$MODE" = json ]; then
   else
     jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
        '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end)}'
-  fi
+  fi; } | _fb
 else
   if $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then
     printf '%s\n' "$TEXT" | glow -

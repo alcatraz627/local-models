@@ -49,9 +49,9 @@ Every model failed the letter count, and most missed that `^a.c$` matches the li
 - `see --ui --json` on MLX returned no `.data` when a model wrapped its JSON in a code fence. It now finds the JSON inside.
 - Two scorer bugs that failed correct answers on format alone (a mid-line `ANSWER:`, and a toggle given as its own element) were found by reading answers and fixed. `probe/vision/rescore.py` re-judges saved replies without re-running models.
 
-## Open decision
+## Decision (owner, 2026-10-22)
 
-Switch plain `see` reads from minicpm-v4.6 to Qwen3-VL-8B on MLX? It gains 16 cases and loses one seed of one case, and it costs about 2 s more per call plus a fresh model load each time. The default lives in `config.sh` (`VISION_MODEL`).
+Plain `see` reads now use Qwen3-VL-8B on MLX. minicpm-v4.6 stays installed as the automatic fallback: `see` re-runs on it when a big Ollama model is resident or the MLX read fails, and the JSON reply then carries a `fallback` reason. `READ_DEFAULT_MLX=0` in `config.sh` turns the new default off.
 
 ## How to re-run
 
