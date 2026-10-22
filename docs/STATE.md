@@ -95,14 +95,12 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
-- **2026-10-22 · lm usability wave:** an audit of the CLI as a person uses it (17 findings,
-  `.claude/output/20261022-lm-usability/audit.md`) built on the `lm-usability` branch: `lm`
-  now opens on jobs (`lm "q"`, cmd, read, diff, doc, again, find, fast) with `lm more` for the
-  rest; bare `q` routes on a terminal; `q check` and `lib/cmdcheck.py` check command answers
-  against the tool's own help; `q again` and a repeat hint; `see paste` / `see latest`; `see`
-  text mode reads exact text and counts before asking a model; history rows carry `tty` and
-  `session` and the history views default to this terminal (`--all` / `LM_ALL=1` for
-  everyone). Build notes: `.claude/output/20261022-lm-usability/build-summary.md`.
+- **2026-10-22 · lm usability wave:** 17 findings from an audit of the CLI as a person uses it.
+  - `lm` opens on jobs (ask, cmd, read, diff, doc, again, find, fast); `lm more` has the rest.
+  - Bare `q` routes on a terminal. `q check` tests a command answer against the tool's own help.
+  - `q again`, `see paste`, `see latest`. `see` reads exact text and counts before a model.
+  - History views default to this terminal; `--all` or `LM_ALL=1` shows every caller.
+  - Audit: `.claude/output/20261022-lm-usability/audit.md`. Build notes: `build-summary.md` beside it.
 
 - **2026-10-22 · vision comparison + lm CLI review wave:** a 42-case vision harness
   (`probe/vision/`, deterministic truths, meaning-based scorers, script baselines, selftest
@@ -239,7 +237,10 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - **Older candidate suite** (`probe/candidates/`): stages 1 to 3 still need runners (granite-docling, image tools, MiniCPM5-2B). The vision harness supersedes its stage 0 and stage 1 reads.
 - **Codex is out of quota until 2026-11-20.** Builds go to sonnet seats until then. Argon stays the ideation and review seat.
 - **Outside-model track record:** `docs/model-notes.md`. Add a row after every Argon, Codex or Gemini run.
-- **Pre-existing verify.sh failures (2, as of 2026-10-22):** the guard-model-tier block path (a gcc hook, outside this repo), and the `com.alcatraz.local-models-ollama` launchd job reporting exit 1 ("address already in use" after an idle shutdown, a restart race in `lm-serve`). Run from a worktree, `lm doctor` also fails its PATH checks because the wrappers point at the main checkout; that one is expected.
+- **Pre-existing verify.sh failures (2, as of 2026-10-22):**
+  - The guard-model-tier block path, a gcc hook outside this repo.
+  - The ollama launchd job exits 1 ("address already in use" after idle shutdown, a restart race in `lm-serve`).
+  - From a worktree, `lm doctor` also fails its PATH checks. That is expected: the wrappers point at the main checkout.
 
 - **Speech and retrieval:** the September trials in `docs/20260926-lm-implementation-trials.md`
   establish feasibility, not adoption. Record 20 owner-spoken Mac clips and a held-out
