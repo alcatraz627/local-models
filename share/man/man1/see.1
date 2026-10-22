@@ -1,37 +1,45 @@
-.TH SEE 1 "" "local-models"
+.TH SEE 1 "2026-10-22" "local-models"
 .SH NAME
-see \- read an image into text with a local vision model (the image never leaves this Mac)
+see \- read an image into text with a local vision model (the image
+never leaves this Mac)
 .SH SYNOPSIS
 .B see
 <image|paste|latest> [\(dqquestion\(dq] [\-\-ocr|\-\-ui] [\-\-json]
 .SH DESCRIPTION
-Read an image into text with a local vision model (the image never leaves this Mac).
+Read an image into text with a local vision model (the image never
+leaves this Mac).
 .PP
-Input: an image path, paste, latest, or a subcommand (count, odd, diff, more, history, show).
+Input: an image path, paste, latest, or a subcommand (count, odd, diff,
+more, history, show).
 .PP
-Output: plain text; \-\-json one object; \-\-ui \-\-json adds the parsed element list under .data.
+Output: plain text; \-\-json one object; \-\-ui \-\-json adds the parsed
+element list under .data.
 .SH OPTIONS
 .TP
 .B \-\-ocr
 EXACT text via Apple Vision (no model, ~instant); composes with \-\-crop
 .TP
 .B \-\-ui
-UI\-inventory read for screenshots/mocks (KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE)
+UI\-inventory read for screenshots/mocks
+(KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE)
 .TP
 .B \-\-no\-measure
 skip the exact\-first step: go straight to the model read
 .TP
 .B \-\-menubar
-screencapture the main\-display top strip and \-\-ui it (needs Screen Recording perm)
+screencapture the main\-display top strip and \-\-ui it (needs Screen
+Recording perm)
 .TP
 .B \-\-crop WxH+X+Y
 read only this pixel window of the image (crop\-then\-read lifts recall)
 .TP
 .B \-\-region NAME
-named crop: top|bottom (third) · left|right (half) · center (middle quarter)
+named crop: top|bottom (third) \[u00B7] left|right (half) \[u00B7]
+center (middle quarter)
 .TP
 .B \-\-only E5[,E6]
-diff only: re\-run just these extractors (E3/E4/E5/E6), return the delta, no model
+diff only: re\-run just these extractors (E3/E4/E5/E6), return the
+delta, no model
 .TP
 .B \-\-grid N
 diff only: grid resolution 4\-64 for E5/E6 (default 8 icons / 16 UIs)
@@ -40,28 +48,35 @@ diff only: grid resolution 4\-64 for E5/E6 (default 8 icons / 16 UIs)
 diff only: evidence pack and plain summary, no model read
 .TP
 .B \-\-color C
-count only: objects of this colour (red green blue yellow orange purple gray black white, or #hex)
+count only: objects of this colour (red green blue yellow orange purple
+gray black white, or #hex)
 .TP
 .B \-\-filled\-only
 count only: drop hollow outlines, keep solid shapes
 .TP
 .B \-\-min\-area N
-count/odd: ignore blobs smaller than N pixels (default scales with image size)
+count/odd: ignore blobs smaller than N pixels (default scales with image
+size)
 .TP
 .B \-\-json
-one JSON object on stdout, no ANSI; with \-\-ui adds parsed .data (schema\-constrained)
+one JSON object on stdout, no ANSI; with \-\-ui adds parsed .data
+(schema\-constrained)
 .TP
 .B \-\-glow
 render the read through glow (TTY\-only, no\-op without glow)
 .TP
 .B \-m, \-\-model M
-vision model (default: Qwen3\-VL on MLX, falling back to $VISION_MODEL = minicpm\-v4.6 when a big ollama model is resident or MLX fails); \-m mlx:<hf\-repo> uses the mlx\-vlm backend
+vision model (default: Qwen3\-VL on MLX, falling back to $VISION_MODEL =
+minicpm\-v4.6 when a big ollama model is resident or MLX fails); \-m
+mlx:<hf\-repo> uses the mlx\-vlm backend
 .TP
 .B \-\-mlx
-route to the mlx\-vlm backend outside ollama (Qwen3\-VL, higher UI\-structure accuracy) = $UI_VISION_MLX
+route to the mlx\-vlm backend outside ollama (Qwen3\-VL, higher
+UI\-structure accuracy) = $UI_VISION_MLX
 .TP
 .B \-\-all
-with more, open \-1 or show \-1: include reads from other terminals, agents and hooks
+with more, open \-1 or show \-1: include reads from other terminals,
+agents and hooks
 .SH EXAMPLES
 .TP
 .B see ~/Desktop/shot.png \(dqwhat is the build id?\(dq
@@ -93,7 +108,8 @@ Success.
 The work ran and failed, or a check failed.
 .TP
 .B 2
-Bad usage: unknown flag, missing value, unknown verb.
+Bad usage: unknown flag, missing value, or a single unknown word
+(several words are taken as a question).
 .TP
 .B 10
 Server down or a backend call failed.
@@ -102,7 +118,8 @@ Server down or a backend call failed.
 Model or backend not available.
 .TP
 .B 12
-Input missing or unreadable (file, image, history entry, optional dependency).
+Input missing or unreadable (file, image, history entry, optional
+dependency).
 .TP
 .B 13
 Wall\-clock timeout.
@@ -115,6 +132,7 @@ Cancelled by the caller.
 .SH FILES
 .TP
 .B logs/*\-history.jsonl
-One JSON line per call. History is per terminal by default; \-\-all or LM_ALL=1 reaches every caller.
+One JSON line per call. History is per terminal by default; \-\-all or
+LM_ALL=1 reaches every caller.
 .SH SEE ALSO
 lm(1), q(1), warm(1), imagine, review

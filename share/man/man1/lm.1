@@ -1,6 +1,7 @@
-.TH LM 1 "" "local-models"
+.TH LM 1 "2026-10-22" "local-models"
 .SH NAME
-lm \- local models on this Mac: the front door to q, see, review, imagine and warm
+lm \- local models on this Mac: the front door to q, see, review,
+imagine and warm
 .SH SYNOPSIS
 .B lm
 \(dqquestion\(dq | verb [args]
@@ -11,10 +12,12 @@ lm \- local models on this Mac: the front door to q, see, review, imagine and wa
 .B lm how
 \(dqwhat I want\(dq
 .SH DESCRIPTION
-Local models on this Mac. Nothing leaves the machine unless a command is marked as leaving it
+Local models on this Mac. Nothing leaves the machine unless a command is
+marked as leaving it
 (lm gemini, and q \-\-web).
 .PP
-Every command takes \-h. This page is generated from lib/verbs.toml, the same registry
+Every command takes \-h. This page is generated from lib/verbs.toml, the
+same registry
 that drives the lm screens, lm \-\-capabilities and lm how.
 .SH COMMANDS
 .TP
@@ -87,7 +90,7 @@ Opencode on the local code model, leased for the session.
 .B lm timeline [N] [\-\-errors] [\-\-tool T] [\-\-all] [\-\-json]
 Your recent calls, newest last.
 .TP
-.B lm last [tool] [\-\-all]
+.B lm last [tool] [\-\-all] [\-\-json]
 Your latest call, in full.
 .TP
 .B lm models [\-\-json]
@@ -99,21 +102,27 @@ Health check of the whole toolkit.
 .B lm examples
 A showcase of everything, grouped by job.
 .TP
-.B q [intent] \(dq<prompt>\(dq [\-\-big|\-\-code|\-\-web] [\-\-ctx FILE] [\-\-json]
-Quick local LLM companion: answers, shell commands, commit messages, file Q&A.
+.B q [intent] \(dq<prompt>\(dq [\-\-big|\-\-code|\-\-web] [\-\-ctx \
+FILE] [\-\-json]
+Quick local LLM companion: answers, shell commands, commit messages,
+file Q&A.
 .TP
-.B see <image|paste|latest> [\(dqquestion\(dq] [\-\-ocr|\-\-ui] [\-\-json]
-Read an image into text with a local vision model (the image never leaves this Mac).
+.B see <image|paste|latest> [\(dqquestion\(dq] [\-\-ocr|\-\-ui] \
+[\-\-json]
+Read an image into text with a local vision model (the image never
+leaves this Mac).
 .TP
 .B warm on|off|status [tier|model] [time]
 Keep a model loaded so q answers instantly, and say when it unloads.
 .SH AGENT MENU
 .TP
 .B lm \-\-capabilities [job] [\-\-json]
-Every job with its inputs, output shape, exit codes, cost and side effects.
+Every job with its inputs, output shape, exit codes, cost and side
+effects.
 .TP
 .B lm how "what I want" [\-\-go] [\-\-json]
-Find the command for a request. Words first, the small model only when no job matches.
+Find the command for a request. Words first, the small model only when
+no job matches.
 .SH EXAMPLES
 .TP
 .B lm \(dqhow do I see what is using port 5432\(dq
@@ -126,7 +135,8 @@ Prints the command and nothing else.
 What is in the image.
 .TP
 .B lm diff before.png after.png
-A three\-line summary: where, whether text changed, whether colours changed.
+A three\-line summary: where, whether text changed, whether colours
+changed.
 .TP
 .B lm doc report.pdf
 A summary (PDF, Word, HTML, text, spreadsheets).
@@ -135,10 +145,12 @@ A summary (PDF, Word, HTML, text, spreadsheets).
 Your last question, one step stronger (small, then big).
 .TP
 .B lm find \(dqport 5432\(dq
-Matching questions and answers across q, see, gemini and imagine, yours first.
+Matching questions and answers across q, see, gemini and imagine, yours
+first.
 .TP
 .B lm review
-Your uncommitted changes (takes a few minutes; loads the 23 GB code model).
+Your uncommitted changes (takes a few minutes; loads the 23 GB code
+model).
 .TP
 .B lm status
 Server, free memory, loaded models, when they unload.
@@ -199,7 +211,8 @@ Success.
 The work ran and failed, or a check failed.
 .TP
 .B 2
-Bad usage: unknown flag, missing value, unknown verb.
+Bad usage: unknown flag, missing value, or a single unknown word
+(several words are taken as a question).
 .TP
 .B 10
 Server down or a backend call failed.
@@ -208,7 +221,8 @@ Server down or a backend call failed.
 Model or backend not available.
 .TP
 .B 12
-Input missing or unreadable (file, image, history entry, optional dependency).
+Input missing or unreadable (file, image, history entry, optional
+dependency).
 .TP
 .B 13
 Wall\-clock timeout.
@@ -221,6 +235,7 @@ Cancelled by the caller.
 .SH FILES
 .TP
 .B logs/*\-history.jsonl
-One JSON line per call. History is per terminal by default; \-\-all or LM_ALL=1 reaches every caller.
+One JSON line per call. History is per terminal by default; \-\-all or
+LM_ALL=1 reaches every caller.
 .SH SEE ALSO
 q(1), see(1), warm(1), imagine, review

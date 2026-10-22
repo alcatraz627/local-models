@@ -35,7 +35,8 @@ JOBS
 KEEP IT HANDY
   lm status                        what is loaded, free memory, when it unloads
   lm fast 1h                       keep answers instant for an hour (lm fast off to free the memory)
-  lm how "what I want"             find the command for it, without running anything (--go runs it)
+  lm how "what I want"             find the command for it, without running anything (--go runs
+                                   read-only ones)
   lm help <job>                    the steps for one job: ask, cmd, doc, read, diff, count, again,
                                    find, web, fast, failed
   lm more                          everything else: gemini ☁, fleet, rag, index, imagine, probe,
@@ -74,7 +75,7 @@ KEEP IT HANDY
 | `lm ui-verify <img> "claim"` | check claims about a screenshot against a UI inventory | vision, 20-60 s | no |
 | `lm opencode [args]` | opencode on the local code model, leased for the session | code, 30 to load; then interactive s | no |
 | `lm timeline [N] [--errors] [--tool T] [--all] [--json]` | your recent calls, newest last | no model, under 1 s | no |
-| `lm last [tool] [--all]` | your latest call, in full | no model, under 1 s | no |
+| `lm last [tool] [--all] [--json]` | your latest call, in full | no model, under 1 s | no |
 | `lm models [--json]` | installed models and which tier each is | no model, under 1 s | no |
 | `lm doctor [--json]` | health check of the whole toolkit | no model, 1-3 s | no |
 | `lm examples` | a showcase of everything, grouped by job | no model, under 1 s | no |

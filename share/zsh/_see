@@ -9,7 +9,7 @@ _lm_shots() {
   shots=( ${dir}/Screen*.png(N.om[1,8]) )
   _alternative \
     'special:shortcut:((paste\:"the image on your clipboard" latest\:"your newest screenshot"))' \
-    'shots:recent screenshot:(${shots})' \
+    'shots:recent screenshot:{compadd -- "${shots[@]}"}' \
     'files:image file:_files -g "*.(png|jpg|jpeg|webp|gif|heic)"'
 }
 
@@ -18,24 +18,24 @@ _see() {
   subs=( 'paste:the image on your clipboard' 'latest:your newest screenshot' 'count:count objects by measuring pixels' 'odd:find the one item that differs' 'diff:what changed between two images' 'more:follow up on the last image' 'history:past reads' 'show:one full read' 'open:the artifact folder of a read' 'note:add a note to a read' 'reshoot:replay a loop recipe' )
   local -a opts
   opts=(
-    '--ocr[EXACT text via Apple Vision (no model, ~instant); composes]'
+    '--ocr[EXACT text via Apple Vision (no model, ~instant); composes with --crop]'
     '--ui[UI-inventory read for screenshots/mocks]'
     '--no-measure[skip the exact-first step\: go straight to the model read]'
-    '--menubar[screencapture the main-display top strip and --ui it (needs]'
-    '--crop[read only this pixel window of the image (crop-then-read]:value:'
-    '--region[named crop\: top|bottom (third) · left|right (half) · center]:value:'
-    '--only[diff only\: re-run just these extractors (E3/E4/E5/E6), return]:value:'
-    '--grid[diff only\: grid resolution 4-64 for E5/E6 (default 8 icons /]:value:'
+    '--menubar[screencapture the main-display top strip and --ui]'
+    '--crop[read only this pixel window of the image (crop-then-read lifts recall)]:value:'
+    '--region[named crop\: top|bottom (third) · left|right (half) · center (middle quarter)]:value:'
+    '--only[diff only\: re-run just these extractors (E3/E4/E5/E6), return the delta]:value:'
+    '--grid[diff only\: grid resolution 4-64 for E5/E6 (default 8 icons / 16 UIs)]:value:'
     '--no-read[diff only\: evidence pack and plain summary, no model read]'
-    '--color[count only\: objects of this colour (red green blue yellow]:value:'
+    '--color[count only\: objects of this colour]:value:'
     '--filled-only[count only\: drop hollow outlines, keep solid shapes]'
-    '--min-area[count/odd\: ignore blobs smaller than N pixels (default scales]:value:'
-    '--json[one JSON object on stdout, no ANSI; with --ui adds parsed]'
+    '--min-area[count/odd\: ignore blobs smaller than N pixels (default scales with image size)]:value:'
+    '--json[one JSON object on stdout, no ANSI; with --ui adds parsed .data]'
     '--glow[render the read through glow (TTY-only, no-op without glow)]'
-    '-m[vision model (default\: Qwen3-VL on MLX, falling back to]'
-    '--model[vision model (default\: Qwen3-VL on MLX, falling back to]'
-    '--mlx[route to the mlx-vlm backend outside ollama (Qwen3-VL, higher]'
-    '--all[with more, open -1 or show -1\: include reads from other]'
+    '-m[vision model]:model:'
+    '--model[vision model]:model:'
+    '--mlx[route to the mlx-vlm backend outside ollama]'
+    '--all[with more, open -1 or show -1\: include reads from other terminals]'
   )
   if (( CURRENT == 2 )); then
     _lm_shots

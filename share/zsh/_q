@@ -3,36 +3,36 @@
 
 _q() {
   local -a intents
-  intents=( 'ask:direct answer, <=2 sentences' 'cmd:a single macOS shell command, nothing else' 'code-dispatch:scoped code change under a pre-written judge — the local coder as a worker, never an architect' 'commit:a git commit message (pipe the diff in)' 'complete:finish an unfinished code file — implement stubs to spec, output the whole file' 'describe-data:deterministic row, schema, missing-value, and numeric range profile' 'diy-plan:internal\: classify a prompt into {intent, web, file, image, tier, probe} for --diy' 'explain-code:what the code does + flags dangerous bits' 'qa:answer grounded ONLY in the context document' 'review:code/PR review — bugs, risks, broken invariants, missing tests' 'summarize:TL;DR of the context document, length-adaptive' 'title:a 2-5 word title (tab titles, fire-and-forget)' )
+  intents=( 'ask:direct answer, <=2 sentences' 'cmd:a single macOS shell command, nothing else' 'code-dispatch:scoped code change under a pre-written judge — the local coder as a worker' 'commit:a git commit message (pipe the diff in)' 'complete:finish an unfinished code file — implement stubs to spec' 'describe-data:deterministic row, schema, missing-value, and numeric range profile' 'diy-plan:internal\: classify a prompt into {intent, web, file, image, tier, probe}' 'explain-code:what the code does + flags dangerous bits' 'qa:answer grounded ONLY in the context document' 'review:code/PR review — bugs, risks, broken invariants, missing tests' 'summarize:TL;DR of the context document, length-adaptive' 'title:a 2-5 word title (tab titles, fire-and-forget)' )
   local -a opts
   opts=(
-    '--big[use the big (reasoning) / code tier for this call]'
-    '--code[use the big (reasoning) / code tier for this call]'
-    '--web[search the web first (DDG, no key) and answer from the]'
-    '--route[force or skip the automatic routing of image paths, file]'
-    '--no-route[force or skip the automatic routing of image paths, file]'
-    '--diy[let q route itself with a planner pass\: intent, web, file]'
+    '--big[use the big (reasoning) tier for this call]'
+    '--code[use the code tier for this call]'
+    '--web[search the web first (DDG, no key) and answer from the results, cited]'
+    '--route[force the automatic routing of image paths, file paths and typos]'
+    '--no-route[skip the automatic routing of image paths, file paths and typos]'
+    '--diy[let q route itself with a planner pass\: intent, web, file, tier]'
     '-c[continue your last exchange / entry N]'
     '--continue[continue your last exchange / entry N]'
-    '-m[model or tier alias\: small | big | code | sweep | <name>]'
-    '--model[model or tier alias\: small | big | code | sweep | <name>]'
+    '-m[model or tier alias\: small | big | code | sweep | <name> (default\: small)]:model:(small big code sweep)'
+    '--model[model or tier alias\: small | big | code | sweep | <name> (default\: small)]:model:(small big code sweep)'
     '--think[show the reasoning trace (dimmed, on stderr; off by default)]'
-    '--no-stats[hide the gray token line (text mode; machine modes always]'
+    '--no-stats[hide the gray token line (text mode; machine modes always carry the counts)]'
     '--raw[no system prompt (bare model)]'
     '--json[machine mode\: one JSON object on stdout, no ANSI]'
     '--stream-json[machine mode\: NDJSON chunk/done/error lines]'
-    '--format[constrain output to a JSON schema (with --json\: adds parsed]:file:_files'
-    '--glow[render the reply through glow (buffers output; TTY-only]'
+    '--format[constrain output to a JSON schema (with --json\: adds parsed .data)]:file:_files'
+    '--glow[render the reply through glow (buffers output; TTY-only, no-op without glow)]'
     '--ctx[context document from a file or stdin (- = stdin)]:file:_files'
     '--file[context document from a file or stdin (- = stdin)]:file:_files'
     '--ctx-name[the document'\''s display name (framing hint)]:value:'
-    '--sheet[XLSX sheet to read (1-based number or name; required for]:value:'
-    '--preflight[inspect extracted input, context size, and sheet selection]'
-    '--prose[describe-data only\: add optional model interpretation after]'
-    '--max-ctx[read at most N chars of the document (default 16000; the cut]:value:'
-    '--timeout[wall-clock cap; structured timeout error after]:value:'
+    '--sheet[XLSX sheet to read]:value:'
+    '--preflight[inspect extracted input, context size, and sheet selection without a model]'
+    '--prose[describe-data only\: add optional model interpretation after exact profile]'
+    '--max-ctx[read at most N chars of the document (default 16000; the cut is printed)]:value:'
+    '--timeout[wall-clock cap; structured timeout error]:value:'
     '--intent[intent as a flag (same set as the positional token)]:value:'
-    '--all[with show -1, -c or history\: include calls from other]'
+    '--all[with show -1, -c or history\: include calls from other terminals]'
   )
   if (( CURRENT == 2 )) && [[ $PREFIX != -* ]]; then
     _describe -t intents 'q intent' intents

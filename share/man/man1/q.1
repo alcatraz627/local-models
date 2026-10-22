@@ -1,15 +1,20 @@
-.TH Q 1 "" "local-models"
+.TH Q 1 "2026-10-22" "local-models"
 .SH NAME
-q \- quick local LLM companion: answers, shell commands, commit messages, file Q&A
+q \- quick local LLM companion: answers, shell commands, commit
+messages, file Q&A
 .SH SYNOPSIS
 .B q
-[intent] \(dq<prompt>\(dq [\-\-big|\-\-code|\-\-web] [\-\-ctx FILE] [\-\-json]
+[intent] \(dq<prompt>\(dq [\-\-big|\-\-code|\-\-web] [\-\-ctx FILE]
+[\-\-json]
 .SH DESCRIPTION
-Quick local LLM companion: answers, shell commands, commit messages, file Q&A.
+Quick local LLM companion: answers, shell commands, commit messages,
+file Q&A.
 .PP
-Input: a prompt, optional intent, optional document (\-\-ctx FILE or stdin).
+Input: a prompt, optional intent, optional document (\-\-ctx FILE or
+stdin).
 .PP
-Output: plain text; \-\-json one object; \-\-stream\-json NDJSON; \-\-format SCHEMA adds parsed .data.
+Output: plain text; \-\-json one object; \-\-stream\-json NDJSON;
+\-\-format SCHEMA adds parsed .data.
 .SH OPTIONS
 .TP
 .B \-\-big / \-\-code
@@ -22,19 +27,22 @@ search the web first (DDG, no key) and answer from the results, cited
 force or skip the automatic routing of image paths, file paths and typos
 .TP
 .B \-\-diy
-let q route itself with a planner pass: intent, web, file, tier, narrated in gray
+let q route itself with a planner pass: intent, web, file, tier,
+narrated in gray
 .TP
 .B \-c, \-\-continue [N]
 continue your last exchange / entry N
 .TP
 .B \-m, \-\-model M
-model or tier alias: small | big | code | sweep | <name> (default: small)
+model or tier alias: small | big | code | sweep | <name> (default:
+small)
 .TP
 .B \-\-think
 show the reasoning trace (dimmed, on stderr; off by default)
 .TP
 .B \-\-no\-stats
-hide the gray token line (text mode; machine modes always carry the counts)
+hide the gray token line (text mode; machine modes always carry the
+counts)
 .TP
 .B \-\-raw
 no system prompt (bare model)
@@ -49,7 +57,8 @@ machine mode: NDJSON chunk/done/error lines
 constrain output to a JSON schema (with \-\-json: adds parsed .data)
 .TP
 .B \-\-glow
-render the reply through glow (buffers output; TTY\-only, no\-op without glow)
+render the reply through glow (buffers output; TTY\-only, no\-op without
+glow)
 .TP
 .B \-\-ctx, \-\-file FILE | \-
 context document from a file or stdin (\- = stdin)
@@ -58,13 +67,16 @@ context document from a file or stdin (\- = stdin)
 the document's display name (framing hint)
 .TP
 .B \-\-sheet NAME|N
-XLSX sheet to read (1\-based number or name; required for multi\-sheet describe\-data)
+XLSX sheet to read (1\-based number or name; required for multi\-sheet
+describe\-data)
 .TP
 .B \-\-preflight
-inspect extracted input, context size, and sheet selection without a model call
+inspect extracted input, context size, and sheet selection without a
+model call
 .TP
 .B \-\-prose
-describe\-data only: add optional model interpretation after exact profile
+describe\-data only: add optional model interpretation after exact
+profile
 .TP
 .B \-\-max\-ctx N
 read at most N chars of the document (default 16000; the cut is printed)
@@ -76,7 +88,8 @@ wall\-clock cap; structured timeout error after
 intent as a flag (same set as the positional token)
 .TP
 .B \-\-all
-with show \-1, \-c or history: include calls from other terminals, agents and hooks
+with show \-1, \-c or history: include calls from other terminals,
+agents and hooks
 .SH INTENTS
 .TP
 .B ask
@@ -86,19 +99,22 @@ Direct answer, <=2 sentences.
 A single macOS shell command, nothing else.
 .TP
 .B code\-dispatch
-Scoped code change under a pre\-written judge — the local coder as a worker, never an architect.
+Scoped code change under a pre\-written judge \[u2014] the local coder
+as a worker, never an architect.
 .TP
 .B commit
 A git commit message (pipe the diff in).
 .TP
 .B complete
-Finish an unfinished code file — implement stubs to spec, output the whole file.
+Finish an unfinished code file \[u2014] implement stubs to spec, output
+the whole file.
 .TP
 .B describe\-data
 Deterministic row, schema, missing\-value, and numeric range profile.
 .TP
 .B diy\-plan
-Internal: classify a prompt into {intent, web, file, image, tier, probe} for \-\-diy.
+Internal: classify a prompt into {intent, web, file, image, tier, probe}
+for \-\-diy.
 .TP
 .B explain\-code
 What the code does + flags dangerous bits.
@@ -107,7 +123,7 @@ What the code does + flags dangerous bits.
 Answer grounded ONLY in the context document.
 .TP
 .B review
-Code/PR review — bugs, risks, broken invariants, missing tests.
+Code/PR review \[u2014] bugs, risks, broken invariants, missing tests.
 .TP
 .B summarize
 TL;DR of the context document, length\-adaptive.
@@ -145,7 +161,8 @@ Success.
 The work ran and failed, or a check failed.
 .TP
 .B 2
-Bad usage: unknown flag, missing value, unknown verb.
+Bad usage: unknown flag, missing value, or a single unknown word
+(several words are taken as a question).
 .TP
 .B 10
 Server down or a backend call failed.
@@ -154,7 +171,8 @@ Server down or a backend call failed.
 Model or backend not available.
 .TP
 .B 12
-Input missing or unreadable (file, image, history entry, optional dependency).
+Input missing or unreadable (file, image, history entry, optional
+dependency).
 .TP
 .B 13
 Wall\-clock timeout.
@@ -167,6 +185,7 @@ Cancelled by the caller.
 .SH FILES
 .TP
 .B logs/*\-history.jsonl
-One JSON line per call. History is per terminal by default; \-\-all or LM_ALL=1 reaches every caller.
+One JSON line per call. History is per terminal by default; \-\-all or
+LM_ALL=1 reaches every caller.
 .SH SEE ALSO
 lm(1), see(1), warm(1), imagine, review

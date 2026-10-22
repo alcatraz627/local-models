@@ -216,7 +216,7 @@ case "${1:-}" in
   -h|--help|help)        show_help; exit 0 ;;
   history)               shift
                          HIST_JSON=false; HIST_N=15
-                         for harg in "$@"; do case "$harg" in --json) HIST_JSON=true ;; --all) LM_ENTRY_SCOPE=all ;; *) HIST_N="$harg" ;; esac; done
+                         for harg in "$@"; do case "$harg" in -h|--help) show_help; exit 0 ;; --json) HIST_JSON=true ;; --all) LM_ENTRY_SCOPE=all ;; *) HIST_N="$harg" ;; esac; done
                          if $HIST_JSON; then
                            if [ "$LM_ENTRY_SCOPE" = mine ]; then mine_history "$HIST_N" true; else jsonl_history_json "$LOG" "$HIST_N"; fi
                            exit 0
@@ -224,7 +224,7 @@ case "${1:-}" in
                          show_history "$HIST_N"; exit 0 ;;
   show)                  shift
                          SHOW_N=""
-                         for sarg in "$@"; do case "$sarg" in --all) LM_ENTRY_SCOPE=all ;; *) SHOW_N="$sarg" ;; esac; done
+                         for sarg in "$@"; do case "$sarg" in -h|--help) show_help; exit 0 ;; --all) LM_ENTRY_SCOPE=all ;; *) SHOW_N="$sarg" ;; esac; done
                          show_entry "$SHOW_N"; exit $? ;;
   intents)               list_intents; exit 0 ;;
   models)                exec "$DIR/bin/lm" models "${@:2}" ;;
@@ -1059,17 +1059,13 @@ if mode == "text" and stats == "true" and sys.stderr.isatty() and not os.environ
             hint_key = "repeat"
     except Exception:
         pass
-    if hint_key is None and truncated:
-        hint_key = "truncated"
     if hint_key is None and model == os.environ.get("Q_SMALL_MODEL") and intent in ("ask", "qa", "summarize", "explain-code") and os.environ.get("LM_HINTS", "1") != "0":
         hint_key = "small_answer"
     if hint_key and os.environ.get("LM_HINTS", "1") != "0":
         try:
             sys.path.insert(0, os.path.join(os.environ.get("LM_DIR", "."), "lib"))
             import verbs
-            line = verbs.hint_line(verbs.load(), hint_key, color=not os.environ.get("NO_COLOR"), n=40000)
-            if line:
-                sys.stderr.write(line + "\n")
+            verbs.emit_hint(verbs.load(), hint_key, color=not os.environ.get("NO_COLOR"))
         except Exception:
             pass
 # The lease nudge: 3+ cold loads of this model inside 5 minutes says the user

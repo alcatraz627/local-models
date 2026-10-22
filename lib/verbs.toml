@@ -10,13 +10,17 @@
 #   inputs, output, exit_codes, cost_tier, cost_secs, leaves_mac, side_effects
 #   keywords          phrases `lm how` matches against; the first one is the job's own best phrase
 #   see_also          other job names
+#   go                the exact command(s) `lm how --go` may run: needs nothing from you and changes nothing
+#   fill              what you must supply, in words, for a command that is not in `go`
+#   examples may carry fill = ["text", ...]: the parts of cmd that stand out in `lm how` as yours to fill in
 #   front_label/front_says, more_label/more_says, help_says   one line on the lm, lm more, lm help screens
 
 version = 1
+manual_date = "2026-10-22"   # the date printed in the man pages; bump it when the registry changes
 
 [conventions]
 json_flag = "--json on q, see, lm status|models|doctor|timeline, warm status, lm how, lm --capabilities: one JSON object (or array) on stdout, no colour"
-exit_codes = { "0" = "success", "1" = "the work ran and failed, or a check failed", "2" = "bad usage: unknown flag, missing value, unknown verb", "10" = "server down or a backend call failed", "11" = "model or backend not available", "12" = "input missing or unreadable (file, image, history entry, optional dependency)", "13" = "wall-clock timeout", "127" = "a required program is not installed", "130" = "cancelled by the caller" }
+exit_codes = { "0" = "success", "1" = "the work ran and failed, or a check failed", "2" = "bad usage: unknown flag, missing value, or a single unknown word (several words are taken as a question)", "10" = "server down or a backend call failed", "11" = "model or backend not available", "12" = "input missing or unreadable (file, image, history entry, optional dependency)", "13" = "wall-clock timeout", "127" = "a required program is not installed", "130" = "cancelled by the caller" }
 history_scope = "q, see and lm history default to calls from your own terminal. A caller with no terminal (an agent, hook or cron job) has no 'mine': pass --all or set LM_ALL=1 to reach the newest row."
 no_tty_behaviour = "No colour, no gray hints, no prompts. Scripted forms (flags, --json, pipes) behave the same with or without a terminal. Error envelopes in --json mode are {ok:false, code, message, remedy, next}: branch on code, not on message."
 
@@ -46,11 +50,17 @@ more_footer = [
 ]
 
 [how]
-cloud_triggers = ["web", "gemini", "internet", "online", "google", "news", "research", "browse", "current"]
-stopwords = ["a", "an", "the", "my", "me", "i", "of", "to", "for", "on", "in", "is", "are", "it", "that", "this", "these", "those", "what", "how", "do", "does", "with", "from", "and", "or", "please", "can", "you", "want", "so", "about", "at", "be", "get", "some", "if", "when"]
+# A cloud job is eligible only when one of these is in the words and not negated. "online search" counts as a pair.
+cloud_words = ["web", "internet", "google", "gemini"]
+# Within four words before a cloud word, one of these cancels it; so does any local phrase in the same clause.
+negators = ["not", "no", "without", "dont", "never", "avoid"]
+local_phrases = ["keep it local", "local only", "offline", "stay local"]
+# Words that suggest the answer needs fresh facts. With no cloud word, the top answer stays local and the web is offered, marked, as an alternative.
+fresh_words = ["current", "currently", "latest", "newest", "news", "weather", "price"]
+stopwords = ["a", "an", "the", "my", "me", "i", "of", "to", "for", "on", "in", "is", "are", "it", "that", "this", "these", "those", "what", "how", "do", "does", "with", "from", "and", "or", "please", "can", "you", "want", "so", "about", "at", "be", "get", "some", "if", "when", "not", "no", "dont", "without", "never", "avoid"]
 synonyms = [
   ["latest", "last", "newest", "recent"],
-  ["big", "bigger", "larger", "heavier"],
+  ["big", "bigger", "larger", "heavier", "better"],
   ["image", "screenshot", "picture", "photo", "png", "pic"],
   ["before", "yesterday", "earlier", "previous", "past", "old", "ago"],
   ["instant", "quick", "snappy", "fast"],
@@ -60,16 +70,17 @@ synonyms = [
 ]
 threshold = 3.0
 
-# What a gray `next:` line says after an answer. The text is the command to run.
+# What a gray `next:` line says after an answer. The text is the command to run. (A cut file is
+# answered by q itself, which prints the exact --max-ctx for that file.)
 [hints]
 small_answer = { text = "lm again --big", why = "not right? the bigger model" }
-truncated = { text = "--max-ctx {n}", why = "only part of the file was read" }
 low_confidence = { text = "see {img} --ocr", why = "the vision model was unsure: read the exact text" }
 repeat = { text = "lm again", why = "the same question twice gives the same answer: try a stronger model" }
 
 # Where a failed call points next. {code} is the error code in the --json envelope.
 [remedies]
 server_down = { remedy = "the local server was stopped; it restarts on the next call, or run lm doctor", next = "lm doctor" }
+server_down_custom_host = { remedy = "nothing answers at {host} (OLLAMA_HOST points there); start that server, or unset OLLAMA_HOST to use the local one", next = "" }
 model_missing = { remedy = "that model is not installed; lm models lists what is", next = "lm models" }
 timeout = { remedy = "it took too long; try a smaller input or a longer --timeout", next = "" }
 ctx_required = { remedy = "that intent needs a file; add --ctx FILE", next = "" }
@@ -77,11 +88,11 @@ ctx_unreadable = { remedy = "the file could not be read; check the path", next =
 ctx_empty = { remedy = "the file has no text in it; check the path or extract text first", next = "" }
 ctx_binary = { remedy = "the file is binary; extract its text first", next = "" }
 ctx_unsupported = { remedy = "that file type cannot be read directly; convert it to text or csv first", next = "" }
-ctx_too_large = { remedy = "the file is too big; cut it down or use lm gemini --file", next = "lm gemini --file FILE" }
+ctx_too_large = { remedy = "the file is too big; cut it down, or send it to the cloud lane with lm gemini --file (that leaves this Mac)", next = "" }
 ctx_truncated = { remedy = "the table is larger than the read limit; narrow it or raise --max-ctx", next = "" }
 format_unreadable = { remedy = "the schema file is missing; check the --format path", next = "" }
 format_invalid = { remedy = "the schema file is not valid JSON", next = "" }
-sheet_missing = { remedy = "that sheet is not in the workbook; list them with --preflight", next = "q --preflight --ctx FILE --json" }
+sheet_missing = { remedy = "that sheet is not in the workbook; list its sheets with q --preflight --ctx <file> --json", next = "" }
 judge_required = { remedy = "this intent needs a === JUDGE === section with a runnable check in the context", next = "" }
 invalid_args = { remedy = "a flag or argument was wrong; the message says which, and -h lists them", next = "" }
 no_such_entry = { remedy = "there is no such history entry; list yours first", next = "lm timeline" }
@@ -89,13 +100,13 @@ cancelled = { remedy = "it was cancelled before it finished", next = "" }
 mlx_failed = { remedy = "the MLX read failed; run it again, or add -m minicpm-v4.6", next = "" }
 mlx_venv_missing = { remedy = "the project venv is missing; mlx-vlm lives in it", next = "lm doctor" }
 model_error = { remedy = "the vision model failed; run it again, or lm doctor", next = "lm doctor" }
-ocr_missing = { remedy = "install the text reader: npm install -g mac-ocr", next = "npm install -g mac-ocr" }
+ocr_missing = { remedy = "install the text reader: npm install -g mac-ocr", next = "" }
 ocr_failed = { remedy = "the text reader failed on that image; try again, or read it with the model", next = "" }
 measure_failed = { remedy = "the pixel measurement failed on that image; check it opens normally", next = "" }
 vlm_unavailable ={ remedy = "the model read was skipped; the measured evidence is still complete", next = "" }
-img_unreadable = { remedy = "the image could not be found; check the path", next = "lm read latest" }
+img_unreadable = { remedy = "the image could not be found; check the path (for your newest screenshot instead: lm read latest)", next = "" }
 not_an_image = { remedy = "that file is not an image; check the path", next = "" }
-clipboard_empty = { remedy = "copy a screenshot first (Cmd-Ctrl-Shift-4), or read your newest saved one", next = "lm read latest" }
+clipboard_empty = { remedy = "copy a screenshot first (Cmd-Ctrl-Shift-4), or read your newest saved one with lm read latest", next = "" }
 crop_failed = { remedy = "the crop could not be made; check the image and the window", next = "" }
 capture_failed = { remedy = "the screen capture produced nothing; allow Screen Recording for your terminal", next = "" }
 no_screencapture = { remedy = "screen capture only works on macOS", next = "" }
@@ -109,11 +120,11 @@ worker_died = { remedy = "a worker produced nothing; run again, or check the ser
 gemini_unavailable = { remedy = "gemini is not available; check the key in ~/.gemini/.env", next = "lm doctor" }
 gemini_error = { remedy = "gemini ended without an answer; lm gemini show -1 has the steps", next = "lm gemini show -1" }
 bad_model = { remedy = "that gemini model is not in the list; lm gemini models shows it", next = "lm gemini models" }
-repomix_missing = { remedy = "install the repo packer: npm install -g repomix", next = "npm install -g repomix" }
+repomix_missing = { remedy = "install the repo packer: npm install -g repomix", next = "" }
 repomix_failed = { remedy = "the repo could not be packed; check the directory", next = "" }
 venv_missing = { remedy = "the project venv is missing; see the setup notes", next = "lm doctor" }
 secrets_found = { remedy = "secret-looking text was found; clean those files before indexing", next = "" }
-no_index = { remedy = "nothing is indexed yet; build the index first", next = "lm rag index docs/" }
+no_index = { remedy = "nothing is indexed yet; build the index first with lm rag index <folder>", next = "" }
 search_failed = { remedy = "retrieval failed; check the index with lm rag status", next = "lm rag status" }
 answer_failed = { remedy = "the answer step failed; try again, or check the server", next = "lm doctor" }
 ax_missing = { remedy = "install the accessibility reader: cargo install --git https://github.com/watzon/ax-cli", next = "" }
@@ -122,6 +133,8 @@ img_unreadable_ui = { remedy = "the screenshot could not be found; check the pat
 inventory_failed = { remedy = "the UI read failed; try see --ui on the image directly", next = "" }
 judge_failed = { remedy = "the judge call failed; try again, or check the server", next = "lm doctor" }
 judge_incomplete = { remedy = "the judge did not rule on every claim; try again or use fewer claims", next = "" }
+no_match = { remedy = "no job matches those words; lm help lists the jobs, lm --capabilities has the menu", next = "lm help" }
+model_failed = { remedy = "the small model could not pick a job; try other words, or lm help lists the jobs", next = "lm help" }
 
 # ───────────────────────────── daily jobs ─────────────────────────────
 
@@ -144,13 +157,16 @@ cost_tier = "small"
 cost_secs = "2-5 (about 5 s on the first call after a pause)"
 leaves_mac = false
 side_effects = "loads the small model, writes logs/q-history.jsonl"
-keywords = ["quick answer", "ask a question", "ask the model", "explain", "how do i", "what does this mean"]
+keywords = ["quick answer", "ask a question", "ask the model", "explain", "how do i", "what does this mean", "tell me", "commit message", "summarize my clipboard", "clipboard text"]
 see_also = ["fast", "again", "cmd"]
 next = "small_answer"
+fill = "your question"
 examples = [
   { cmd = 'lm "how do I see what is using port 5432"', says = "the answer comes back in a few seconds" },
   { cmd = "lm fast 1h", says = "the first answer after a pause takes about 5 s; this keeps it instant" },
   { cmd = 'lm "what text is in ~/Desktop/shot.png"', says = "an image path in the question goes to the image reader" },
+  { cmd = "git diff | q commit", says = "a commit message written from the diff", keywords = ["commit message"] },
+  { cmd = 'pbpaste | q "tighten this copy"', says = "text on your clipboard as the input", keywords = ["clipboard text", "summarize my clipboard"] },
 ]
 
 [[job]]
@@ -171,11 +187,12 @@ cost_tier = "small"
 cost_secs = "2-5"
 leaves_mac = false
 side_effects = "loads the small model, writes logs/q-history.jsonl; never runs the command it prints"
-keywords = ["shell command", "terminal command", "command line for", "one-liner", "give me a command", "how do i run"]
+keywords = ["shell command", "terminal command", "command line for", "one-liner", "give me a command", "how do i run a command"]
 see_also = ["ask", "again"]
 next = "small_answer"
+fill = "your task, in words"
 examples = [
-  { cmd = 'lm cmd "list the 5 largest files in ~/Downloads"', says = "prints the command and nothing else" },
+  { cmd = 'lm cmd "list the 5 largest files in ~/Downloads"', says = "prints the command and nothing else", keywords = ["shell command", "command line", "one-liner"] },
   { cmd = 'q check "ls -lah --sort=size"', says = "check a command you already have, without running it", keywords = ["check this command"] },
 ]
 
@@ -197,9 +214,11 @@ cost_tier = "vision"
 cost_secs = "1 (--ocr) to 30 (cold vision model)"
 leaves_mac = false
 side_effects = "loads a vision model, reads the clipboard for 'paste', writes logs/see-history.jsonl and outputs/see/"
-keywords = ["text from a screenshot", "read an image", "read the screenshot", "ocr", "what does the picture say", "read latest screenshot"]
+keywords = ["text from a screenshot", "read an image", "read the screenshot", "ocr", "what does the picture say", "read latest screenshot", "clipboard image", "image on my clipboard"]
 see_also = ["diff", "count", "ui-verify"]
 next = "low_confidence"
+go = ["lm read latest", "lm read paste"]
+fill = "the image path"
 examples = [
   { cmd = "lm read shot.png", says = "what is in the image" },
   { cmd = 'lm read shot.png "what is the build id?"', says = "asks for text, IDs and numbers are read exactly first" },
@@ -231,6 +250,7 @@ side_effects = "writes logs/see-history.jsonl and outputs/see/"
 keywords = ["what changed between two images", "compare two screenshots", "before and after", "difference between images"]
 see_also = ["read", "count"]
 next = ""
+fill = "the two image paths"
 examples = [
   { cmd = "lm diff before.png after.png", says = "a three-line summary: where, whether text changed, whether colours changed" },
   { cmd = "see diff a.png b.png --no-read --json", says = "the measured evidence only, no model" },
@@ -254,13 +274,14 @@ cost_tier = "small"
 cost_secs = "3-15 depending on file size"
 leaves_mac = false
 side_effects = "loads the small model, extracts text locally, writes logs/q-history.jsonl"
-keywords = ["summarize a file", "summarise this document", "ask about a file", "what does this pdf say", "read this report", "tldr of a file"]
+keywords = ["summarize a file", "summarise this document", "ask about a file", "what does this pdf say", "read this report", "tldr of a file", "summarize", "how many tokens", "token count"]
 see_also = ["ask", "gemini", "rag"]
-next = "truncated"
+next = ""
+fill = "the file path"
 examples = [
   { cmd = "lm doc report.pdf", says = "a summary (PDF, Word, HTML, text, spreadsheets)" },
   { cmd = 'lm doc report.pdf "what is the decision?"', says = "an answer grounded in the file" },
-  { cmd = "q --preflight --ctx report.pdf", says = "how big the file is, before asking" },
+  { cmd = "q --preflight --ctx report.pdf", says = "how big the file is, before asking", keywords = ["how many tokens", "token count", "how big"] },
 ]
 
 [[job]]
@@ -312,6 +333,7 @@ side_effects = "reads the history files only"
 keywords = ["find an answer i got before", "search past answers", "search my history", "what did i ask", "old answer"]
 see_also = ["timeline", "last"]
 next = ""
+fill = "the words to look for"
 examples = [
   { cmd = 'lm find "port 5432"', says = "matching questions and answers across q, see, gemini and imagine, yours first" },
   { cmd = "lm timeline 15", says = "your last 15 calls, newest last" },
@@ -338,12 +360,12 @@ cost_tier = "code"
 cost_secs = "120-300 (loads the 23 GB code model)"
 leaves_mac = false
 side_effects = "loads the code model (23 GB), reads git state, writes logs/q-history.jsonl"
-keywords = ["review my changes", "code review", "review a pr", "review uncommitted changes", "check my diff"]
+keywords = ["review my changes", "code review", "review a pr", "review uncommitted changes", "check my diff", "review my git diff", "review a diff", "review my code"]
 see_also = ["fleet"]
 next = ""
 examples = [
   { cmd = "lm review", says = "your uncommitted changes (takes a few minutes; loads the 23 GB code model)" },
-  { cmd = "review 214", says = "a GitHub PR", keywords = ["pr"] },
+  { cmd = "review 214", says = "a GitHub PR", keywords = ["pr"], fill = ["214"] },
 ]
 
 # ───────────────────────────── keep it handy ─────────────────────────────
@@ -366,9 +388,10 @@ cost_tier = "no model"
 cost_secs = "under 1"
 leaves_mac = false
 side_effects = "none"
-keywords = ["what is using memory", "memory", "what is loaded", "free memory", "is the server up", "what models are running"]
+keywords = ["what is using memory", "memory", "what is loaded", "free memory", "is the server up", "what models are running", "what is eating my ram", "ram", "mac is slow", "what is running"]
 see_also = ["models", "doctor", "fast"]
 next = ""
+go = "lm status"
 examples = [
   { cmd = "lm status", says = "server, free memory, loaded models, when they unload" },
   { cmd = "lm models", says = "every installed model and which tier it is" },
@@ -392,12 +415,13 @@ cost_tier = "small"
 cost_secs = "5 (loads the small model once)"
 leaves_mac = false
 side_effects = "loads the small model and holds about 5 GB of memory until the lease ends or you run lm fast off"
-keywords = ["keep the model loaded", "keep answers instant", "warm up the model", "instant answers", "make it faster"]
+keywords = ["keep the model loaded", "keep answers instant", "warm up the model", "instant answers", "make it faster", "free up memory", "stop the models", "unload all models", "keep the model warm"]
 see_also = ["status", "warm"]
 next = ""
 examples = [
-  { cmd = "lm fast 1h", says = "q answers in under a second until the time it prints" },
-  { cmd = "lm fast off", says = "free the memory now", keywords = ["unload", "free memory"] },
+  { cmd = "lm fast 1h", says = "q answers in under a second until the time it prints", keywords = ["keep the model warm", "keep answers instant"] },
+  { cmd = "lm fast off", says = "free the memory now", keywords = ["unload", "free memory", "stop models", "stop the models"] },
+  { cmd = "warm off all", says = "unload every model, back to zero memory", keywords = ["unload all models", "stop all models", "zero memory"] },
   { cmd = "lm status", says = "what is loaded and when it unloads" },
 ]
 
@@ -422,6 +446,7 @@ side_effects = "none"
 keywords = ["help with a job", "how do i use lm", "list the jobs", "what can lm do"]
 see_also = ["how", "more", "examples"]
 next = ""
+go = ["lm help", "lm --capabilities"]
 examples = [
   { cmd = "lm help", says = "the list of jobs" },
   { cmd = "lm help read", says = "the steps for reading an image" },
@@ -447,6 +472,7 @@ side_effects = "none"
 keywords = ["every command", "all commands", "the full list"]
 see_also = ["help", "examples"]
 next = ""
+go = "lm more"
 examples = [
   { cmd = "lm more", says = "the full command list" },
 ]
@@ -458,24 +484,24 @@ aliases = []
 summary = "find the command for what you want, without running it"
 usage = 'lm how "what I want" [--go] [--json]'
 front_label = 'lm how "what I want"'
-front_says = "find the command for it, without running anything (--go runs it)"
+front_says = "find the command for it, without running anything (--go runs read-only ones)"
 more_label = 'lm how "..."'
-more_says = "say what you want, get the command (--go runs it)"
+more_says = "say what you want, get the command (--go runs read-only ones)"
 help_says = "say what you want, get the command"
-note = "Matching is by words first and costs nothing. Only when no job matches well does it ask the small model, with the registry as context. It never runs anything without --go."
+note = "Matching is by words first and costs nothing. Only when no job matches well does it ask the small model to pick a job by name; the command always comes from this registry. --go runs only the few read-only commands that need nothing from you, and otherwise says what to fill in. Cloud jobs appear only when your words ask for the web or gemini."
 inputs = "what you want, in your own words"
-output = "the command, one line on why, up to two alternatives; --json: {command, job, why, alternatives, matched_by}"
-exit_codes = "0 found, 2 bad usage, 12 nothing matched (with --no-model), 10/11 model failed"
+output = "the command with the parts you must fill in picked out, one line on why, up to two alternatives (a cloud one is marked); --json: {command, job, why, alternatives, matched_by, go, fill}, where go says --go would run it and fill says what you must supply"
+exit_codes = "0 found (or --go ran it), 2 bad usage (including --go with --json, and --go on a command that needs your input), 12 nothing matched (with --no-model), 10 the model fallback failed"
 cost_tier = "no model"
 cost_secs = "under 1 (about 5 when it falls back to the small model)"
 leaves_mac = false
-side_effects = "none unless --go; the model fallback loads the small model and writes logs/q-history.jsonl"
+side_effects = "none unless --go, which runs only a command the job lists in its go field; the model fallback loads the small model and writes logs/q-history.jsonl"
 keywords = ["which command", "what command", "find the command", "which lm command"]
 see_also = ["help", "more"]
 next = ""
 examples = [
   { cmd = 'lm how "text from my last screenshot"', says = "prints the command, runs nothing" },
-  { cmd = 'lm how "what is using memory" --go', says = "prints it, then runs it" },
+  { cmd = 'lm how "what is using memory" --go', says = "prints it, then runs it (only read-only commands; others say what to fill in)" },
   { cmd = 'lm how "redo that on a bigger model" --json', says = "the answer as JSON for a script" },
 ]
 
@@ -494,9 +520,10 @@ cost_tier = "no model"
 cost_secs = "under 1"
 leaves_mac = false
 side_effects = "writes logs/see-history.jsonl"
-keywords = ["count the objects", "how many things in the image", "count the dots", "how many squares"]
+keywords = ["count the objects", "how many things in the image", "count the dots", "how many squares", "odd one out"]
 see_also = ["read", "diff"]
 next = ""
+fill = "the image path"
 examples = [
   { cmd = "see count dots.png", says = "how many objects (exact, instant, no model)" },
   { cmd = "see count squares.png --color blue", says = "only the blue ones" },
@@ -518,9 +545,10 @@ cost_tier = "cloud"
 cost_secs = "5-30"
 leaves_mac = true
 side_effects = "sends your question to a web search (and to Gemini for research); writes history"
-keywords = ["search the web", "something current", "latest version", "look it up online", "news"]
+keywords = ["search the web", "something current", "latest version", "look it up online", "news", "internet", "the internet"]
 see_also = ["gemini", "again"]
 next = ""
+fill = "your question"
 examples = [
   { cmd = 'q --web "current node LTS version?"', says = "searches the web, answers from the results with citations", cloud = true },
   { cmd = 'lm gemini research "state of X"', says = "a slower, deeper lookup (Gemini)", cloud = true },
@@ -544,6 +572,7 @@ side_effects = "none"
 keywords = ["why did it fail", "a call failed", "show errors", "what went wrong", "error"]
 see_also = ["timeline", "last", "doctor"]
 next = ""
+go = "lm timeline 10 --errors"
 examples = [
   { cmd = "lm timeline 10 --errors", says = "your failed calls, each with its reason and what to do" },
   { cmd = "lm last", says = "the latest call in full, error included" },
@@ -567,6 +596,7 @@ side_effects = "loads the small model, writes history"
 keywords = ["machine readable", "json output", "answer for a script", "structured answer"]
 see_also = ["table", "q"]
 next = ""
+fill = "your prompt"
 examples = [
   { cmd = 'q --json "is 91 a prime number? answer yes or no"', says = "one JSON object with text, model and timing" },
   { cmd = 'q --json --format schema.json "classify: ..."', says = "the answer follows your schema, parsed under .data" },
@@ -589,6 +619,7 @@ side_effects = "writes logs/q-history.jsonl"
 keywords = ["profile a table", "csv columns and missing values", "spreadsheet statistics", "describe the data"]
 see_also = ["doc", "json"]
 next = ""
+fill = "the data file path"
 examples = [
   { cmd = "q describe-data --ctx data.csv --json", says = "profile facts without model arithmetic" },
   { cmd = "q --preflight --ctx data.xlsx --json", says = "inspect workbook sheets first", section = "XLSX" },
@@ -609,7 +640,7 @@ help_says = "the cloud lane: huge documents and web research"
 note = "Gemini is an external service: the text you send leaves this Mac. Sample-check what it says."
 inputs = "a prompt, optionally a file, piped stdin or a whole repo"
 output = "the answer on stdout; --json {ok, text, ...}; show N opens a past call"
-exit_codes = "0 answered, 2 bad usage, 10 call failed, 11 gemini unavailable, 12 input missing, 13 timeout"
+exit_codes = "0 answered, or the help screen when you give it nothing; 2 bad usage (with --json and nothing to do: the error envelope), 10 call failed, 11 gemini unavailable, 12 input missing, 13 timeout"
 cost_tier = "cloud"
 cost_secs = "10-120"
 leaves_mac = true
@@ -617,10 +648,11 @@ side_effects = "sends your text and files to Gemini; writes logs/gem-history.jso
 keywords = ["gemini", "huge document", "very long file", "whole repo", "ingest a repo", "research a topic"]
 see_also = ["web", "doc"]
 next = ""
+fill = "your prompt, and the file if there is one"
 examples = [
   { cmd = 'lm gemini --file big.md "summarize the risks"', says = "a file too big for the local model", cloud = true },
   { cmd = 'lm gemini research "state of X"', says = "web lookup, with null where it is unsure", cloud = true },
-  { cmd = "lm gemini ingest-repo .", says = 'load a whole repo, then lm gemini ask "..."', cloud = true },
+  { cmd = "lm gemini ingest-repo .", says = 'load a whole repo, then lm gemini ask "..."', cloud = true, fill = ["."] },
 ]
 
 [[job]]
@@ -640,9 +672,10 @@ cost_tier = "small"
 cost_secs = "depends on file count; -j sets the parallelism"
 leaves_mac = false
 side_effects = "loads a model for the whole run, writes outputs/fleet/ and logs/fleet-history.jsonl"
-keywords = ["many files at once", "batch of files", "run on every file", "fan out across files"]
+keywords = ["many files at once", "batch of files", "run on every file", "fan out across files", "many prompts in parallel", "in parallel"]
 see_also = ["review", "doc"]
 next = ""
+fill = "the intent and the files"
 examples = [
   { cmd = 'lm fleet qa --prompt "who owns this?" docs/*.md', says = "fan out across files" },
   { cmd = "lm fleet sample <run-dir>", says = "look at a sample of what it answered" },
@@ -664,13 +697,14 @@ cost_tier = "small"
 cost_secs = "indexing: minutes for a big folder; search: under 2"
 leaves_mac = false
 side_effects = "loads the embedding model, writes a local index database"
-keywords = ["search by meaning", "semantic search", "index my docs", "vector search"]
+keywords = ["search by meaning", "semantic search", "index my docs", "vector search", "index my notes", "ask my notes", "notes"]
 see_also = ["doc", "index"]
 next = ""
+fill = "your folder or query"
 examples = [
   { cmd = 'rg -n "term" docs/', says = "find exact names and paths" },
-  { cmd = "lm rag index docs/", says = "build a local search-by-meaning index" },
-  { cmd = 'lm rag search "concept"', says = "find related passages" },
+  { cmd = "lm rag index docs/", says = "build a local search-by-meaning index", keywords = ["index my notes", "index my docs"], fill = ["docs/"] },
+  { cmd = 'lm rag search "concept"', says = "find related passages", keywords = ["ask my notes", "search my notes"] },
 ]
 
 [[job]]
@@ -692,8 +726,9 @@ side_effects = "writes an index file in the repo"
 keywords = ["where is this function defined", "symbol map", "find a symbol in the repo", "where is the class"]
 see_also = ["rag"]
 next = ""
+fill = "the symbol name"
 examples = [
-  { cmd = "lm index find fleet_worker", says = "where is X, no model call" },
+  { cmd = "lm index find fleet_worker", says = "where is X, no model call", fill = ["fleet_worker"] },
 ]
 
 [[job]]
@@ -712,12 +747,13 @@ cost_tier = "mlx"
 cost_secs = "60-120 with the default model"
 leaves_mac = false
 side_effects = "loads a large image model onto the GPU, writes outputs/imagine/ and its history"
-keywords = ["draw an image", "generate a picture", "make an image", "image generation"]
+keywords = ["draw an image", "generate a picture", "make an image", "image generation", "generate an image"]
 see_also = []
 next = ""
+fill = "your prompt"
 examples = [
-  { cmd = 'imagine "a cozy reading nook"', says = "about 1-2 minutes with the default model, free, offline" },
-  { cmd = 'imagine refine 12 "warmer light"', says = "steer a past image" },
+  { cmd = 'imagine "a cozy reading nook"', says = "about 1-2 minutes with the default model, free, offline", keywords = ["generate an image", "draw", "make a picture", "image of"] },
+  { cmd = 'imagine refine 12 "warmer light"', says = "redo a past generation with one change", keywords = ["refine", "steer", "iterate on"], fill = ["12", '"warmer light"'] },
 ]
 
 [[job]]
@@ -739,8 +775,9 @@ side_effects = "loads the model under test, writes probe reports"
 keywords = ["is this model trustworthy", "evaluate a model", "test a local model"]
 see_also = ["bench", "models"]
 next = ""
+fill = "the model name"
 examples = [
-  { cmd = "lm probe gemma4:26b", says = "run the reliability eval on one model" },
+  { cmd = "lm probe gemma4:26b", says = "run the reliability eval on one model", fill = ["gemma4:26b"] },
 ]
 
 [[job]]
@@ -754,12 +791,12 @@ more_says = "run a fixed behavior and latency fixture set"
 help_says = "run a fixed behavior and latency fixture set"
 inputs = "a fixture set name such as quick"
 output = "correctness, latency and disk figures"
-exit_codes = "0 ran, 2 bad usage"
+exit_codes = "0 ran, 1 failed (a fixture set that does not exist ends in a Python error), 2 bad flag"
 cost_tier = "small"
 cost_secs = "minutes"
 leaves_mac = false
 side_effects = "loads models, writes benchmark output"
-keywords = ["benchmark the models", "measure latency", "run the bench"]
+keywords = ["benchmark the models", "measure latency", "run the bench", "how fast is the model", "latency of the model"]
 see_also = ["probe", "doctor"]
 next = ""
 examples = [
@@ -785,6 +822,7 @@ side_effects = "loads the vision and small models, reads the accessibility tree 
 keywords = ["verify the ui", "is the button disabled", "check a ui claim", "does the screenshot show"]
 see_also = ["read"]
 next = ""
+fill = "the screenshot path and your claim"
 examples = [
   { cmd = 'lm ui-verify shot.png "the CTA is disabled"', says = "strict pass/fail/unsure gate" },
   { cmd = 'lm ui-verify --app Finder "there is a Trash item"', says = "judge the live accessibility tree" },
@@ -833,6 +871,7 @@ side_effects = "reads the history files only"
 keywords = ["my recent calls", "what did i run recently", "history of calls", "recent activity"]
 see_also = ["last", "find", "failed"]
 next = ""
+go = "lm timeline"
 examples = [
   { cmd = "lm timeline", says = "your last 20 calls across q, see, imagine, fleet and gemini" },
   { cmd = "lm timeline --errors", says = "only failed calls, each with its reason and what to do" },
@@ -844,20 +883,21 @@ name = "last"
 kind = "job"
 aliases = []
 summary = "your latest call, in full"
-usage = "lm last [tool] [--all]"
+usage = "lm last [tool] [--all] [--json]"
 more_label = "lm last [tool]"
 more_says = "open the newest history entry in full (optionally of one tool)"
 help_says = "your latest call, in full"
 inputs = "optionally a tool name"
-output = "the newest history entry of yours, in full"
-exit_codes = "0 shown, 12 none of your calls from this terminal"
+output = "the newest history entry of yours, in full; --json is the history row as one JSON object"
+exit_codes = "0 shown, 2 bad usage, 12 none of your calls from this terminal"
 cost_tier = "no model"
 cost_secs = "under 1"
 leaves_mac = false
 side_effects = "reads the history files only"
-keywords = ["open the last call in full", "show my latest call", "last answer in full"]
+keywords = ["open the last call in full", "show my latest call", "last answer in full", "what did the last call say", "the last call", "the last thing i ran"]
 see_also = ["timeline", "find"]
 next = ""
+go = "lm last"
 examples = [
   { cmd = "lm last", says = "your newest call, in full" },
   { cmd = "lm last gemini", says = "the newest gemini call, in full" },
@@ -882,6 +922,7 @@ side_effects = "none"
 keywords = ["list the models", "which models are installed", "what models do i have", "model tiers"]
 see_also = ["status", "doctor"]
 next = ""
+go = "lm models"
 examples = [
   { cmd = "lm models", says = "installed models, which are loaded, and which tier each fills" },
   { cmd = "lm models --json", says = "the same as JSON" },
@@ -903,9 +944,10 @@ cost_tier = "no model"
 cost_secs = "1-3"
 leaves_mac = false
 side_effects = "none"
-keywords = ["health check", "is everything working", "something is broken", "check the toolkit"]
+keywords = ["health check", "is everything working", "something is broken", "check the toolkit", "healthy"]
 see_also = ["status", "failed"]
 next = ""
+go = "lm doctor"
 examples = [
   { cmd = "lm doctor", says = "one pass or fail line per dependency; exits 1 if any fail" },
   { cmd = "lm doctor --json", says = "the same as JSON" },
@@ -930,6 +972,7 @@ side_effects = "none"
 keywords = ["show me examples", "examples of everything", "a showcase"]
 see_also = ["help", "more"]
 next = ""
+go = "lm examples"
 examples = [
   { cmd = "lm examples", says = "real commands you can paste, grouped by job" },
 ]

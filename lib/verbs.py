@@ -4,7 +4,7 @@
     verbs.py screen front|more|help [JOB]|capabilities [JOB] [--json] [--color]
     verbs.py how "what I want" [--go] [--json] [--no-model] [--color]
     verbs.py remedy CODE          JSON {remedy, next} for an error code
-    verbs.py hint KEY [--n N] [--img PATH] [--color]
+    verbs.py hint KEY [--img PATH] [--color]      the gray next: line, on stderr
     verbs.py gen --out DIR | --root ROOT   completion, man pages, tldr pages, the docs block
 
 Standard library only, so any python 3.11+ runs it.
@@ -214,7 +214,8 @@ def screen_capabilities(reg, p, job=None):
 
 # lm how
 
-STOP = None
+TOKEN = re.compile(r"[a-z0-9][a-z0-9+_-]*")
+LAUNCHERS = ("lm", "q", "see", "review", "warm", "imagine", "probe")
 
 
 def _norm(reg):
@@ -229,13 +230,16 @@ def _norm(reg):
 def stem(w):
     for suf in ("ing", "ed", "es", "s"):
         if len(w) > len(suf) + 2 and w.endswith(suf):
-            return w[: -len(suf)]
+            w = w[: -len(suf)]
+            if suf in ("ing", "ed") and len(w) > 2 and w[-1] == w[-2] and w[-1] not in "aeioulszf":
+                w = w[:-1]
+            return w
     return w
 
 
 def toks(text, stop, canon):
     out = []
-    for w in re.findall(r"[a-z0-9][a-z0-9+_-]*", text.lower()):
+    for w in TOKEN.findall(text.lower()):
         if w in stop:
             continue
         w = canon.get(w, w)
@@ -244,12 +248,84 @@ def toks(text, stop, canon):
     return out
 
 
-def how_rank(reg, query):
-    """Score every job against the words. Returns [(score, job, matched_phrase, example)] best first."""
+_VOCAB = {}
+
+
+def vocab(reg):
+    """Every word the registry itself uses, so a typo in a request can be mended toward it."""
+    key = id(reg)
+    if key not in _VOCAB:
+        stop, canon = _norm(reg)
+        words = set(stop) | set(canon)
+        for j in reg["job"]:
+            parts = [j["summary"], *j["keywords"]]
+            for e in j["examples"]:
+                parts += [e["says"], e["cmd"], *e.get("keywords", [])]
+            for t in parts:
+                words.update(TOKEN.findall(t.lower()))
+        _VOCAB[key] = words
+    return _VOCAB[key]
+
+
+def edits(a, b):
+    """Edit distance counting a swapped pair of letters as one edit."""
+    d = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i in range(len(a) + 1):
+        d[i][0] = i
+    for j in range(len(b) + 1):
+        d[0][j] = j
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            c = 0 if a[i - 1] == b[j - 1] else 1
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + c)
+            if i > 1 and j > 1 and a[i - 1] == b[j - 2] and a[i - 2] == b[j - 1]:
+                d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1)
+    return d[-1][-1]
+
+
+def fix_typos(reg, text):
+    """The request with words of five letters or more mended to the registry's own spelling when one edit away."""
+    v = vocab(reg)
+    out = []
+    for w in TOKEN.findall(text.lower().replace("'", "")):
+        if len(w) >= 5 and w not in v:
+            near = sorted(c for c in v if abs(len(c) - len(w)) <= 1 and len(c) >= 4 and edits(w, c) <= 1)
+            if near:
+                w = near[0]
+        out.append(w)
+    return " ".join(out)
+
+
+def cloud_state(reg, query):
+    """(asked, negated, local): did the words ask for the web or gemini, and did they say no to it.
+
+    A cloud word counts as asked unless a negator sits within four words before it or the same
+    clause says to keep things local. A negated one never enables a cloud job.
+    """
+    h = reg["how"]
+    words, neg, local_phrases = set(h["cloud_words"]), set(h["negators"]), h["local_phrases"]
+    text = query.lower().replace("'", "").replace("’", "")
+    asked = negated = local = False
+    for clause in re.split(r"[,;.!?]|\bbut\b|\bhowever\b|\bthen\b", text):
+        w = re.findall(r"[a-z0-9]+", clause)
+        clause_local = any(p in clause for p in local_phrases)
+        local = local or clause_local
+        for i, t in enumerate(w):
+            if t in words or (t == "online" and w[i + 1:i + 2] == ["search"]):
+                if clause_local or any(x in neg for x in w[max(0, i - 4):i]):
+                    negated = True
+                else:
+                    asked = True
+    local = local or any(p in text for p in local_phrases)
+    return asked, negated, local
+
+
+def how_rank(reg, query, cloud_ok):
+    """Score every job against the words. Returns [(score, job, matched_phrase, example, example_score)] best first."""
     stop, canon = _norm(reg)
+    query = fix_typos(reg, query)
     q = set(toks(query, stop, canon))
-    raw = set(re.findall(r"[a-z0-9][a-z0-9+_-]*", query.lower()))
-    cloud_ok = any(t in raw for t in reg["how"]["cloud_triggers"])
+    raw = set(TOKEN.findall(query.lower()))
     ranked = []
     for j in reg["job"]:
         if j["kind"] == "tool":
@@ -263,9 +339,7 @@ def how_rank(reg, query):
                 continue
             hit = len(kt & q)
             if hit == len(kt):
-                s = 3.0 * len(kt) if len(kt) > 1 else 3.0
-                if len(kt) == 1 and len(kt) < len(q):
-                    s = 3.0
+                s = 3.0 * len(kt)
             elif len(kt) > 1 and hit:
                 s = 0.8 * hit
             else:
@@ -278,125 +352,215 @@ def how_rank(reg, query):
         if j["name"] in raw or j["name"] in q:
             score += 2.0
         bonus = 0.0
-        best_ex, best_es = None, -1.0
+        best_ex, best_es, first_ok = None, -1.0, None
         for e in j["examples"]:
             if e.get("cloud") and not cloud_ok:
                 continue
+            first_ok = first_ok or e
             et = set(toks(e["says"] + " " + e["cmd"] + " " + " ".join(e.get("keywords", [])), stop, canon))
-            es = len(et & q) + 2.0 * sum(1 for k in e.get("keywords", []) if set(toks(k, stop, canon)) <= q and toks(k, stop, canon))
+            kw_hits = sum(1 for k in e.get("keywords", []) if toks(k, stop, canon) and set(toks(k, stop, canon)) <= q)
+            es = len(et & q) + 2.0 * kw_hits
             bonus = max(bonus, 0.3 * len(et & q))
             if es > best_es:
                 best_ex, best_es = e, es
         score += min(bonus, 1.0)
         if best_ex is None:
             continue
+        if best_es < 2.0:
+            best_ex = first_ok
         ranked.append((score, j, phrase, best_ex, best_es))
     ranked.sort(key=lambda r: -r[0])
     return ranked
 
 
+def go_list(job):
+    g = job.get("go", [])
+    return [g] if isinstance(g, str) else list(g)
+
+
+def fill_re(ex):
+    """The parts of a command the person must supply: the example's own `fill` list, else quoted text, <x> and file names."""
+    fills = ex.get("fill")
+    if fills:
+        return re.compile("|".join(re.escape(x) for x in fills))
+    return re.compile(r"\"[^\"]*\"|'[^']*'|<[^>]+>|\S+\.(?:png|jpg|jpeg|pdf|md|csv|xlsx|txt|json)\b|\bdocs/")
+
+
+def paint_cmd(p, cmd, ex, runnable):
+    """The command in the palette, with the parts the person must fill in standing out when --go would not run it."""
+    if runnable or not p.Y:
+        return f"{p.Bd}{p.C}{cmd}{p.Rs}"
+    out, pos = [], 0
+    for m in fill_re(ex).finditer(cmd):
+        if m.start() > pos:
+            out.append(f"{p.Bd}{p.C}{cmd[pos:m.start()]}{p.Rs}")
+        out.append(f"{p.Y}{m.group(0)}{p.Rs}")
+        pos = m.end()
+    if pos < len(cmd):
+        out.append(f"{p.Bd}{p.C}{cmd[pos:]}{p.Rs}")
+    return "".join(out)
+
+
 def how_answer(reg, query):
-    ranked = how_rank(reg, query)
-    if not ranked or ranked[0][0] < reg["how"]["threshold"]:
+    """The registry's answer for a request, or None. The command always comes from the registry."""
+    asked, negated, local = cloud_state(reg, query)
+    ranked = how_rank(reg, query, asked)
+    thr = reg["how"]["threshold"]
+    jobs = by_name(reg)
+    words = set(TOKEN.findall(query.lower()))
+    fresh = not (asked or negated or local) and any(w in words for w in reg["how"]["fresh_words"])
+    top, why = None, ""
+    if ranked and ranked[0][0] >= thr:
+        top = ranked[0]
+    elif fresh:
+        j = jobs["ask"]
+        top = (0.0, j, "", j["examples"][0], 0.0)
+        why = "nothing matches exactly; the small local model can try, but it cannot know what is current"
+    if top is None:
         return None
-    score, j, phrase, ex, _ = ranked[0]
-    alts = []
-    same = [e for e in j["examples"] if e is not ex and not (e.get("cloud") and "cloud" in ex)]
+    score, j, phrase, ex, _ = top
     stop, canon = _norm(reg)
-    q = set(toks(query, stop, canon))
+    q = set(toks(fix_typos(reg, query), stop, canon))
+    alts, seen = [], {ex["cmd"]}
+
+    def add(e, cloud=False):
+        if e["cmd"] in seen:
+            return
+        seen.add(e["cmd"])
+        a = {"command": e["cmd"], "says": e["says"]}
+        if cloud:
+            a["leaves_mac"] = True
+        alts.append(a)
+
+    same = [e for e in j["examples"] if e is not ex and (asked or not e.get("cloud"))]
     same.sort(key=lambda e: -len(set(toks(e["says"] + " " + e["cmd"], stop, canon)) & q))
     for e in same[:1]:
-        if not e.get("cloud") or any(t in query.lower() for t in reg["how"]["cloud_triggers"]):
-            alts.append({"command": e["cmd"], "says": e["says"]})
-    for r in ranked[1:3]:
+        if set(toks(e["says"] + " " + e["cmd"], stop, canon)) & q:
+            add(e)
+    for r in ranked[1:]:
         if len(alts) >= 2:
             break
-        if r[0] >= 0.8 * reg["how"]["threshold"]:
-            alts.append({"command": r[3]["cmd"], "says": r[3]["says"]})
-    return {"command": ex["cmd"], "job": j["name"], "why": f"{j['summary']}" + (f" (matched \"{phrase}\")" if phrase else ""),
-            "alternatives": alts[:2], "matched_by": "keywords"}
+        if r[1] is not j and r[0] >= thr:
+            add(r[3])
+    alts = alts[:2]
+    if fresh and j["name"] == "ask":
+        web = next(e for e in jobs["web"]["examples"] if e.get("cloud"))
+        alts = []
+        add({"cmd": web["cmd"], "says": web["says"] + " (leaves this Mac)"}, cloud=True)
+    runnable = ex["cmd"] in go_list(j)
+    return {"command": ex["cmd"], "job": j["name"],
+            "why": why or (f"{j['summary']}" + (f" (matched \"{phrase}\")" if phrase else "")),
+            "alternatives": alts, "matched_by": "keywords", "go": runnable,
+            "fill": None if runnable else (j.get("fill") or None)}
 
 
-def how_model(reg, query):
-    """Ask the small tier, constrained to a schema, when no job matched well."""
-    lines = []
-    for j in reg["job"]:
-        if j["leaves_mac"]:
-            continue
-        lines.append(f"- {j['name']}: {j['summary']}. e.g. {j['examples'][0]['cmd']}")
-    prompt = ("Pick the one job that does what the request asks and write the exact command to run it, "
-              "using only these jobs. Never pick a job that leaves the Mac. Answer as JSON "
-              '{"job": name, "command": command, "why": one short sentence}.\n\nJOBS\n' + "\n".join(lines) + f"\n\nREQUEST: {query}")
-    schema = {"type": "object", "properties": {"job": {"type": "string"}, "command": {"type": "string"}, "why": {"type": "string"}},
-              "required": ["job", "command", "why"]}
+def ask_small(prompt, schema):
+    """Ask the small tier a question constrained to a JSON schema; returns q's --json envelope."""
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(schema, f)
         sp = f.name
     try:
         p = subprocess.run([os.path.join(ROOT, "bin", "q"), "--json", "-m", "small", "--format", sp, prompt],
                            capture_output=True, text=True, timeout=120)
-        env = json.loads(p.stdout.strip().splitlines()[-1])
-    except Exception as e:
-        return None, f"the small model could not be reached ({e})"
+        return json.loads(p.stdout.strip().splitlines()[-1])
     finally:
         os.unlink(sp)
-    if not env.get("ok", True) or "data" not in env:
-        return None, env.get("message", "the small model gave no structured answer")
-    d = env["data"]
-    j = resolve(reg, d.get("job", ""))
-    if j is None or j["leaves_mac"]:
-        return None, "the model named a job that does not exist or leaves this Mac"
-    cmd = d.get("command", "")
+
+
+def how_model(reg, query):
+    """Ask the small tier which JOB fits, when no job matched well. Only a job name comes back.
+
+    The reply is held to an enum of job names; the command shown is always the registry's,
+    never text the model wrote.
+    """
+    asked, _, _ = cloud_state(reg, query)
+    jobs = [j for j in reg["job"] if j["kind"] != "tool" and (asked or not j["leaves_mac"])]
+    names = [j["name"] for j in jobs]
+    lines = [f"- {j['name']}: {j['summary']}" for j in jobs]
+    prompt = ("Pick the one job that does what the request asks. Answer as JSON {\"job\": name}, "
+              "with a name from this list only.\n\nJOBS\n" + "\n".join(lines) + f"\n\nREQUEST: {query}")
+    schema = {"type": "object", "properties": {"job": {"type": "string", "enum": names}},
+              "required": ["job"], "additionalProperties": False}
     try:
-        first = shlex.split(cmd)[:2]
-    except ValueError:
-        first = []
-    if not first or first[0] not in ("lm", "q", "see", "review", "warm", "imagine", "probe") or "cloud" in cmd:
-        return None, "the model's command did not start with a known tool"
-    return {"command": cmd, "job": j["name"], "why": d.get("why", j["summary"]), "alternatives": [], "matched_by": "model"}, ""
+        env = ask_small(prompt, schema)
+    except Exception as e:
+        return None, f"the small model could not be reached ({e})"
+    if not env.get("ok", True) or not isinstance(env.get("data"), dict):
+        return None, env.get("message", "the small model gave no structured answer")
+    name = env["data"].get("job")
+    if name not in names:
+        return None, "the model did not name one of the jobs"
+    j = by_name(reg)[name]
+    ex = next(e for e in j["examples"] if asked or not e.get("cloud"))
+    runnable = ex["cmd"] in go_list(j)
+    return {"command": ex["cmd"], "job": name, "why": f"{j['summary']} (chosen by the small model)", "alternatives": [],
+            "matched_by": "model", "go": runnable, "fill": None if runnable else (j.get("fill") or None)}, ""
+
+
+def how_error(reg, as_json, code, msg, rc):
+    """Report a failure as the JSON envelope on stdout, or one line on stderr."""
+    if as_json:
+        print(json.dumps({"ok": False, "code": code, "message": msg, **remedy_for(reg, code)}, ensure_ascii=False))
+    else:
+        print(f"lm how: {msg}", file=sys.stderr)
+    return rc
+
+
+def run_go(reg, ans):
+    """Run a registry command that needs nothing from the person, as an argument list (no shell)."""
+    argv = shlex.split(ans["command"])
+    if argv[0] in LAUNCHERS:
+        argv[0] = os.path.join(ROOT, "bin", argv[0])
+    env = dict(os.environ, PATH=os.path.join(ROOT, "bin") + os.pathsep + os.environ.get("PATH", ""))
+    sys.stdout.flush()
+    try:
+        return subprocess.run(argv, env=env).returncode
+    except OSError as e:
+        print(f"lm how: could not run it ({e})", file=sys.stderr)
+        return 127
 
 
 def cmd_how(reg, args):
+    known = {"--json", "--go", "--no-model", "--color"}
     as_json = "--json" in args
+    unknown = [a for a in args if re.fullmatch(r"--[A-Za-z][\w-]*", a) and a not in known]
+    if unknown:
+        return how_error(reg, as_json, "invalid_args", f"unknown flag '{unknown[0]}'; the flags are --go, --json and --no-model (quote the request)", 2)
     go = "--go" in args
     no_model = "--no-model" in args
     color = "--color" in args
-    words = [a for a in args if a not in ("--json", "--go", "--no-model", "--color")]
-    query = " ".join(words).strip()
+    if go and as_json:
+        return how_error(reg, True, "invalid_args", "--go cannot be combined with --json: read .command from the answer and run it yourself", 2)
+    query = " ".join(a for a in args if a not in known).strip()
     p = Pal(color and not as_json)
     if not query:
-        print('lm how: say what you want, e.g. lm how "text from my last screenshot"', file=sys.stderr)
-        return 2
+        return how_error(reg, as_json, "invalid_args", 'say what you want, e.g. lm how "text from my last screenshot"', 2)
     ans = how_answer(reg, query)
     if ans is None and not no_model:
         ans, err = how_model(reg, query)
         if ans is None:
-            return fail_how(as_json, "model_failed", err, 10)
+            return how_error(reg, as_json, "model_failed", err, 10)
     if ans is None:
-        return fail_how(as_json, "no_match", "no job matches those words well enough; lm help lists the jobs, lm --capabilities has the menu", 12)
+        return how_error(reg, as_json, "no_match", "no job matches those words well enough; lm help lists the jobs, lm --capabilities has the menu", 12)
     if as_json:
         print(json.dumps(ans, ensure_ascii=False))
-    else:
-        print(f"{p.Bd}{p.C}{ans['command']}{p.Rs}")
-        print(f"{p.Dm}why: {ans['why']}{p.Rs}")
-        for a in ans["alternatives"]:
-            print(f"{p.Dm}or:  {p.Rs}{p.C}{a['command']}{p.Rs}  {p.Dm}{a['says']}{p.Rs}")
+        return 0
+    jobs = by_name(reg)
+    ex = next((e for e in jobs[ans["job"]]["examples"] if e["cmd"] == ans["command"]), {})
+    print(paint_cmd(p, ans["command"], ex, ans["go"]))
+    print(f"{p.Dm}why: {ans['why']}{p.Rs}")
+    for a in ans["alternatives"]:
+        mark = f"{p.Y}☁{p.Rs} " if a.get("leaves_mac") else ""
+        print(f"{p.Dm}or:  {p.Rs}{mark}{p.C}{a['command']}{p.Rs}  {p.Dm}{a['says']}{p.Rs}")
     if go:
-        if re.search(r"[<>]|\.\.\.", ans["command"]) or re.search(r"\b(shot|before|after|a|b|report|file|data|grid|dots|squares)\.(png|pdf|md|csv|xlsx)\b", ans["command"]):
-            print("lm how: that command has a placeholder that needs your input, so it was not run", file=sys.stderr)
+        if not ans["go"]:
+            if ans["fill"]:
+                print(f"lm how: fill in {ans['fill']} and run it (--go only runs commands that need nothing from you)", file=sys.stderr)
+            else:
+                print("lm how: that one loads a model or changes something, so --go leaves it to you: run it yourself", file=sys.stderr)
             return 2
-        env = dict(os.environ, PATH=os.path.join(ROOT, "bin") + os.pathsep + os.environ.get("PATH", ""))
-        sys.stdout.flush()
-        return subprocess.run(ans["command"], shell=True, env=env).returncode
+        return run_go(reg, ans)
     return 0
-
-
-def fail_how(as_json, code, msg, rc):
-    if as_json:
-        print(json.dumps({"ok": False, "code": code, "message": msg, "remedy": msg, "next": "lm help"}))
-    else:
-        print(f"lm how: {msg}", file=sys.stderr)
-    return rc
 
 
 # errors and hints
@@ -406,7 +570,11 @@ def remedy_for(reg, code):
     r = reg["remedies"].get(code)
     if r is None:
         return {"remedy": "see the message above; -h lists the flags and examples", "next": None}
-    return {"remedy": r["remedy"], "next": r["next"] or None}
+    out = {"remedy": r["remedy"], "next": r["next"] or None}
+    host = os.environ.get("OLLAMA_HOST", "").strip()
+    if code == "server_down" and host.replace("http://", "").rstrip("/") not in ("", "127.0.0.1:11434", "localhost:11434"):
+        out["remedy"] = reg["remedies"]["server_down_custom_host"]["remedy"].replace("{host}", host)
+    return out
 
 
 def hint_line(reg, key, color=False, **kw):
@@ -418,6 +586,14 @@ def hint_line(reg, key, color=False, **kw):
     for k, v in kw.items():
         text = text.replace("{" + k + "}", str(v))
     return f"{p.Dm}next: {text}  ({h['why']}){p.Rs}"
+
+
+def emit_hint(reg, key, color=False, **kw):
+    """Write the one gray `next:` line for KEY to stderr. A hint is never part of an answer, so never stdout."""
+    line = hint_line(reg, key, color, **kw)
+    if line:
+        sys.stderr.write(line + "\n")
+    return bool(line)
 
 
 # generation
@@ -458,6 +634,52 @@ def zsh_desc(s):
     return s.replace("'", "'\\''").replace(":", "\\:")
 
 
+DANGLERS = {"the", "a", "an", "of", "and", "or", "to", "from", "with", "in", "on", "for", "by", "as", "is", "after", "before",
+            "then", "that", "which", "into", "at", "if", "when", "than", "but", "so", "are", "was", "this", "its", "it", "be"}
+
+
+def shorten(s, n=78):
+    """A description cut at the end of a clause (or a word), never inside a parenthesis or on a dangling article."""
+    s = " ".join(s.split())
+
+    def open_pairs(x):
+        return x.count("(") > x.count(")") or x.count("{") > x.count("}")
+
+    if len(s) <= n:
+        cut = s
+    else:
+        best = 0
+        for i in range(n):
+            end = s[i + 1:i + 2] in ("", " ")
+            if s[i] in ")}" and end and not open_pairs(s[:i + 1]):
+                best = max(best, i + 1)
+            elif s[i] in ",;" and end and not open_pairs(s[:i]):
+                best = max(best, i)
+        if best >= n // 2:
+            cut = s[:best]
+        else:
+            cut = s[:n].rsplit(" ", 1)[0]
+            while open_pairs(cut):
+                cut = cut[:max(cut.rfind("("), cut.rfind("{"))].rstrip()
+    words = cut.rstrip(" ,;:-").split(" ")
+    while len(words) > 1 and words[-1].lower() in DANGLERS:
+        words.pop()
+    return " ".join(words).rstrip(" ,;:-")
+
+
+def flag_descs(label, fl, desc):
+    """One description per flag. Alternatives ("--big / --code", "force or skip ...") each get their own half."""
+    if len(fl) == 2 and "/" in label:
+        m = re.match(r"^(\w+) or (\w+) (.*)$", desc)
+        if m:
+            return {fl[0]: f"{m.group(1)} {m.group(3)}", fl[1]: f"{m.group(2)} {m.group(3)}"}
+        m = re.search(r"(\S+(?: \([^)]*\))?) / (\S+)", desc)
+        if m:
+            pre, post = desc[:m.start()], desc[m.end():]
+            return {fl[0]: f"{pre}{m.group(1)}{post}", fl[1]: f"{pre}{m.group(2)}{post}"}
+    return {f: desc for f in fl}
+
+
 SHOT_FN = r"""
 _lm_shots() {
   local dir="${SEE_SCREENSHOT_DIR:-$(defaults read com.apple.screencapture location 2>/dev/null)}"
@@ -467,7 +689,7 @@ _lm_shots() {
   shots=( ${dir}/Screen*.png(N.om[1,8]) )
   _alternative \
     'special:shortcut:((paste\:"the image on your clipboard" latest\:"your newest screenshot"))' \
-    'shots:recent screenshot:(${shots})' \
+    'shots:recent screenshot:{compadd -- "${shots[@]}"}' \
     'files:image file:_files -g "*.(png|jpg|jpeg|webp|gif|heic)"'
 }
 """
@@ -490,8 +712,8 @@ def gen_zsh(reg):
     header = "# generated by scripts/gen-verbs.sh from lib/verbs.toml; do not edit\n"
 
     verbs = [j for j in reg["job"] if j["kind"] != "topic"]
-    desc = " ".join(f"'{zsh_desc(j['name'])}:{zsh_desc(j['summary'])}'" for j in verbs)
-    helptopics = " ".join(f"'{zsh_desc(j['name'])}:{zsh_desc(j['summary'])}'" for j in reg["job"])
+    desc = " ".join(f"'{zsh_desc(j['name'])}:{zsh_desc(shorten(j['summary']))}'" for j in verbs)
+    helptopics = " ".join(f"'{zsh_desc(j['name'])}:{zsh_desc(shorten(j['summary']))}'" for j in reg["job"])
 
     def tool_flags(tool):
         rows = tool_rows(tool).get("OPTIONS", [])
@@ -500,21 +722,17 @@ def gen_zsh(reg):
             fl = flags_of(label)
             if not fl:
                 continue
-            short = d if len(d) <= 62 else d[:62].rsplit(" ", 1)[0].rstrip(",;:( ")
             tail = ""
-            rest = label
-            for f in fl:
-                rest = rest.replace(f, "")
-            rest = rest.replace(",", " ").strip()
+            rest = re.sub(r"(?<![\w-])--?[A-Za-z][\w-]*", "", label).replace(",", " ").strip()
             if rest and not rest.startswith("/") and not rest.startswith("["):
                 if "FILE" in rest:
                     tail = ":file:_files"
                 elif rest.startswith("M") and "model" in label:
-                    tail = ":model:(small big code sweep)"
+                    tail = ":model:(small big code sweep)" if tool == "q" else ":model:"
                 elif rest[0].isupper() or rest[0] in "<":
                     tail = ":value:"
-            for f in fl:
-                specs.append(f"'{zsh_escape(f)}[{zsh_escape(short)}]{tail}'")
+            for f, fd in flag_descs(label, fl, d).items():
+                specs.append(f"'{zsh_escape(f)}[{zsh_escape(shorten(fd))}]{tail}'")
         return specs
 
     lm = [f"#compdef lm\n{header}{SHOT_FN}", "_lm() {", "  local -a verbs", f"  verbs=( {desc} )",
@@ -538,7 +756,7 @@ def gen_zsh(reg):
     lm.append("_lm \"$@\"")
     files["share/zsh/_lm"] = "\n".join(lm) + "\n"
 
-    ints = " ".join(f"'{zsh_desc(n)}:{zsh_desc(s)}'" for n, s in intents())
+    ints = " ".join(f"'{zsh_desc(n)}:{zsh_desc(shorten(s))}'" for n, s in intents())
     q = [f"#compdef q\n{header}", "_q() {", "  local -a intents", f"  intents=( {ints} )", "  local -a opts", "  opts=("]
     q += ["    " + s for s in tool_flags("q")]
     q += ["  )", "  if (( CURRENT == 2 )) && [[ $PREFIX != -* ]]; then", "    _describe -t intents 'q intent' intents", "    return",
@@ -562,6 +780,7 @@ def gen_zsh(reg):
 
 def roff(s):
     s = s.replace("\\", "\\e").replace("-", "\\-").replace('"', "\\(dq")
+    s = re.sub(r"[^\x00-\x7f]", lambda m: "\\[u%04X]" % ord(m.group()), s)
     return re.sub(r"^([.'])", r"\\&\1", s)
 
 
@@ -571,11 +790,33 @@ def cap(s):
     return s if first in ("q", "see", "warm", "lm") else s[:1].upper() + s[1:]
 
 
+def fold(line, width=72):
+    """Break a roff line at spaces so none runs past the width. A request line continues with a trailing backslash."""
+    if len(line.encode("utf-8")) <= width:
+        return [line]
+    request = line.startswith(".")
+    out, cur = [], ""
+    for w in line.split(" "):
+        trial = f"{cur} {w}" if cur else w
+        if cur and len(trial.encode("utf-8")) > width - (2 if request else 0):
+            out.append(cur + (" \\" if request else ""))
+            cur = w if request or not w[:1] in ".'" else "\\&" + w
+        else:
+            cur = trial
+    out.append(cur)
+    return out
+
+
 def man_page(reg, name):
+    text = _man_page(reg, name)
+    return "\n".join(x for line in text.split("\n") for x in fold(line))
+
+
+def _man_page(reg, name):
     jobs = by_name(reg)
     j = jobs.get(name)
     title = name.upper()
-    out = [f'.TH {title} 1 "" "local-models"', ".SH NAME"]
+    out = [f'.TH {title} 1 "{reg["manual_date"]}" "local-models"', ".SH NAME"]
     if name == "lm":
         out.append(roff("lm - local models on this Mac: the front door to q, see, review, imagine and warm"))
     else:
@@ -741,15 +982,9 @@ def main(argv):
         return 0
     if cmd == "hint":
         kw = {}
-        if "--n" in args_nc:
-            kw["n"] = args_nc[args_nc.index("--n") + 1]
         if "--img" in args_nc:
             kw["img"] = shlex.quote(args_nc[args_nc.index("--img") + 1])
-        line = hint_line(reg, args_nc[0], color, **kw)
-        if not line:
-            return 1
-        print(line)
-        return 0
+        return 0 if emit_hint(reg, args_nc[0], color, **kw) else 1
     if cmd == "gen":
         return cmd_gen(reg, args_nc)
     print(f"verbs.py: unknown command {cmd}", file=sys.stderr)
