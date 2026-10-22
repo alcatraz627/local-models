@@ -40,6 +40,11 @@ OCR_MISSING=false  # diff mode: mac-ocr absent — E1 text lane skipped, recorde
 ONLY=""            # diff --only E5,E6 → slice rerun (no model), returns the delta
 NO_READ=false      # diff --no-read → skip the VLM prose seat (loop-round default)
 GRID=""            # diff --grid N → override the grid resolution (4–64)
+MEASURE=false      # count/odd: model-free pixel measurement (lib/measure.py), no VLM
+M_JOB=""           # count | odd
+M_COLOR=""         # count --color NAME|#hex
+M_MIN_AREA=""      # count/odd --min-area N
+M_FILLED=false     # count --filled-only
 positionals=()
 ORIG_ARGS=("$@")   # kept so a default MLX read can re-run itself on the fallback model
 MLX_AUTO=false     # true when the MLX model was picked by default, not by -m/--mlx
@@ -58,6 +63,8 @@ show_help() {
   _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
   _cmd 'see diff <A> <B> ["focus"]' 'compare two images: deterministic evidence pack (text/color/hash/shape) + judged read'
   _cmd 'see diff <A> <B> --only E5' 'slice rerun of one extractor — returns the delta, no model call'
+  _cmd 'see count <img> [--color C] [--filled-only]' 'count objects by measuring pixels, no model (exact where models guess)'
+  _cmd 'see odd <img>'            'find the one item that differs among repeated items, by measurement; says ambiguous rather than guess'
   _cmd 'see more ["q"] [flags]'   'follow-up read of the LAST image (from its artifact copy)'
   _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
   _cmd 'see open [N]'             'print (and reveal, if TTY) the artifact folder of read N (default -1)'
@@ -74,7 +81,10 @@ show_help() {
   _ex 'see diff a.png b.png --only E5 --grid 32' '# refine one extractor, get the delta (no model)'
   _ex 'see diff a.png b.png --no-read --json'  '# loop rounds: evidence pack only, VLM prose seat skipped'
   _ex 'see diff a.png b.png --mlx'             '# judged read by Qwen3-VL on MLX instead of the 17GB gemma tier'
-  _ex 'see --menubar "which app is focused?"'  '# grab + read the top strip (crop-first beats full-screen)'
+  _ex 'see count dots.png --filled-only --json' '# solid dots only, hollow rings dropped; exact, no model'
+  _ex 'see count squares.png --color red'      '# count only the red objects'
+  _ex 'see odd grid.png --json'                '# the outlier among repeated items, or ambiguous'
+  _ex 'see --menubar "which app is focused?"''# grab + read the top strip (crop-first beats full-screen)'
   _ex 'see panel.png --ui --json | jq .data'   '# structured elements array for an agent'
   _sec OPTIONS
   _opt '--ui'          'UI-inventory read for screenshots/mocks (KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE)'
@@ -84,6 +94,9 @@ show_help() {
   _opt '--region NAME' 'named crop: top|bottom (third) · left|right (half) · center (middle quarter)'
   _opt '--only E5[,E6]' 'diff only: re-run just these extractors (E3/E4/E5/E6), return the delta — no model'
   _opt '--grid N'      'diff only: grid resolution 4-64 for E5/E6 (default 8 icons / 16 UIs)'
+  _opt '--color C'     'count only: objects of this colour (red green blue yellow orange purple gray black white, or #hex)'
+  _opt '--filled-only' 'count only: drop hollow outlines, keep solid shapes'
+  _opt '--min-area N'  'count/odd: ignore blobs smaller than N pixels (default scales with image size)'
   _opt '--json'        'one JSON object on stdout, no ANSI; with --ui adds parsed .data (schema-constrained)'
   _opt '--glow'        'render the read through glow (TTY-only, no-op without glow)'
   _opt '-m, --model M' "vision model (default: Qwen3-VL on MLX, falling back to \$VISION_MODEL = $MODEL when a big ollama model is resident or MLX fails); -m mlx:<hf-repo> uses the mlx-vlm backend"
@@ -211,6 +224,9 @@ while [ $# -gt 0 ]; do
     --region)   need_arg see "$1" "${2:-}"; REGION="$2"; shift 2 ;;
     --only)     need_arg see "$1" "${2:-}"; ONLY="$2"; shift 2 ;;
     --grid)     need_arg see "$1" "${2:-}"; GRID="$2"; shift 2 ;;
+    --color)    need_arg see "$1" "${2:-}"; M_COLOR="$2"; shift 2 ;;
+    --min-area) need_arg see "$1" "${2:-}"; M_MIN_AREA="$2"; shift 2 ;;
+    --filled-only) M_FILLED=true; shift ;;
     --glow)     GLOW=true; shift ;;
     -m|--model) need_arg see "$1" "${2:-}"; MODEL="$2"; MODEL_SET=true; shift 2 ;;
     -h|--help)  show_help; exit 0 ;;
@@ -227,7 +243,8 @@ if $UI && ! $MODEL_SET && [ "${UI_DEFAULT_MLX:-1}" = 1 ]; then
 fi
 # Plain reads default to the same MLX model (READ_DEFAULT_MLX); diff keeps its own
 # default and --ocr is model-free. MODEL_SET stays false so nothing else re-routes it.
-if ! $UI && ! $OCR && ! $MODEL_SET && [ "${READ_DEFAULT_MLX:-1}" = 1 ] && [ "${positionals[0]:-}" != diff ]; then
+if ! $UI && ! $OCR && ! $MODEL_SET && [ "${READ_DEFAULT_MLX:-1}" = 1 ] && [ "${positionals[0]:-}" != diff ] \
+   && [ "${positionals[0]:-}" != count ] && [ "${positionals[0]:-}" != odd ]; then
   MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MLX_AUTO=true
 fi
 # The fallback: re-run this same command on VISION_MODEL (minicpm). Used when MLX
@@ -317,7 +334,22 @@ if [ "${positionals[0]}" = "diff" ]; then
     fi
     exit 0
   fi
+elif [ "${positionals[0]}" = "count" ] || [ "${positionals[0]}" = "odd" ]; then
+  # measuring verbs: model-free pixel work in lib/measure.py (no VLM, no server)
+  MEASURE=true; M_JOB="${positionals[0]}"
+  IMG="$(expand_tilde "${positionals[1]:-}")"
+  [ -n "$IMG" ] || emit_error invalid_args "$M_JOB needs an image: see $M_JOB <image>" 2
+  [ "${#positionals[@]}" -le 2 ] || emit_error invalid_args "$M_JOB takes one image and flags only, got extra: ${positionals[*]:2}" 2
+  { $UI || $OCR || $MENUBAR; } && emit_error invalid_args "$M_JOB is a measurement, not a read — drop --ui/--ocr/--menubar" 2
+  [ -n "$CROP$REGION" ] && emit_error invalid_args "$M_JOB measures the whole image — crop it first if needed" 2
+  if [ "$M_JOB" = odd ] && { [ -n "$M_COLOR" ] || $M_FILLED; }; then
+    emit_error invalid_args "odd takes no --color/--filled-only; it compares every similar-sized object" 2
+  fi
+  QUERY="${M_COLOR:+--color $M_COLOR }${M_MIN_AREA:+--min-area $M_MIN_AREA }"
+  $M_FILLED && QUERY="${QUERY}--filled-only"
+  QUERY="${QUERY% }"
 else
+  { [ -n "$M_COLOR$M_MIN_AREA" ] || $M_FILLED; } && emit_error invalid_args "--color/--min-area/--filled-only belong to: see count|odd <image>" 2
   IMG="$(expand_tilde "${positionals[0]}")"; QUERY="${positionals[*]:1}"
 fi
 ORIG_IMG="$IMG"   # what the caller named — meta/history cite this, not the crop temp
@@ -370,11 +402,42 @@ if [ -n "$CROP$REGION" ]; then
   IMG="$CROP_IMG"
 fi
 
+# ── Measure path (count / odd): pixel measurement, no model, no server ──
+# lib/measure.py answers or says it is ambiguous; it never guesses. Its JSON is
+# the whole result, so .data carries it and TEXT is the one-line answer plus why.
+M_DATA=""
+if $MEASURE; then
+  [ -n "$SEE_TMP" ] || SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
+  m_args=("$M_JOB" "$IMG")
+  [ -n "$M_COLOR" ] && m_args+=(--color "$M_COLOR")
+  [ -n "$M_MIN_AREA" ] && m_args+=(--min-area "$M_MIN_AREA")
+  $M_FILLED && m_args+=(--filled-only)
+  t0=$(python3 -c 'import time; print(int(time.time()*1000))')
+  set +e
+  M_DATA="$("$DIR/.venv/bin/python" "$DIR/lib/measure.py" "${m_args[@]}" 2>"$SEE_TMP/measure.err")"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    _mc="$(printf '%s' "$M_DATA" | jq -r '.code // "measure_failed"' 2>/dev/null)" || _mc=measure_failed
+    _mm="$(printf '%s' "$M_DATA" | jq -r '.message // empty' 2>/dev/null)" || _mm=""
+    [ -n "$_mm" ] || _mm="$(head -c 200 "$SEE_TMP/measure.err" 2>/dev/null)"
+    [ "$rc" -eq 2 ] || [ "$rc" -eq 12 ] || rc=10
+    emit_error "$_mc" "$_mm" "$rc"
+  fi
+  TEXT="$(printf '%s' "$M_DATA" | jq -r '
+    (if .ambiguous then
+       (if .job == "count" then "\(.answer) (ambiguous, could be \(.range[0]) to \(.range[1]))"
+        else "ambiguous" + (if (.candidates | length) > 0 then ": object " + (.candidates | map(tostring) | join(" or ")) else "" end) end)
+     elif .job == "count" then "\(.answer)"
+     else "object \(.answer) of \(.objects | length), bbox \(.bbox | map(tostring) | join(","))" end),
+    .why' 2>/dev/null)" || TEXT=""
+  [ -n "$TEXT" ] || emit_error measure_failed "measure.py returned unparseable output" 10
+  MODEL="measure"
+elif $OCR; then
 # ── OCR fast path (--ocr): Apple Vision exact text, no model, no server ──
 # The complement to the VLM read: verbatim-but-unstructured vs structured-but-
 # good-verify. Composes with --crop/--region (crop-then-OCR reads tiny regions
 # exactly). Query text is ignored — OCR extracts, it doesn't answer.
-if $OCR; then
   $UI && ! $MENUBAR && emit_error invalid_args "--ocr is exact extraction, --ui is a structured model read — pick one (or run both as two calls)" 2
   command -v mac-ocr >/dev/null 2>&1 || emit_error ocr_missing "mac-ocr not installed — npm install -g mac-ocr" 12
   [ -n "$QUERY" ] && [ "$MODE" = text ] && echo "see: note — --ocr ignores the question; extracting text only" >&2
@@ -702,6 +765,7 @@ fi
 # `see more` build on it. Pruned to the newest $ART_KEEP folders.
 READ_MODE=general; if $MENUBAR; then READ_MODE=menubar; elif $UI; then READ_MODE=ui; fi
 if $OCR; then READ_MODE=ocr; $MENUBAR && READ_MODE=ocr-menubar; fi
+$MEASURE && READ_MODE="$M_JOB"
 $DIFF && READ_MODE=diff
 ART=""
 NOW_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -781,6 +845,10 @@ if [ "$MODE" = json ]; then
          # a ``` fence or a sentence, so fall back to the outermost {...} span
          data:($t | try fromjson catch
                  (try (index("{") as $a | rindex("}") as $b | .[$a:$b+1] | fromjson) catch null))}'
+  elif $MEASURE; then
+    # count/odd --json: the measurement object under .data, the one-line answer in .text
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" --argjson d "$M_DATA" \
+       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end), data:$d}'
   elif [ -n "${OCR_DATA:-}" ]; then
     # --ocr --json: .data carries the positioned words (x/y/w/h normalized
     # top-left + the 3×3 pos label); .text stays the plain concatenation.
