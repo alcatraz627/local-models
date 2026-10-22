@@ -114,6 +114,23 @@ lm_identify() { # sets LM_TTY and LM_SESSION once per process
 }
 # jq fragment for a history row's identity: use with --arg tty "$LM_TTY" --arg sess "$LM_SESSION".
 JQ_WHO='{tty:(if $tty == "" then null else $tty end), session:(if $sess == "" then null else $sess end)}'
+# jq def: what to do about an error code, in words (shown next to failed rows).
+JQ_REMEDY='def remedy($c): {
+      server_down: "the local server was stopped; it restarts on the next call, or run lm doctor",
+      model_missing: "that model is not installed; lm models lists what is",
+      timeout: "it took too long; try a smaller input or a longer --timeout",
+      ctx_required: "that intent needs a file; add --ctx FILE",
+      ctx_unreadable: "the file could not be read; check the path",
+      ctx_binary: "the file is binary; extract its text first",
+      ctx_too_large: "the file is too big; cut it down or use lm gemini --file",
+      cancelled: "it was cancelled before it finished",
+      mlx_failed: "the MLX read failed; run it again, or add -m minicpm-v4.6",
+      model_error: "the vision model failed; run it again, or lm doctor",
+      ocr_missing: "install the text reader: npm install -g mac-ocr",
+      vlm_unavailable: "the model read was skipped; the measured evidence is still complete",
+      gemini_unavailable: "gemini is not available; check the key in ~/.gemini/.env",
+      gemini_error: "gemini ended without an answer; lm gemini show -1 has the steps"
+    }[$c] // "";'
 # jq def: true for a row that came from the caller's own terminal or session.
 JQ_MINE='def mine($t; $s): ($t != "" and (.tty // "") == $t) or ($s != "" and (.session // "") == $s);'
 

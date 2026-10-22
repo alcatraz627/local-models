@@ -106,7 +106,7 @@ show_history() {
 }
 show_entry() {
   jsonl_entry "$LOG" "${1:-}" \
-    '"#\($i)  \(.ts)  [\(.intent)]  \(.ms)ms  \(.model)\(if .diy then "\nDIY: " + .diy.trace else "" end)\n\nPROMPT:\n\(.prompt)\n\nRESPONSE:\n\(.response)"'
+    "$JQ_REMEDY"'"#\($i)  \(.ts)  [\(.intent)]  \(.ms)ms  \(.model)\(if .diy then "\nDIY: " + .diy.trace else "" end)\n\nPROMPT:\n\(.prompt)\n\nRESPONSE:\n\(.response)\(if .error and remedy(.error) != "" then "\n\nWHAT TO DO: " + remedy(.error) else "" end)"'
 }
 
 

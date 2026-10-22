@@ -40,6 +40,7 @@ EVIDENCE=""        # diff mode: the vis-compare evidence pack JSON (empty otherw
 VLM_FAILED=false   # diff mode: the VLM prose read was skipped/failed — pack still ships
 OCR_MISSING=false  # diff mode: mac-ocr absent — E1 text lane skipped, recorded as a failure
 ONLY=""            # diff --only E5,E6 → slice rerun (no model), returns the delta
+NO_MEASURE=false   # --no-measure: skip the exact-first step and go straight to the model read
 NO_READ=false      # diff --no-read → skip the VLM prose seat (loop-round default)
 GRID=""            # diff --grid N → override the grid resolution (4–64)
 MEASURE=false      # count/odd: model-free pixel measurement (lib/measure.py), no VLM
@@ -131,10 +132,46 @@ emit_error() { # CODE MESSAGE EXIT
   esac
   # a mistyped path is a usage slip, not a failed read, so it stays out of history too
   case "$3:$1" in
-    2:*|*:img_unreadable|*:not_an_image) : ;;
+    2:*|*:img_unreadable|*:not_an_image|*:clipboard_empty) : ;;
     *) mkdir -p "$DIR/logs" 2>/dev/null; log_fail "$1" "$2" ;;
   esac
   exit "$3"
+}
+
+# The plain-words half of `see diff`: where, whether text changed, whether colours changed,
+# then the ASCII heatmap. Built only from the measured evidence pack, so it is true with or
+# without a model.
+diff_summary() {
+  printf '%s' "$EVIDENCE" | jq -r '
+    def vname($i; $h): (($i + 0.5) / $h) as $r | if $r < 0.34 then "top" elif $r < 0.67 then "middle" else "bottom" end;
+    def hname($i; $w): (($i + 0.5) / $w) as $r | if $r < 0.34 then "left" elif $r < 0.67 then "centre" else "right" end;
+    (.heatmap_ascii // "" | split("\n") | map(select(length > 0))) as $rows
+    | ($rows | length) as $h | (($rows[0] // "") | length) as $w
+    | [range(0; $h) as $r | ($rows[$r] | explode) as $cs | range(0; $cs | length) as $c | select($cs[$c] != 32) | [$r, $c]] as $hot
+    | (if ($hot | length) == 0 then "Where: nothing differs visibly"
+       elif ($hot | length) >= ($h * $w * 0.6) then "Where: most of the image differs (about \(.grid_heat.hot_cell_pct // 0)%)"
+       else ($hot | map(.[0]) | [min, max]) as $vr | ($hot | map(.[1]) | [min, max]) as $hr
+         | vname(($vr[0] + $vr[1]) / 2; $h) as $v | hname(($hr[0] + $hr[1]) / 2; $w) as $hc
+         | (($vr[1] - $vr[0] + 1) / $h) as $vs | (($hr[1] - $hr[0] + 1) / $w) as $hs
+         | "Where: " + (if $v == "middle" and $hc == "centre" then "the centre of the image"
+                         elif $v == "middle" then "the \($hc) side"
+                         elif $hc == "centre" then "the \($v) of the image"
+                         else "the \($v) \($hc)" end)
+           + (if $vs >= 0.85 and $hs < 0.5 then ", a tall strip" elif $hs >= 0.85 and $vs < 0.5 then ", a wide strip" else "" end)
+           + " (about \(.grid_heat.hot_cell_pct // 0)% of the image differs)" end),
+      (if ([.failures[]? | select(.code == "ocr_missing")] | length) > 0 then "Text: not compared (Apple Vision OCR is not installed)"
+       else ((.text_diff.removed // []) + (.text_diff.added // []) + (.text_diff.moved // [])) as $t
+         | if ($t | length) == 0 then "Text: unchanged"
+           else "Text: \((.text_diff.added // []) | length) added, \((.text_diff.removed // []) | length) removed, \((.text_diff.moved // []) | length) moved" end end),
+      ((.color.avg_dE // 0) as $d
+       | ((.color.palette_pairs // []) | map(select(.dE >= 10)) | sort_by(-(.weight * .dE)) | .[0]) as $p
+       | (if $d < 2 then "Colours: unchanged"
+          elif $d < 10 then "Colours: slightly different"
+          else "Colours: different" end)
+         + (if $p then "; the biggest shift is \($p.a) to \($p.b)" else "" end)),
+      "",
+      "Heatmap (\($w) by \($h), # = most different, blank = same):",
+      ($rows[] | "  |" + . + "|")'
 }
 
 # History subcommands (same numbering contract as q: stable JSONL line numbers).
@@ -149,8 +186,30 @@ case "${1:-}" in
   show)    shift; SHOW_N=""
            for sarg in "$@"; do case "$sarg" in --all) LM_ENTRY_SCOPE=all ;; *) SHOW_N="$sarg" ;; esac; done
            jsonl_entry "$LOG" "$SHOW_N" \
-             '"# see \(.img)  ·  \(.ts)  ·  \(.model)  ·  \(.ms)ms\n\n\(.response)"'
+             "$JQ_REMEDY"'"# see \(.img)  ·  \(.ts)  ·  \(.model)  ·  \(.ms)ms\n\n\(.response)\(if .error and remedy(.error) != "" then "\n\nWHAT TO DO: " + remedy(.error) else "" end)"'
            exit $? ;;
+  # paste = the image on the clipboard; latest = the newest screenshot file. Both end in a
+  # normal read, so every other flag and a trailing question work as usual.
+  paste)   shift
+           command -v osascript >/dev/null 2>&1 || { echo "see: paste needs macOS (osascript)" >&2; exit 12; }
+           SEE_TMP="$(mktemp -d "${TMPDIR:-/tmp}/see-run.XXXXXX")"
+           PASTE_IMG="$SEE_TMP/clipboard.png"
+           # PNG data straight off the clipboard; an error here means it holds text or nothing.
+           if ! osascript -e 'set d to (the clipboard as «class PNGf»)' \
+                          -e "set f to open for access POSIX file \"$PASTE_IMG\" with write permission" \
+                          -e 'set eof f to 0' -e 'write d to f' -e 'close access f' >/dev/null 2>&1 || [ ! -s "$PASTE_IMG" ]; then
+             emit_error clipboard_empty "the clipboard holds no image. Copy one first: Cmd-Ctrl-Shift-4 copies a screenshot area (plain Cmd-Shift-4 saves a file instead: use see latest)" 12
+           fi
+           _rc=0; "$0" "$PASTE_IMG" "$@" || _rc=$?
+           exit "$_rc" ;;
+  latest)  shift
+           SHOT_DIR="${SEE_SCREENSHOT_DIR:-$(defaults read com.apple.screencapture location 2>/dev/null || true)}"
+           [ -n "$SHOT_DIR" ] || SHOT_DIR="$HOME/Desktop"
+           SHOT_DIR="$(expand_tilde "$SHOT_DIR")"
+           SHOT="$(ls -t "$SHOT_DIR"/Screenshot*.png "$SHOT_DIR"/"Screen Shot"*.png "$SHOT_DIR"/*.png 2>/dev/null | sed -n 1p || true)"
+           [ -n "$SHOT" ] || emit_error img_unreadable "no screenshots found in $SHOT_DIR (set SEE_SCREENSHOT_DIR if yours are elsewhere)" 12
+           [ -t 2 ] && printf '%s· latest screenshot: %s (%s)%s\n' "$Dm" "$(basename "$SHOT")" "$(date -r "$(stat -f %m "$SHOT")" '+%H:%M %d %b')" "$Rs" >&2
+           exec "$0" "$SHOT" "$@" ;;
   # `more` = re-target the LAST image without retyping its path. Prefers the
   # artifact copy (survives temp cleanup — the original --menubar strip is long
   # gone) over the original path. Remaining args pass through, so
@@ -231,6 +290,7 @@ while [ $# -gt 0 ]; do
     --ui)       UI=true; shift ;;
     --ocr)      OCR=true; shift ;;
     --no-read)  NO_READ=true; shift ;;
+    --no-measure) NO_MEASURE=true; shift ;;
     --menubar)  MENUBAR=true; UI=true; shift ;;
     --mlx)      MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MODEL_SET=true; shift ;;
     --crop)     need_arg see "$1" "${2:-}"; CROP="$2"; shift 2 ;;
@@ -254,10 +314,9 @@ done
 if $UI && ! $MODEL_SET && [ "${UI_DEFAULT_MLX:-1}" = 1 ]; then
   MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MODEL_SET=true; MLX_AUTO=true
 fi
-# Plain reads default to the same MLX model (READ_DEFAULT_MLX); diff keeps its own
-# default and --ocr is model-free. MODEL_SET stays false so nothing else re-routes it.
-if ! $UI && ! $OCR && ! $MODEL_SET && [ "${READ_DEFAULT_MLX:-1}" = 1 ] && [ "${positionals[0]:-}" != diff ] \
-   && [ "${positionals[0]:-}" != count ] && [ "${positionals[0]:-}" != odd ]; then
+# Plain reads and diff both default to the same MLX model (READ_DEFAULT_MLX); --ocr is
+# model-free, and --no-read never loads a model at all. MODEL_SET stays false so nothing else re-routes it.
+if ! $UI && ! $OCR && ! $MODEL_SET && [ "${READ_DEFAULT_MLX:-1}" = 1 ] && [ "${positionals[0]:-}" != count ] && [ "${positionals[0]:-}" != odd ]; then
   MODEL="mlx:${UI_VISION_MLX:-mlx-community/Qwen3-VL-8B-Instruct-4bit}"; MLX_AUTO=true
 fi
 # The fallback: re-run this same command on VISION_MODEL (minicpm). Used when MLX
@@ -364,6 +423,43 @@ elif [ "${positionals[0]}" = "count" ] || [ "${positionals[0]}" = "odd" ]; then
 else
   { [ -n "$M_COLOR$M_MIN_AREA" ] || $M_FILLED; } && emit_error invalid_args "--color/--min-area/--filled-only belong to: see count|odd <image>" 2
   IMG="$(expand_tilde "${positionals[0]}")"; QUERY="${positionals[*]:1}"
+fi
+# ── Exact first: ask for text, an ID, or a count and the measuring tools answer before any model ──
+# `--ocr` reads text exactly and `count` measures pixels; both are instant and cannot invent
+# anything, so they go first. A pure "what text is in it" is fully answered by OCR; an ID or
+# number question prints the exact text and then lets the model pick the field. A count that
+# measures cleanly is the answer; an ambiguous one is shown with its range and the model reads too.
+# Text mode only (agents and --json get the read they always got); --no-measure skips this.
+if ! $DIFF && ! $MEASURE && ! $OCR && ! $UI && ! $NO_MEASURE && [ -n "$QUERY" ] && [ "$MODE" = text ] \
+   && [ -z "${SEE_EXACT_DONE:-}" ] && [ -z "$CROP$REGION" ]; then
+  _ql="$(printf '%s' "$QUERY" | tr 'A-Z' 'a-z')"
+  case "$_ql" in
+    *"how many"*|*"count the"*|*"number of "*)
+      _col=""; for _c in red green blue yellow orange purple gray black white; do case "$_ql" in *"$_c"*) _col="$_c"; break ;; esac; done
+      _cnt="$(SEE_EXACT_DONE=1 "$0" count "$IMG" ${_col:+--color "$_col"} 2>/dev/null)" || _cnt=""
+      if [ -n "$_cnt" ]; then
+        _verb="see count $(basename "$IMG")${_col:+ --color $_col}"
+        printf '%s\n' "$_cnt"
+        case "$_cnt" in
+          *ambiguous*) [ -t 2 ] && printf '%s· measured with: %s (not certain, so the model reads too; --no-measure skips this)%s\n' "$Dm" "$_verb" "$Rs" >&2 ;;
+          *) [ -t 2 ] && printf '%s· measured with: %s (exact, no model ran; --no-measure for the model'"'"'s read)%s\n' "$Dm" "$_verb" "$Rs" >&2
+             exit 0 ;;
+        esac
+      fi ;;
+    *"what text"*|*"transcribe"*|*"read the text"*|*"extract the text"*|*"all the text"*|*"what does it say"*|*"what does the image say"*|*"text in "*)
+      if command -v mac-ocr >/dev/null 2>&1; then
+        [ -t 2 ] && printf '%s· measured with: see %s --ocr (exact text, no model ran; --no-measure for the model'"'"'s read)%s\n' "$Dm" "$(basename "$IMG")" "$Rs" >&2
+        SEE_EXACT_DONE=1 exec "$0" "$IMG" --ocr
+      fi ;;
+    *exactly*|*" id"*|*"build id"*|*"serial"*|*"version"*|*"which number"*|*"what number"*|*"phone"*|*"code"*)
+      if command -v mac-ocr >/dev/null 2>&1; then
+        _ocr_txt="$(mac-ocr "$IMG" 2>/dev/null | head -c 1500)" || _ocr_txt=""
+        if [ -n "$_ocr_txt" ]; then
+          printf 'Exact text on the image (Apple Vision):\n%s\n\n' "$_ocr_txt"
+          [ -t 2 ] && printf '%s· measured with: see %s --ocr (exact); the model now picks the field you asked about (--no-measure skips this)%s\n' "$Dm" "$(basename "$IMG")" "$Rs" >&2
+        fi
+      fi ;;
+  esac
 fi
 ORIG_IMG="$IMG"   # what the caller named — meta/history cite this, not the crop temp
 
@@ -545,7 +641,7 @@ if $DIFF; then
   else
     MACHINE_DIFF="$(printf '%s' "$EVIDENCE" | jq -r '.text_summary // ""' 2>/dev/null)" || MACHINE_DIFF=""
   fi
-  $MODEL_SET || MODEL="${UI_VISION_MODEL:-$MODEL}"   # structure work → big tier, like --ui
+  # (the judge is the MLX Qwen3-VL by default, with the same minicpm-then-evidence-only fallback as plain reads)
   SYS="You are a precise UI-comparison analyst. The FIRST image is A (the reference); the SECOND image is B (the candidate/recreation). Report differences grounded in what is visible — never fabricate an element or value. B being different from A is not automatically wrong: separate what changed from whether it matters."
   USER="Compare the two interface images (A = reference, first; B = candidate, second). Output EXACTLY these sections, each heading bare:
 ## TEXT CHANGES
@@ -681,17 +777,18 @@ $USER" --max-tokens "$_mlx_max" 2>"$SEE_TMP/mlx.err")"
   case "$TEXT" in *"=========="*) TEXT="${TEXT##*==========}" ;; esac
   TEXT="$(printf '%s' "$TEXT" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   if [ "$rc" -ne 0 ] || [ -z "$TEXT" ]; then
-    if $DIFF; then
+    _mlx_cause="$(rg -i -N 'error' "$SEE_TMP/mlx.err" 2>/dev/null | tail -n 1 | head -c 160)"   # the cause, not the traceback's first lines
+    [ -n "$_mlx_cause" ] || _mlx_cause="$(tail -n 1 "$SEE_TMP/mlx.err" 2>/dev/null | head -c 160)"
+    if $MLX_AUTO; then
+      fallback_read "the mlx read failed ($_mlx_cause)"
+    elif $DIFF; then
       # soft for diff, like the ollama path: keep the $0 evidence pack
-      echo "see: mlx-vlm read failed — evidence pack only ($(tail -n 1 "$SEE_TMP/mlx.err" 2>/dev/null | head -c 160))" >&2
+      echo "see: mlx-vlm read failed — evidence pack only ($_mlx_cause)" >&2
       VLM_FAILED=true
       TEXT="(visual read failed — the deterministic evidence pack below is complete)"
       rc=0
-    elif $MLX_AUTO; then
-      # the last line naming an error, not the traceback's trailing help link
-      fallback_read "the mlx read failed ($(rg -i -N 'error' "$SEE_TMP/mlx.err" 2>/dev/null | tail -n 1 | head -c 140))"
     else
-      emit_error mlx_failed "mlx-vlm read failed: $(head -c 200 "$SEE_TMP/mlx.err" 2>/dev/null)" 10
+      emit_error mlx_failed "mlx-vlm read failed: $_mlx_cause" 10
     fi
   fi
   MODEL="mlx:$MLX_MODEL"
@@ -761,7 +858,7 @@ if $DIFF && [ -n "$EVIDENCE" ]; then
   _om=false; $OCR_MISSING && _om=true
   _nr=false; $NO_READ && _nr=true
   _vfix="start ollama, or ignore — the evidence layer is model-independent"
-  $MLX && _vfix="mlx-vlm failed ($(tail -n 1 "$SEE_TMP/mlx.err" 2>/dev/null | head -c 160)); check the repo id, or ignore — the evidence layer is model-independent"
+  if $MLX && $VLM_FAILED; then _vfix="mlx-vlm failed ($(tail -n 1 "$SEE_TMP/mlx.err" 2>/dev/null | head -c 160 || true)); check the repo id, or ignore — the evidence layer is model-independent"; fi
   EVIDENCE="$(printf '%s' "$EVIDENCE" | jq -c --arg m "$MODEL" --argjson vms "$ms" --argjson vf "$_vf" --argjson om "$_om" --argjson nr "$_nr" --arg vfix "$_vfix" \
     'if $nr then .   # --no-read: deliberate skip — no model call, no failure entry
      elif $vf then (.failures += [{stage:"vlm", code:"vlm_unavailable", retriable:true, fix:$vfix}])
@@ -785,6 +882,8 @@ NOW_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # The audit trail must not name a model that never fired: on a deliberate
 # --no-read skip, read.md / meta.json / see-history.jsonl carry this instead.
 HMODEL="$MODEL"; $NO_READ && HMODEL="none (--no-read)"
+NOMODEL=false; { $NO_READ || { $DIFF && $VLM_FAILED; }; } && NOMODEL=true   # no model ran: the envelope says null, not a name
+$DIFF && $VLM_FAILED && ! $NO_READ && HMODEL="none (read failed)"
 if mkdir -p "$ART_ROOT" 2>/dev/null; then
   slug="$(printf '%s' "$(basename "${ORIG_IMG%.*}")" | tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-//; s/-$//' | cut -c1-40)"
   [ -n "$slug" ] || slug=img
@@ -871,22 +970,31 @@ if [ "$MODE" = json ]; then
   elif $DIFF && [ -n "$EVIDENCE" ]; then
     # --json for a diff: the full evidence pack under .evidence (schema docs/10
     # §5), the standalone VLM prose in .text. The judge (L2) reads .evidence.
-    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" --argjson ev "$EVIDENCE" \
-       '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end),
+    jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson nm "$NOMODEL" --argjson ms "$ms" --arg art "$ART" --argjson ev "$EVIDENCE" \
+       '{ok:true, text:$t, model:(if $nm then null else $m end), ms:$ms, artifact:(if $art == "" then null else $art end),
          evidence:($ev + {artifact:(if $art == "" then null else $art end)})}'
   else
     jq -cn --arg t "$TEXT" --arg m "$MODEL" --argjson ms "$ms" --arg art "$ART" \
        '{ok:true, text:$t, model:$m, ms:$ms, artifact:(if $art == "" then null else $art end)}'
   fi; } | _fb
 else
-  if $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then
+  if $DIFF && [ -n "$EVIDENCE" ]; then
+    # The measured summary is the answer; a model read, when one ran, comes after it.
+    diff_summary
+    if $NOMODEL; then
+      $NO_READ || printf '\n%s(the model read was unavailable; the measured summary above is complete)%s\n' "$Dm" "$Rs"
+    else
+      printf '\n%sModel read%s\n' "$Y" "$Rs"
+      printf '%s\n' "$TEXT"
+    fi
+  elif $GLOW && [ -t 1 ] && command -v glow >/dev/null 2>&1; then
     printf '%s\n' "$TEXT" | glow -
   else
     printf '%s\n' "$TEXT"
   fi
   # Integer ms, no awk — robust even on an interrupted run. The TTY guard must
   # not become the exit code (non-TTY text-mode success would exit 1).
-  [ -t 2 ] && printf '%s· %s · %dms%s%s\n' "$Dm" "$MODEL" "$ms" "${ART:+ · see open -1}" "$Rs" >&2
+  [ -t 2 ] && printf '%s· %s · %dms%s%s\n' "$Dm" "$($NOMODEL && echo 'no model ran' || echo "$MODEL")" "$ms" "${ART:+ · see open -1}" "$Rs" >&2
   # next: nudges — rerun suggestions the extractors surfaced, each paste-ready
   if $DIFF && [ -n "$EVIDENCE" ]; then
     printf '%s' "$EVIDENCE" | jq -r '.next[]? | "  → " + .reason + "\n    " + .cmd' 2>/dev/null >&2 || true
