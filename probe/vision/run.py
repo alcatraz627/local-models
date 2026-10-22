@@ -4,6 +4,7 @@
     run.py --model minicpm-v4.6 --core --dry-run     # print the commands only
     run.py --model gemma4:26b --cases C01,T01        # run two cases, seeds 0 1 2
     run.py --model apple-vision --cases T06          # OCR lane only, no model
+    run.py --model measure --cases C02,O03           # `see count` / `see odd`, no model
 
 One JSON line per (case, seed) goes to results/<model-slug>.jsonl. Pairs already
 present for that model are skipped unless --fresh. OCR-lane runs are model
@@ -24,6 +25,9 @@ from score import score, score_blank_read
 TIMEOUT_S = 420
 OCR_MODEL = "apple-vision"
 BIG_OLLAMA_GB = 7
+# The model-free measuring lane: `see count` / `see odd` answer these cases by pixel measurement.
+MEASURE_MODEL = "measure"
+MEASURE_CASES = ("C01", "C02", "C03", "O01", "O02", "O03", "O04")
 
 
 def resident_big_ollama():
@@ -45,6 +49,17 @@ def lanes(case, folder, model):
     see, img = str(SEE), str(folder / "image.png")
     tail = ["--json", "-m", model]
     truth = json.loads((folder / "truth.json").read_text())
+    if model == MEASURE_MODEL:
+        if case["id"] not in MEASURE_CASES:
+            raise ValueError(f"the measure lane does not cover {case['id']}")
+        if mode == "odd":
+            return [dict(name="main", cmd=[see, "odd", img, "--json"], measure=True)]
+        cmd = [see, "count", img, "--json"]
+        if case["id"] == "C02":
+            cmd.append("--filled-only")
+        if case["id"] == "C03":
+            cmd += ["--color", truth["color"]]
+        return [dict(name="main", cmd=cmd, measure=True)]
     if mode == "diff":
         return [dict(name="main", cmd=[see, "diff", str(folder / "a.png"), str(folder / "b.png"), prompt, *tail])]
     if mode == "ui-json":
@@ -93,6 +108,9 @@ def execute(lane, case_id, truth):
     wall_ms = round((time.monotonic() - started) * 1000)
     env = parse_envelope(stdout)
     text, data = env.get("text") or "", env.get("data")
+    if lane.get("measure") and isinstance(data, dict):
+        # an ambiguous measurement is an honest non-answer, so it must not score as a pick
+        text = f"ANSWER: {data['answer']}" if data.get("answer") is not None else "ANSWER: ambiguous"
     if lane.get("kind") == "blank-read":
         verdict = score_blank_read(text)
     else:
@@ -145,6 +163,8 @@ def main():
 
     wanted = set(a.cases.split(",")) if a.cases else None
     cases = [c for c in load_cases(a.catalog) if (wanted is None or c["id"] in wanted) and (not a.core or c.get("core"))]
+    if a.model == MEASURE_MODEL:
+        cases = [c for c in cases if c["id"] in MEASURE_CASES]
     if wanted and wanted - {c["id"] for c in cases}:
         raise SystemExit("unknown case ids: " + ", ".join(sorted(wanted - {c["id"] for c in cases})))
     seeds = tuple(int(s) for s in a.seeds.split(","))
