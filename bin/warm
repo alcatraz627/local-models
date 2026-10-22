@@ -28,7 +28,7 @@ pin() { # MODEL KEEP_ALIVE(number or "duration")
   secs="$(ka_seconds "$ka" 2>/dev/null)" && [ -n "$secs" ] && ka="$secs"   # one form Ollama always reads (it has no 'd')
   [[ "$ka" =~ ^-?[0-9]+$ ]] || ka="\"$ka\""
   out="$(curl -s "$OLLAMA_HOST/api/generate" -d "{\"model\":\"$1\",\"keep_alive\":$ka}")" \
-    || { echo "failed to reach Ollama at $OLLAMA_HOST" >&2; exit 10; }
+    || { echo "failed to reach Ollama at $OLLAMA_HOST" >&2; lm_fix_line server_down; exit 10; }
   # Ollama answers a refusal (model not pulled, bad name) with HTTP 404 and an
   # error body, which curl -s still counts as success; read the body instead.
   if [[ "$out" == *'"error"'* ]]; then
@@ -40,6 +40,7 @@ pin() { # MODEL KEEP_ALIVE(number or "duration")
       echo "failed to load '$1': the memory guard killed it under memory pressure (see $guard). Free memory or stop the guard: touch /tmp/mem-guard.stop" >&2
     else
       echo "failed to load '$1': $out (is it pulled? ollama list)" >&2
+      lm_fix_line model_missing
     fi
     exit 11
   fi

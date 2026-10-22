@@ -47,11 +47,12 @@ def run(argv, env_extra=None, timeout=60, stdin=None):
     return p.returncode, p.stdout, p.stderr
 
 
-def run_pty(argv, timeout=30):
+def run_pty(argv, timeout=30, env_extra=None):
     """Run argv attached to a pseudo-terminal, colour allowed; return (rc, output)."""
     env = dict(os.environ, TERM="xterm-256color")
     env.pop("NO_COLOR", None)
     env["LM_HINTS"] = "0"
+    env.update(env_extra or {})
     m, s = pty.openpty()
     p = subprocess.Popen(argv, stdin=s, stdout=s, stderr=s, env=env, close_fds=True)
     os.close(s)
@@ -72,7 +73,7 @@ def run_pty(argv, timeout=30):
     return p.returncode, out.decode("utf-8", "replace")
 
 
-# ── 1. the registry parses and every job is complete ─────────────────────────────────
+# 1. the registry parses and every job is complete
 reg = None
 try:
     with open(REGISTRY, "rb") as f:
@@ -99,7 +100,7 @@ names = set(jobs)
 aliases = {a: n for n, j in jobs.items() for a in j.get("aliases", [])}
 verbs_known = names | set(aliases) | {"q", "see", "warm", "how", "version", "opencode"}
 
-# ── 2. the screens and the registry name the same jobs ──────────────────────────────
+# 2. the screens and the registry name the same jobs
 rc, front, _ = run([LM])
 check("lm (no tty) exits 0", rc == 0, f"rc={rc}")
 shown = set()
@@ -123,7 +124,7 @@ for line in more.splitlines():
     if m:
         check(f"more verb 'lm {m.group(1)}' is in the registry", m.group(1) in verbs_known)
 
-# ── 3. every example starts with a real verb ──────────────────────────────────────────
+# 3. every example starts with a real verb
 intents = {f[:-5] for f in os.listdir(os.path.join(ROOT, "intents")) if f.endswith(".toml")}
 for name, j in jobs.items():
     for e in j.get("examples", []):
@@ -145,7 +146,7 @@ for name, j in jobs.items():
             ok = toks[1] in intents or toks[1] in Q_SUBS
         check(f"example verb ok: {cmd}", ok)
 
-# ── 4. every verb answers -h with exit 0 and writes no history ──────────────────────
+# 4. every verb answers -h with exit 0 and writes no history
 def snapshot():
     out = {}
     for d in ("logs", "outputs"):
@@ -172,7 +173,7 @@ after = snapshot()
 check("-h left logs/ and outputs/ untouched", before == after,
       str([k for k in set(before) | set(after) if before.get(k) != after.get(k)][:3]))
 
-# ── 5. generated files equal a fresh generation ─────────────────────────────────────
+# 5. generated files equal a fresh generation
 with tempfile.TemporaryDirectory(prefix="verbs-gen.") as tmp:
     rc, _, err = run([sys.executable, VERBS_PY, "gen", "--out", tmp])
     check("gen --out succeeds", rc == 0, err[:200])
@@ -197,7 +198,7 @@ with tempfile.TemporaryDirectory(prefix="verbs-gen.") as tmp:
         disk = open(p, encoding="utf-8").read() if os.path.exists(p) else None
         check(f"{rel} equals a fresh generation", disk == fresh, "run scripts/gen-verbs.sh")
 
-# ── 6. the agent menu validates against the registry ────────────────────────────────
+# 6. the agent menu validates against the registry
 rc, out, err = run([LM, "--capabilities", "--json"])
 try:
     cap = json.loads(out)
@@ -215,7 +216,7 @@ check("lm --capabilities <job> --json is one job", rc == 0 and json.loads(out).g
 rc, out, _ = run([LM, "--capabilities"])
 check("lm --capabilities (text) lists jobs", rc == 0 and "read" in out and "\033" not in out)
 
-# ── 7. lm how finds the job without a model ─────────────────────────────────────────
+# 7. lm how finds the job without a model
 def how(q):
     rc, out, err = run([LM, "how", "--json", "--no-model", q])
     try:
@@ -257,7 +258,7 @@ check("how: never a cloud lane unprompted", rc == 0 and "--web" not in r.get("co
 rc, r = how("zzz qqq xxyzzy")
 check("how --no-model with no match exits 12 with code no_match", rc == 12 and r.get("code") == "no_match", str(r)[:160])
 
-# ── 8. a --json error carries the fix ───────────────────────────────────────────────
+# 8. a --json error carries the fix
 for label, argv in (("q", [Q, "--json", "--ctx", "/nonexistent/none.txt", "hi"]),
                     ("see", [SEE, "--json", "/nonexistent/none.png"])):
     rc, out, _ = run(argv)
@@ -269,16 +270,34 @@ for label, argv in (("q", [Q, "--json", "--ctx", "/nonexistent/none.txt", "hi"])
           e.get("ok") is False and isinstance(e.get("remedy"), str) and e["remedy"] and "next" in e, str(e)[:200])
     check(f"{label} --json error keeps code and message", "code" in e and "message" in e)
 
-# ── 9. the hint table lives in the registry ─────────────────────────────────────────
+libtext = open(os.path.join(ROOT, "bin", "_lib.sh"), encoding="utf-8").read()
+timeline = re.findall(r'^\s{6}(\w+): "(.*?)",?$', libtext.split("JQ_REMEDY='def remedy")[1].split("}[$c]")[0], re.M)
+check("timeline remedy table is readable", len(timeline) >= 10, str(len(timeline)))
+if reg:
+    for code, text in timeline:
+        check(f"timeline remedy for {code} matches the registry", reg["remedies"].get(code, {}).get("remedy") == text,
+              str(reg["remedies"].get(code, {}).get("remedy")))
+
+# 9. the hint table lives in the registry
 rc, out, _ = run([sys.executable, VERBS_PY, "hint", "small_answer"])
 check("hint small_answer is lm again --big", rc == 0 and "lm again --big" in out, out[:80])
 
-# ── 10. colour is kept on a terminal and absent when piped ──────────────────────────
+# 10. colour is kept on a terminal and absent when piped
 for argv in ([LM], [LM, "help", "read"], [LM, "more"]):
     rc, out = run_pty(argv)
     check(f"{' '.join(argv[1:]) or 'lm'}: coloured on a terminal", rc == 0 and out.count("\033[") >= 8, f"{out.count(chr(27))} escapes")
 rc, out, _ = run([LM], env_extra={"NO_COLOR": "1"})
 check("lm piped: no escape codes", "\033" not in out)
+
+with tempfile.TemporaryDirectory(prefix="verbs-shots.") as shots:
+    open(os.path.join(shots, "Screenshot test.png"), "w").close()
+    rc, out = run_pty([LM], env_extra={"LM_HINTS": "1", "SEE_SCREENSHOT_DIR": shots})
+    check("bare lm on a terminal suggests lm read latest after a fresh screenshot",
+          "suggest:" in out and "lm read latest" in out.split("JOBS")[0], out[:160])
+    rc, out = run_pty([LM], env_extra={"LM_HINTS": "0", "SEE_SCREENSHOT_DIR": shots})
+    check("LM_HINTS=0 silences the suggestion", "suggest:" not in out)
+    rc, out, _ = run([LM], env_extra={"LM_HINTS": "1", "SEE_SCREENSHOT_DIR": shots})
+    check("lm piped never suggests", "suggest:" not in out)
 
 fails = [c for c in CHECKS if not c[1]]
 for name, ok, detail in CHECKS:

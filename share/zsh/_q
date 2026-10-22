@@ -34,8 +34,8 @@ _q() {
     '--intent[intent as a flag (same set as the positional token)]:value:'
     '--all[with show -1, -c or history\: include calls from other]'
   )
-  if (( CURRENT == 2 )); then
-    _alternative 'intents:intent:_describe -t intents intent intents' 'flags:flag:compadd -a opts'
+  if (( CURRENT == 2 )) && [[ $PREFIX != -* ]]; then
+    _describe -t intents 'q intent' intents
     return
   fi
   _arguments -s $opts '*:prompt or file:_files'

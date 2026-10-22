@@ -541,7 +541,7 @@ def gen_zsh(reg):
     ints = " ".join(f"'{zsh_desc(n)}:{zsh_desc(s)}'" for n, s in intents())
     q = [f"#compdef q\n{header}", "_q() {", "  local -a intents", f"  intents=( {ints} )", "  local -a opts", "  opts=("]
     q += ["    " + s for s in tool_flags("q")]
-    q += ["  )", "  if (( CURRENT == 2 )); then", "    _alternative 'intents:intent:_describe -t intents intent intents' 'flags:flag:compadd -a opts'", "    return",
+    q += ["  )", "  if (( CURRENT == 2 )) && [[ $PREFIX != -* ]]; then", "    _describe -t intents 'q intent' intents", "    return",
           "  fi", "  _arguments -s $opts '*:prompt or file:_files'", "}", "_q \"$@\""]
     files["share/zsh/_q"] = "\n".join(q) + "\n"
 
@@ -568,7 +568,7 @@ def roff(s):
 def cap(s):
     """Capitalise a sentence unless it opens with a command name, which stays as typed."""
     first = s.split()[0] if s.split() else ""
-    return s if first in ("q", "see", "warm", "lm", "imagine", "opencode", "review") else s[:1].upper() + s[1:]
+    return s if first in ("q", "see", "warm", "lm") else s[:1].upper() + s[1:]
 
 
 def man_page(reg, name):
