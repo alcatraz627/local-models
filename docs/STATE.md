@@ -95,6 +95,13 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-10-22 · lm discoverability:** one job list (`lib/verbs.toml`) drives everything people and agents read.
+  - It generates the `lm` screens, `lm --capabilities [--json]`, zsh completion, man pages, tldr pages and the CAPABILITIES §0 block.
+  - `lm how "<request>"` finds the command without running it. `--go` runs only argument-free, read-only jobs.
+  - JSON errors carry `remedy` and `next`. Answers on a terminal get one gray `next:` hint.
+  - Regenerate with `scripts/gen-verbs.sh`. `probe/fixtures/verbs-drift.py` (in verify.sh) fails on any drift.
+  - Reports: `.claude/output/20261022-lm-discover/` (brief, build-report, validator, fixes).
+
 - **2026-10-22 · lm usability wave:** 17 findings from an audit of the CLI as a person uses it.
   - `lm` opens on jobs (ask, cmd, read, diff, doc, again, find, fast); `lm more` has the rest.
   - Bare `q` routes on a terminal. `q check` tests a command answer against the tool's own help.
