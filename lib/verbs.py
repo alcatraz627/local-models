@@ -685,11 +685,11 @@ _lm_shots() {
   local dir="${SEE_SCREENSHOT_DIR:-$(defaults read com.apple.screencapture location 2>/dev/null)}"
   [[ -n $dir ]] || dir="$HOME/Desktop"
   dir="${~dir}"
-  local -a shots
+  local -a shots expl
   shots=( ${dir}/Screen*.png(N.om[1,8]) )
+  (( $#shots )) && _wanted shots expl 'recent screenshot' compadd -- "${shots[@]}"
   _alternative \
     'special:shortcut:((paste\:"the image on your clipboard" latest\:"your newest screenshot"))' \
-    'shots:recent screenshot:{compadd -- "${shots[@]}"}' \
     'files:image file:_files -g "*.(png|jpg|jpeg|webp|gif|heic)"'
 }
 """

@@ -35,8 +35,7 @@ JOBS
 KEEP IT HANDY
   lm status                        what is loaded, free memory, when it unloads
   lm fast 1h                       keep answers instant for an hour (lm fast off to free the memory)
-  lm how "what I want"             find the command for it, without running anything (--go runs
-                                   read-only ones)
+  lm how "what I want"             find the command for it, run nothing (--go runs read-only ones)
   lm help <job>                    the steps for one job: ask, cmd, doc, read, diff, count, again,
                                    find, web, fast, failed
   lm more                          everything else: gemini ☁, fleet, rag, index, imagine, probe,
