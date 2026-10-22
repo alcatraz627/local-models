@@ -188,7 +188,8 @@ case "$CMD" in
              printf '%spick per call: lm gemini -m <model> · set the default: GEMINI_MODEL in config.sh · extend the list: GEMINI_MODELS%s\n' "$Dm" "$Rs"
            fi
            exit 0 ;;
-  "")      show_help; exit 0 ;;
+  "")      [ "$MODE" = json ] && emit_error invalid_args "give a prompt, or a subcommand such as ask or models (lm gemini -h)" 2
+           show_help; exit 0 ;;
 esac
 
 # Validate the model against the pick-list EARLY — a typo errors here instead of

@@ -56,6 +56,7 @@ emit_error() { # CODE MESSAGE EXIT
   exit "$3"
 }
 
+if [ "${1:-}" = --json ]; then MODE=json; shift; fi   # lm rag --json: the flag may come first
 CMD="${1:-}"; shift 2>/dev/null || true
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -69,7 +70,9 @@ done
 [ -x "$PY" ] || emit_error venv_missing "project venv missing at $PY" 12
 
 case "$CMD" in
-  ""|-h|--help|help) show_help; exit 0 ;;
+  "") [ "$MODE" = json ] && emit_error invalid_args "say what to do: index, search, ask or status (lm rag -h)" 2
+      show_help; exit 0 ;;
+  -h|--help|help) show_help; exit 0 ;;
 
   index)
     [ "${#positionals[@]}" -gt 0 ] || emit_error invalid_args "index needs dirs/files: lm rag index <dir|file.md>…" 2

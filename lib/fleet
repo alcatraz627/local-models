@@ -78,7 +78,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ -n "$INTENT" ] || { show_help; exit 2; }
+if [ -z "$INTENT" ]; then
+  [ "$MODE" = json ] && emit_error invalid_args "give an intent and the files to run it on (lm fleet -h)" 2
+  show_help; exit 2
+fi
 [ -f "$DIR/intents/$INTENT.toml" ] || emit_error unknown_intent "no such intent: $INTENT (see: q intents)" 2
 HANDLER="$(yq -p toml -r '.handler // "model"' "$DIR/intents/$INTENT.toml" 2>/dev/null)"
 [[ "$JOBS" =~ ^[1-9]$ ]] || emit_error invalid_args "-j must be 1-9, got '$JOBS'" 2

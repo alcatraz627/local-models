@@ -155,7 +155,7 @@ JQ_REMEDY='def remedy($c): {
       ctx_required: "that intent needs a file; add --ctx FILE",
       ctx_unreadable: "the file could not be read; check the path",
       ctx_binary: "the file is binary; extract its text first",
-      ctx_too_large: "the file is too big; cut it down or use lm gemini --file",
+      ctx_too_large: "the file is too big; cut it down, or send it to the cloud lane with lm gemini --file (that leaves this Mac)",
       cancelled: "it was cancelled before it finished",
       mlx_failed: "the MLX read failed; run it again, or add -m minicpm-v4.6",
       model_error: "the vision model failed; run it again, or lm doctor",
@@ -241,14 +241,15 @@ usage_fail() { # TOOL MESSAGE
   exit 2
 }
 
-# For verbs whose only option is --json, in any position: prints --json when given,
-# refuses anything else. Use as: jf="$(json_only "lm doctor" "$@")" || exit 2
+# For verbs whose only option is --json, in any position: sets JSON_ONLY to --json when given and
+# refuses anything else (usage error, exit 2). Call it directly, never inside $( ), or the JSON
+# error envelope is swallowed by the substitution.
 json_only() { # TOOL ARG...
-  local tool="$1" out=""; shift
+  local tool="$1" a; shift
+  JSON_ONLY=""
   for a in "$@"; do
-    case "$a" in --json) out=--json ;; *) usage_fail "$tool" "unexpected '$a' (the only option is --json)" ;; esac
+    case "$a" in --json) JSON_ONLY=--json ;; *) usage_fail "$tool" "unexpected '$a' (the only option is --json)" ;; esac
   done
-  printf '%s' "$out"
 }
 
 # Call from the parser's catch-all branch. Only a flag-shaped word (-x, --xyz,

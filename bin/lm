@@ -15,6 +15,9 @@ source "$DIR/config.sh" 2>/dev/null || true   # WARM_MODEL etc — doctor checks
 source "$BIN/_lib.sh"
 wants_all "$@" && HELP_ALL=true
 lm_identify
+# With --json among the arguments, a usage error also prints the {ok:false, code, message, remedy, next} envelope on stdout.
+MODE=text
+for _arg in "$@"; do case "$_arg" in --json) MODE=json ;; esac; done
 
 # The screens below are generated from lib/verbs.toml, the one registry of jobs. Colour
 # follows the palette in _lib.sh: --color is passed only when this stdout is a terminal.
@@ -33,8 +36,8 @@ help_job() {
 }
 
 # One gray line above the bare screen when the next step is probably obvious: an image on
-# the clipboard, or a screenshot from the last ten minutes. Terminal only, capped well under
-# 150 ms, and it never fails the screen. LM_HINTS=0 turns it off.
+# the clipboard, or a screenshot from the last ten minutes. Terminal only, the clipboard probe is cut
+# at 200 ms, and it never fails the screen. LM_HINTS=0 turns it off.
 suggest_next() {
   [ -t 1 ] || return 0
   [ "${LM_HINTS:-1}" != 0 ] || return 0
@@ -44,8 +47,9 @@ suggest_next() {
   dir="${SEE_SCREENSHOT_DIR:-$(defaults read com.apple.screencapture location 2>/dev/null || true)}"
   [ -n "$dir" ] || dir="$HOME/Desktop"
   dir="$(expand_tilde "$dir")"
-  shot="$(find "$dir" -maxdepth 1 -name '*.png' -mmin -10 -print -quit 2>/dev/null || true)"
-  for i in 1 2 3 4 5 6; do kill -0 "$pid" 2>/dev/null || break; sleep 0.02; done
+  shot=""
+  [ ! -d "$dir" ] || shot="$(find "$dir" -maxdepth 1 -name '*.png' -mmin -10 -print -quit 2>/dev/null || true)"
+  for i in 1 2 3 4 5 6 7; do kill -0 "$pid" 2>/dev/null || break; sleep 0.02; done
   kill "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
   if grep -q -e 'PNGf' -e 'TIFF' "$tmp" 2>/dev/null; then
@@ -335,11 +339,13 @@ lm_models() {
   local model="${WARM_MODEL:-gemma4-e4b-warm}" big="${BIG_MODEL:-gemma4:26b}" code="${CODE_MODEL:-qwen3.6:35b-a3b}" tags ps resident avail
   local sweep vision; sweep="$(resolve_tier sweep)"; vision="${VISION_MODEL:-minicpm-v4.6}"
   tags=$(curl -s -m 2 "$OLLAMA_HOST/api/tags" 2>/dev/null) \
-    || { echo "server down — start: launchctl kickstart -k gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2; return 10; }
+    || { [ "${1:-}" != --json ] || lm_err_json server_down "server down: nothing answered at $OLLAMA_HOST"
+         echo "server down — start: launchctl kickstart -k gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2; return 10; }
   # A reachable-but-erroring server (HTTP 500 body) makes curl exit 0 with non-JSON;
   # validate before the jq pipes, which would otherwise abort under `set -e`.
   printf '%s' "$tags" | jq -e . >/dev/null 2>&1 \
-    || { echo "server reachable but returned no model list" >&2; return 10; }
+    || { [ "${1:-}" != --json ] || lm_err_json server_down "the server answered but returned no model list"
+         echo "server reachable but returned no model list" >&2; return 10; }
   ps=$(curl -s -m 2 "$OLLAMA_HOST/api/ps" 2>/dev/null)
   resident=$(printf '%s' "$ps" | jq -c '[.models[]?.name]' 2>/dev/null || echo '[]')
   # tiers (the aliases `q -m` accepts) and gemini are the contract for other
@@ -401,14 +407,14 @@ lm_timeline() {
       -h|--help) verb_help timeline; return 0 ;;
       --tool)   need_arg "lm timeline" "$1" "${2:-}"; tool="$2"; shift 2 ;;
       *) if [[ "$1" =~ ^[1-9][0-9]*$ ]]; then n="$1"; shift
-         else reject_unknown_flag "lm timeline" "$1"; echo "lm timeline: unexpected '$1' (lm timeline [N] [--errors] [--tool T] [--all] [--json])" >&2; exit 2; fi ;;
+         else reject_unknown_flag "lm timeline" "$1"; usage_fail "lm timeline" "unexpected '$1' (lm timeline [N] [--errors] [--tool T] [--all] [--json])"; fi ;;
     esac
   done
   case "$tool" in
     gem) tool=gemini ;; img) tool=imagine ;;
     ''|q|see|imagine|fleet|gemini) : ;;
     *) local g; g="$(did_you_mean "$tool" q see imagine fleet gemini)"
-       echo "lm timeline: unknown tool '$tool'${g:+ (did you mean '$g'?)}; one of q see imagine fleet gemini" >&2; exit 2 ;;
+       usage_fail "lm timeline" "unknown tool '$tool'${g:+ (did you mean '$g'?)}; one of q see imagine fleet gemini" ;;
   esac
   lm_identify
   # Only the newest N lines of each log can hold the newest N rows overall, so tail
@@ -467,10 +473,11 @@ lm_timeline() {
 # Open the newest history entry (optionally of one tool) in full: the tool's own `show N`.
 # Yours by default; --all takes the newest from anyone.
 lm_last() {
-  local tool="" row n args=()
+  local tool="" row n args=() json=false
   while [ $# -gt 0 ]; do
     case "$1" in
       -h|--help) verb_help last; return 0 ;;
+      --json) json=true; shift ;;
       --all) args+=(--all); shift ;;
       -*) reject_unknown_flag "lm last" "$1"; shift ;;
       *) tool="$1"; shift ;;
@@ -479,8 +486,10 @@ lm_last() {
   if [ -n "$tool" ]; then row="$(LM_TIMELINE_QUIET=1 lm_timeline 1 --tool "$tool" --json ${args[@]+"${args[@]}"})"; else row="$(LM_TIMELINE_QUIET=1 lm_timeline 1 --json ${args[@]+"${args[@]}"})"; fi
   tool="$(printf '%s' "$row" | jq -r '.[0].tool // empty')"; n="$(printf '%s' "$row" | jq -r '.[0].n // empty')"
   if [ -z "$tool" ]; then
+    $json && lm_err_json no_such_entry "none of your calls from this terminal yet"
     echo "lm last: none of your calls from this terminal yet (lm last --all takes the newest from anyone)" >&2; exit 12
   fi
+  if $json; then printf '%s' "$row" | jq -c '.[0]'; return 0; fi
   printf '%s%s#%s%s\n' "$eDm" "$tool" "$n" "$eRs" >&2
   case "$tool" in
     q)       exec "$BIN/q" show "$n" ;;
@@ -582,7 +591,8 @@ verb_help() {
       _note 'Each row starts with a handle like q#3689: open it with q show 3689.' ;;
     last)
       _cmd 'lm last [tool]'         'your newest call, in full (optionally of one tool)'
-      _cmd 'lm last --all'          'the newest call from anyone, including agents and hooks' ;;
+      _cmd 'lm last --all'          'the newest call from anyone, including agents and hooks'
+      _cmd 'lm last --json'         'the row as one JSON object' ;;
     find)
       _cmd 'lm find "words"'        'questions and answers containing all the words, yours first'
       _cmd 'lm find port -n 40'     'show up to 40 matches (default 15)'
@@ -626,9 +636,9 @@ verb_help() {
       _cmd 'lm more'                'the full command list' ;;
     how)
       _cmd 'lm how "what I want"'   'the command for it, one line on why, up to two alternatives; nothing is run'
-      _cmd 'lm how "..." --go'      'print the command, then run it'
-      _cmd 'lm how "..." --json'    '{command, job, why, alternatives, matched_by}'
-      _note 'Matching is by words first and costs nothing. Only when no job matches well does it ask the small model. It never picks a command that leaves this Mac unless your words ask for the web or gemini.' ;;
+      _cmd 'lm how "..." --go'      'print the command, then run it; only read-only commands run, the rest say what to fill in'
+      _cmd 'lm how "..." --json'    '{command, job, why, alternatives, matched_by, go, fill} (not with --go)'
+      _note 'Matching is by words first and costs nothing. Only when no job matches well does it ask the small model to pick a job by name. A command that leaves this Mac appears only when your words ask for the web or gemini, and not when they say no to it.' ;;
     capabilities)
       _cmd 'lm --capabilities'      'every job with what it takes, what it prints, its cost and side effects'
       _cmd 'lm --capabilities --json' 'the same for a script or an agent: {version, jobs, conventions}'
@@ -697,12 +707,12 @@ case "$verb" in
     ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
   status)   shift; if wants_help "$@"; then verb_help status; exit 0; fi
-            jf="$(json_only "lm status" "$@")" || exit 2
-            if [ -n "$jf" ]; then lm_status_json; else lm_status; fi ;;
+            json_only "lm status" "$@"
+            if [ -n "$JSON_ONLY" ]; then lm_status_json; else lm_status; fi ;;
   models|doctor)
             shift; if wants_help "$@"; then verb_help "$verb"; exit 0; fi
-            jf="$(json_only "lm $verb" "$@")" || exit 2
-            "lm_$verb" "$jf" ;;
+            json_only "lm $verb" "$@"
+            "lm_$verb" "$JSON_ONLY" ;;
   timeline) shift; lm_timeline "$@" ;;
   last)     shift; lm_last "$@" ;;
   examples) shift; if wants_help "$@"; then verb_help examples; exit 0; fi; examples_table ;;

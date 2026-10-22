@@ -64,6 +64,16 @@ ka_seconds() {
   done
   echo "$total"
 }
+# Stop with exit 11 before "loading" is printed, if MODEL is not an installed model. When the
+# model list cannot be read, say nothing and let pin() report what Ollama answers.
+require_installed() { # MODEL
+  local tags; tags="$(curl -s -m 3 "$OLLAMA_HOST/api/tags" 2>/dev/null)" || return 0
+  printf '%s' "$tags" | jq -e . >/dev/null 2>&1 || return 0
+  printf '%s' "$tags" | jq -e --arg m "$1" 'any(.models[]?; .name == $m or (.name | startswith($m + ":")))' >/dev/null 2>&1 && return 0
+  echo "failed to load '$1': it is not installed (ollama list shows what is)" >&2
+  lm_fix_line model_missing
+  exit 11
+}
 # Stop with exit 2 and a plain message, before anything loads, if TTL is not a time we can read.
 require_ttl() { # TTL
   ka_seconds "$1" >/dev/null && return 0
@@ -87,6 +97,8 @@ is_duration() { [[ "$1" =~ ^([0-9]+[dhms])+$ ]] || [ "$1" = forever ]; }
 cmd="${1:-status}"
 # bare `warm --json` means the status view, like bare `warm`
 [ "$cmd" = --json ] && set -- status --json && cmd=status
+# `warm on -h` (and off, status, restart) is a question about the command, never a model name
+case "$cmd" in on|off|status|restart) wants_help "${@:2}" && exec "$0" --help ;; esac
 case "$cmd" in
   on)
     target="${2:-}"
@@ -99,12 +111,14 @@ case "$cmd" in
     else require_ttl "${3:-$DEFAULT_LEASE}"; fi
     ollama_ensure || { server_down_msg; exit 10; }
     if [ -z "$target" ]; then
+      require_installed "$WARM_MODEL"
       echo "loading $WARM_MODEL for $WARM_KEEP_ALIVE ..."
       pin "$WARM_MODEL" "$WARM_KEEP_ALIVE"
       fast_until_line "$WARM_MODEL" "$WARM_KEEP_ALIVE" q
     elif is_duration "$target"; then
       # `warm on 1h` means the small model (what q uses) for an hour
       [ "$target" = forever ] && ttl=-1 || ttl="$target"
+      require_installed "$WARM_MODEL"
       echo "loading $WARM_MODEL for $target ..."
       pin "$WARM_MODEL" "$ttl"
       fast_until_line "$WARM_MODEL" "$target" q
@@ -112,6 +126,7 @@ case "$cmd" in
       model="$(resolve_tier "$target")"
       ttl="${3:-$DEFAULT_LEASE}"
       [ "$ttl" = forever ] && ttl=-1
+      require_installed "$model"
       echo "loading $model for $ttl ..."
       pin "$model" "$ttl"
       fast_until_line "$model" "$ttl" "$target"
