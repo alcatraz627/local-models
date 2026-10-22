@@ -558,7 +558,7 @@ check("see on a missing image: next is null and the remedy names lm read latest"
       e.get("code") == "img_unreadable" and e.get("next") is None and "lm read latest" in e.get("remedy", ""), str(e)[:200])
 rc, out, _ = run([LM, "models", "--json"], env_extra=DEAD)
 e = json.loads(out.strip().splitlines()[-1]) if out.strip() else {}
-check("server_down remedy names OLLAMA_HOST when it is not the default", "OLLAMA_HOST" in e.get("remedy", "") and "127.0.0.1:1" in e.get("remedy", ""), str(e)[:200])
+check("server_down remedy names OLLAMA_HOST when it is not the default, and next is null", "OLLAMA_HOST" in e.get("remedy", "") and "127.0.0.1:1" in e.get("remedy", "") and e.get("next") is None, str(e)[:200])
 rc, out, _ = run([sys.executable, VERBS_PY, "remedy", "server_down"], env_extra={"OLLAMA_HOST": "http://127.0.0.1:11434"})
 check("server_down remedy keeps the restart advice for the default host", "OLLAMA_HOST" not in out and "restarts" in out, out[:160])
 

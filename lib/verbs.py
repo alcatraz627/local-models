@@ -574,6 +574,7 @@ def remedy_for(reg, code):
     host = os.environ.get("OLLAMA_HOST", "").strip()
     if code == "server_down" and host.replace("http://", "").rstrip("/") not in ("", "127.0.0.1:11434", "localhost:11434"):
         out["remedy"] = reg["remedies"]["server_down_custom_host"]["remedy"].replace("{host}", host)
+        out["next"] = None   # lm doctor would only report the same unreachable host
     return out
 
 
