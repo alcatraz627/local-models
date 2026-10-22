@@ -20,6 +20,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$DIR/config.sh" 2>/dev/null || true
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"
+lm_identify
 
 case "${1:-}" in
   sample|verdict|audit) exec python3 "$DIR/lib/fleet-review.py" "$@" ;;
@@ -201,7 +202,8 @@ mkdir -p "$DIR/logs"
 jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg intent "$INTENT" --arg model "$MODEL" \
    --argjson items "${#items[@]}" --argjson pass "$PASS" --argjson fail "$FAIL" \
    --argjson wall "$SECONDS" --arg run "$OUT" --arg gate "$([ -n "$JUDGE" ] && echo judge || echo envelope)" \
-   '{ts:$ts, intent:$intent, model:$model, gate_level:$gate, items:$items, pass:$pass, fail:$fail, wall_s:$wall, run:$run}' \
+   --arg tty "$LM_TTY" --arg sess "$LM_SESSION" \
+   '{ts:$ts, intent:$intent, model:$model, gate_level:$gate, items:$items, pass:$pass, fail:$fail, wall_s:$wall, run:$run} + '"$JQ_WHO" \
    >> "$DIR/logs/fleet-history.jsonl" 2>/dev/null || true
 
 if [ "$MODE" = json ]; then

@@ -554,7 +554,7 @@ lm_models() {
 JQ_HIST='
   def flat($s; $k): ((($s // "")[0:200]) | gsub("\\s+"; " "))[0:$k];
   def first_line: (. // "") | split("\n") | map(select(test("\\S"))) | (.[0] // "") | gsub("\\s+"; " ");
-  def userwords: ((.prompt // "")[0:2000]) | (if startswith("<input") then "" else split("\n\n<input")[0] end);
+  def userwords: ((.prompt // "")[0:2000]) | (if startswith("<input") then "" else (split("\n\n<input")[0] // "") end);
   def docname: ((.prompt // "")[0:2000]) | (capture("<input name=\"(?<f>[^\"]*)\"") | .f) // "";
   def qtext($k): (userwords | gsub("\\s+"; " ")) as $w | docname as $d
     | (if $w == "" then ((.intent // "ask") + (if $d != "" then " " + $d else "" end))

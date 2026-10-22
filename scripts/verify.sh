@@ -92,7 +92,7 @@ if [ "$(printf '%s' "$R" | jq -r .ok 2>/dev/null)" = "true" ] && [ -n "$A" ]; th
   ok "see --json envelope + artifact field"
   { ls "$A"/source.* >/dev/null 2>&1 && [ -f "$A/read.md" ] && [ -f "$A/meta.json" ]; } \
     && ok "artifact folder complete (source + read.md + meta.json)" || bad "artifact folder incomplete: $A"
-  [ "$(./bin/see open -1)" = "$A" ] && ok "see open -1 → same artifact" || bad "see open -1 mismatch"
+  [ "$(./bin/see open -1 --all)" = "$A" ] && ok "see open -1 → same artifact" || bad "see open -1 mismatch"
 else bad "see --json: $R"; fi
 
 echo "── ui-verify: help + dispatch (full gate not run — see header) ──"
@@ -187,7 +187,7 @@ echo "── histories + timeline ──"
 for h in logs/q-history.jsonl logs/see-history.jsonl logs/fleet-history.jsonl logs/gem-history.jsonl; do
   [ -f "$h" ] && jq -es . "$h" >/dev/null 2>&1 && ok "parses: $h" || bad "missing/corrupt: $h"
 done
-[ "$(./bin/lm timeline 5 | wc -l | tr -d ' ')" -ge 5 ] && ok "lm timeline merges streams" || bad "lm timeline"
+[ "$(./bin/lm timeline 5 --all | wc -l | tr -d ' ')" -ge 5 ] && ok "lm timeline merges streams" || bad "lm timeline"
 
 echo "── feedback sink ──"
 bash scripts/self-audit.sh >/dev/null 2>&1 && [ -f "logs/self-audit/$(date +%Y%m%d).md" ] && ok "self-audit digest" || bad "self-audit"

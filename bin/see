@@ -119,9 +119,9 @@ show_help() {
 log_fail() { # CODE MESSAGE
   local _mode="${READ_MODE:-}"; [ -z "$_mode" ] && [ "${DIFF:-false}" = true ] && _mode=diff
   jq -cn --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg img "${ORIG_IMG:-${IMG:-}}" \
-     --arg p "${QUERY:-}" --arg m "${MODEL:-}" --arg rm "$_mode" --arg c "$1" --arg msg "$2" --arg caller "$PWD" \
+     --arg p "${QUERY:-}" --arg m "${MODEL:-}" --arg rm "$_mode" --arg c "$1" --arg msg "$2" --arg caller "$PWD" --arg tty "$LM_TTY" --arg sess "$LM_SESSION" \
      '{ts:$ts, img:$img, img2:null, prompt:(if $p == "" then null else $p end), mode:(if $rm == "" then null else $rm end),
-       crop:null, model:$m, ms:0, caller:$caller, artifact:null, error:$c, response:("[error: " + $c + "] " + $msg)}' \
+       crop:null, model:$m, ms:0, caller:$caller, artifact:null, error:$c, response:("[error: " + $c + "] " + $msg)} + '"$JQ_WHO" \
      >> "$LOG" 2>/dev/null || true
 }
 emit_error() { # CODE MESSAGE EXIT
@@ -146,7 +146,9 @@ case "${1:-}" in
            jsonl_history "$LOG" "$HIST_N" \
              "$JQ_LOCAL_TS"'"\(.ts | lts)  \(.mode // "read")\(if .error or ((.response // "") | startswith("(visual read failed")) then " ✗" else "" end)  \(.model)  \(.ms)ms  \(.img)  \((.prompt // "describe") | gsub("\\s+"; " ") | .[0:40])"'
            exit 0 ;;
-  show)    jsonl_entry "$LOG" "${2:-}" \
+  show)    shift; SHOW_N=""
+           for sarg in "$@"; do case "$sarg" in --all) LM_ENTRY_SCOPE=all ;; *) SHOW_N="$sarg" ;; esac; done
+           jsonl_entry "$LOG" "$SHOW_N" \
              '"# see \(.img)  ·  \(.ts)  ·  \(.model)  ·  \(.ms)ms\n\n\(.response)"'
            exit $? ;;
   # `more` = re-target the LAST image without retyping its path. Prefers the
@@ -154,6 +156,8 @@ case "${1:-}" in
   # gone) over the original path. Remaining args pass through, so
   # `see more --ui "q"` works exactly like a fresh invocation.
   more)    shift
+           _rest=(); for sarg in "$@"; do case "$sarg" in --all) LM_ENTRY_SCOPE=all ;; *) _rest+=("$sarg") ;; esac; done
+           set -- ${_rest[@]+"${_rest[@]}"}
            LAST="$(jsonl_entry "$LOG" -1 '(.artifact // "") + "\t" + .img' 2>/dev/null)" \
              || { echo "see: no history yet" >&2; exit 12; }
            ART_PREV="${LAST%%	*}"; ORIG_PREV="${LAST#*	}"
@@ -162,13 +166,16 @@ case "${1:-}" in
            [ -n "$IMG_R" ] || { [ -f "$ORIG_PREV" ] && IMG_R="$ORIG_PREV"; }
            [ -n "$IMG_R" ] || { echo "see: last image is gone ($ORIG_PREV) and no artifact copy exists" >&2; exit 12; }
            exec "$0" "$IMG_R" "$@" ;;
-  open)    ART="$(jsonl_entry "$LOG" "${2:--1}" '.artifact // empty')" || exit 1
+  open)    shift; OPEN_N=-1
+           for sarg in "$@"; do case "$sarg" in --all) LM_ENTRY_SCOPE=all ;; *) OPEN_N="$sarg" ;; esac; done
+           ART="$(jsonl_entry "$LOG" "$OPEN_N" '.artifact // empty')" || exit 1
            { [ -n "$ART" ] && [ -d "$ART" ]; } \
              || { echo "see: that read has no artifact folder (pre-artifact-store entry?)" >&2; exit 12; }
            printf '%s\n' "$ART"
            if [ -t 1 ] && command -v open >/dev/null 2>&1; then open "$ART"; fi
            exit 0 ;;
   note)    shift
+           if [ "${1:-}" = --all ]; then LM_ENTRY_SCOPE=all; shift; fi
            N=-1; case "${1:-}" in -[0-9]*|[0-9]*) N="$1"; shift ;; esac
            [ $# -gt 0 ] || { echo 'usage: see note [N] "text"' >&2; exit 2; }
            ART="$(jsonl_entry "$LOG" "$N" '.artifact // empty')" || exit 1
@@ -819,12 +826,13 @@ HERR=""; $VLM_FAILED && HERR=vlm_unavailable
 jq -cn --arg ts "$NOW_TS" --arg img "$ORIG_IMG" --arg img2 "${IMG_B:-}" --arg p "$QUERY" \
    --arg m "$HMODEL" --argjson ms "$ms" --arg r "$TEXT" --arg rm "$READ_MODE" \
    --arg crop "$CROP_DESC" --arg art "$ART" --arg caller "$PWD" --arg err "$HERR" \
+   --arg tty "$LM_TTY" --arg sess "$LM_SESSION" \
    '{ts:$ts, img:$img, img2:(if $img2 == "" then null else $img2 end),
      prompt:(if $p == "" then null else $p end), mode:$rm,
      crop:(if $crop == "" then null else $crop end), model:$m, ms:$ms,
      caller:$caller,
      artifact:(if $art == "" then null else $art end), response:$r}
-    + (if $err == "" then {} else {error:$err} end)' \
+    + (if $err == "" then {} else {error:$err} end) + '"$JQ_WHO" \
    >> "$LOG" 2>/dev/null || true
 
 # compare-history: one line per diff run (successes AND failures) — the stream

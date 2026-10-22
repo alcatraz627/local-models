@@ -6,6 +6,7 @@ import csv
 from datetime import date
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -224,7 +225,9 @@ def main():
                 f.write(json.dumps({"ts": stamp, "cid": stamp, "intent": "describe-data",
                                     "model": "deterministic:tabular", "think": False,
                                     "prompt": args.query, "response": summary, "ms": ms,
-                                    "resident": False, "caller": str(Path.cwd())}) + "\n")
+                                    "resident": False, "caller": str(Path.cwd()),
+                                    "tty": os.environ.get("LM_TTY") or None,
+                                    "session": os.environ.get("LM_SESSION") or None}) + "\n")
         except OSError:
             pass
 

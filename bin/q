@@ -116,7 +116,10 @@ case "${1:-}" in
                          for harg in "$@"; do case "$harg" in --json) HIST_JSON=true ;; *) HIST_N="$harg" ;; esac; done
                          if $HIST_JSON; then jsonl_history_json "$LOG" "$HIST_N"; exit 0; fi
                          show_history "${1:-15}"; exit 0 ;;
-  show)                  shift; show_entry "${1:-}"; exit 0 ;;
+  show)                  shift
+                         SHOW_N=""
+                         for sarg in "$@"; do case "$sarg" in --all) LM_ENTRY_SCOPE=all ;; *) SHOW_N="$sarg" ;; esac; done
+                         show_entry "$SHOW_N"; exit $? ;;
   intents)               list_intents; exit 0 ;;
   models)                exec "$DIR/bin/lm" models "${@:2}" ;;
   on|off|status|restart) exec "$DIR/bin/warm" "$@" ;;
@@ -155,6 +158,7 @@ while [ $# -gt 0 ]; do
     --web)   WEB=true; shift ;;
     --diy)   DIY=true; shift ;;
     --no-stats) STATS=false; shift ;;
+    --all)   LM_ENTRY_SCOPE=all; shift ;;
     --json)        MODE=json; shift ;;
     --stream-json) MODE=stream; shift ;;
     --big)   MODEL="$(resolve_tier big)";  USER_MODEL=true; shift ;;
@@ -606,7 +610,13 @@ fi
 # keyed by cid; pre-cid entries fall back to their own ts as the chain id.
 HIST="[]"; CID=""
 if $CONT && [ -f "$LOG" ]; then
-  target=$(if [ -n "$CONT_N" ]; then sed -n "${CONT_N}p" "$LOG"; else tail -1 "$LOG"; fi)
+  # A bare -c continues YOUR last exchange (this terminal), not whatever a hook ran last.
+  if [ -n "$CONT_N" ]; then target=$(sed -n "${CONT_N}p" "$LOG")
+  elif [ "$LM_ENTRY_SCOPE" = all ]; then target=$(tail -1 "$LOG")
+  else _mine="$(mine_line "$LOG" 1)" || _mine=""
+       if [ -n "$_mine" ]; then target=$(sed -n "${_mine}p" "$LOG")
+       else emit_error no_such_entry "none of your calls from this terminal to continue; q -c N continues entry N, and q --all -c continues the newest from anyone" 2; fi
+  fi
   if [ -n "$target" ]; then
     CID=$(printf '%s' "$target" | jq -r '.cid // .ts')
     $USER_MODEL  || MODEL=$(printf '%s' "$target" | jq -r '.model')
@@ -661,7 +671,7 @@ if $GLOW && [ "$MODE" = text ] && [ -t 1 ] && command -v glow >/dev/null 2>&1; t
 mkdir -p "$DIR/logs"
 [ "$KEEP" = "0" ] && lm_step q "$MODEL cold load · intent=$INTENT"
 exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" "$GLOW_OK" "$LEASE_HINT" "${DIY_LOG:-}" <<'PY'
-import sys, json, time, signal, urllib.request, urllib.error
+import sys, os, json, time, signal, urllib.request, urllib.error
 (model, sysp, query, think, keep, intent, logf,
  histjson, cid, mode, timeout, trunc, host, stats, fmt, glow, lease_hint, diyjson) = sys.argv[1:19]
 truncated = trunc == "true"
@@ -679,7 +689,9 @@ def emit_err(code, msg, rc):
         with open(logf, "a") as f:
             f.write(json.dumps({"ts": ts, "cid": cid or ts, "intent": intent, "model": model,
                                 "think": think == "true", "prompt": query,
-                                "response": "[error: %s]" % code, "error": code, "ms": 0}) + "\n")
+                                "response": "[error: %s]" % code, "error": code, "ms": 0,
+                                "tty": os.environ.get("LM_TTY") or None,
+                                "session": os.environ.get("LM_SESSION") or None}) + "\n")
     except Exception:
         pass
     sys.exit(rc)
@@ -805,7 +817,10 @@ try:  # history is best-effort — never break the answer on a log failure
         # keep==-1 is set iff the model was resident before this call, so the
         # cold-load rate is derivable from the history (lm doctor reads this).
         "resident": keep == "-1",
-        "caller": __import__("os").getcwd(),
+        "caller": os.getcwd(),
+        # who ran it: lets -c, show -1 and lm timeline mean "mine" (null = no terminal)
+        "tty": os.environ.get("LM_TTY") or None,
+        "session": os.environ.get("LM_SESSION") or None,
     }
     if diyjson:  # --diy routing rides into history so `q show N` can explain it
         try:
