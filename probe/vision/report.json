@@ -6,6 +6,7 @@
     "measure",
     "minicpm-v4.6",
     "mlx:mlx-community/Qwen3.5-9B-MLX-4bit",
+    "mlx:mlx-community/Qwen3.6-27B-4bit",
     "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit",
     "mlx:mlx-community/Qwen3-VL-8B-Instruct-4bit",
     "qwen3.6:35b-a3b"
@@ -1299,6 +1300,302 @@
         "rate": 0.0
       }
     },
+    "mlx:mlx-community/Qwen3.6-27B-4bit": {
+      "C01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "C02": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 2,
+        "n": 3,
+        "rate": 0.0
+      },
+      "C03": {
+        "pass": 1,
+        "fail": 2,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.3333333333333333
+      },
+      "C04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T05": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "T06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "S01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "S04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "K03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "G04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "B01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "B02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "U04": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "U06": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "U07": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "R01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D01": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "D04": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 0.0
+      },
+      "D05": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D06": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      },
+      "D07": {
+        "pass": 0,
+        "fail": 3,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 0.0
+      },
+      "H01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H03": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "H04": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O01": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O02": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
+      "O03": {
+        "pass": 0,
+        "fail": 1,
+        "format_fail": 2,
+        "n": 3,
+        "rate": 0.0
+      },
+      "O04": {
+        "pass": 1,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 1,
+        "rate": 1.0
+      }
+    },
     "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
       "C01": {
         "pass": 2,
@@ -2237,6 +2534,14 @@
       "rate": 0.8928571428571429,
       "median_wall_s": 5.5
     },
+    "mlx:mlx-community/Qwen3.6-27B-4bit": {
+      "pass": 94,
+      "fail": 14,
+      "format_fail": 4,
+      "n": 112,
+      "rate": 0.8392857142857143,
+      "median_wall_s": 13.1
+    },
     "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
       "pass": 85,
       "fail": 26,
@@ -2799,6 +3104,132 @@
         "cases": 1
       }
     },
+    "mlx:mlx-community/Qwen3.6-27B-4bit": {
+      "UI": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "UI inventory": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "UI state": {
+        "rate": 0.6,
+        "cases": 5
+      },
+      "absence": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "chart": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "chart values": {
+        "rate": 1.0,
+        "cases": 3
+      },
+      "checked": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "color": {
+        "rate": 0.5833333333333334,
+        "cases": 4
+      },
+      "counting": {
+        "rate": 0.5833333333333334,
+        "cases": 4
+      },
+      "crop lift": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "dense layout": {
+        "rate": 0.5,
+        "cases": 2
+      },
+      "dense text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "diff": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "diff localization": {
+        "rate": 0.3333333333333333,
+        "cases": 3
+      },
+      "disabled": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "false premise": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "hallucination trap": {
+        "rate": 1.0,
+        "cases": 7
+      },
+      "low-contrast text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "no language prior": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "odd-one-out": {
+        "rate": 0.75,
+        "cases": 4
+      },
+      "on/off": {
+        "rate": 0.0,
+        "cases": 1
+      },
+      "reading": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "reading small text": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "real art": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotated text": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "rotation": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "selected": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "spatial relations": {
+        "rate": 1.0,
+        "cases": 4
+      },
+      "table": {
+        "rate": 1.0,
+        "cases": 1
+      },
+      "table cells": {
+        "rate": 1.0,
+        "cases": 2
+      },
+      "text binding": {
+        "rate": 1.0,
+        "cases": 1
+      }
+    },
     "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
       "UI": {
         "rate": 1.0,
@@ -3271,6 +3702,22 @@
           "rate": 1.0
         }
       },
+      "mlx:mlx-community/Qwen3.6-27B-4bit": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
       "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
         "full": {
           "pass": 3,
@@ -3413,6 +3860,29 @@
           "rate": 1.0
         }
       },
+      "mlx:mlx-community/Qwen3.6-27B-4bit": {
+        "full": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "crop": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        },
+        "region": {
+          "pass": 3,
+          "fail": 0,
+          "format_fail": 0,
+          "n": 3,
+          "rate": 1.0
+        }
+      },
       "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
         "full": {
           "pass": 3,
@@ -3514,6 +3984,13 @@
         "n": 3,
         "rate": 1.0
       },
+      "mlx:mlx-community/Qwen3.6-27B-4bit": {
+        "pass": 3,
+        "fail": 0,
+        "format_fail": 0,
+        "n": 3,
+        "rate": 1.0
+      },
       "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
         "pass": 3,
         "fail": 0,
@@ -3547,6 +4024,9 @@
     "measure": {},
     "minicpm-v4.6": {},
     "mlx:mlx-community/Qwen3.5-9B-MLX-4bit": {},
+    "mlx:mlx-community/Qwen3.6-27B-4bit": {
+      "hallucinated": 3
+    },
     "mlx:mlx-community/Qwen3-VL-4B-Instruct-4bit": {
       "band_trap": 1
     },

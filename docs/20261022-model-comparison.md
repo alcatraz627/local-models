@@ -27,7 +27,9 @@ Every image is generated with a known truth, and every answer is scored by meani
 | gemma4-e4b | Ollama, small tier | 78 | 2.2 s | overcounts by one on every count |
 | minicpm-v4.6 | Ollama, plain `see` default | 74 | 1.8 s | falls for false-premise and absent-series questions |
 
-Qwen3.6-27B (16 GB) was planned but not run: Hugging Face downloads were stalling at about 170 KB/s, so its partial download was removed.
+Qwen3.6-27B (16 GB, MLX 4-bit) was run later the same day: 94/112 at a 13.1 s median. Against Qwen3-VL-8B it was better on 3 cases (diff localisation, rotation, and the real rug odd-one-out) and worse on 4 (small-dot counting, colour counting, and both UI inventories, where it listed elements that are not there). Slower and less accurate overall, so it was pruned.
+
+The measuring lane (`see count` / `see odd`, no model) scored 18/19 on the counting and odd-one-out cases in 0.3 s. The one miss is the real rug, where it reports "ambiguous" instead of guessing.
 
 Full matrix, capability rollup and crop lift: `probe/vision/REPORT.md`. Per-case winners and losers: `python3 probe/vision/dominance.py <incumbent> <challenger>`.
 

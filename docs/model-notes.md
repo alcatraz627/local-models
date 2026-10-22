@@ -39,5 +39,6 @@ Newest first.
 
 | Date | Task | Checked how | Result | Note |
 |---|---|---|---|---|
+| 2026-10-22 | Same harness, Qwen3.6-27B 4-bit on MLX | as above | 94/112, 13.1 s median; beats Qwen3-VL-8B on 3 cases, loses on 4 (counting, UI inventories with invented elements) | pruned |
 | 2026-10-22 | 42-case vision harness, 3 seeds, 7 models | generated truths, meaning-based scorers, every failing cell read | Qwen3-VL-8B 101/112, Qwen3.5-9B 100, qwen3.6:35b 98, gemma4:26b 97, Qwen3-VL-4B 85, gemma4-e4b 78, minicpm-v4.6 74 | `docs/20261022-model-comparison.md` |
 | 2026-10-21 | Name the odd motif of 12 on the Affinity rug-border fixture | case.json truth (motif 9) | minicpm said 3, Qwen3-VL said 6: both wrong | Counting and comparing many small shapes is a measuring job; a pixel script found motif 9 |
