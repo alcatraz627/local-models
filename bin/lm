@@ -388,7 +388,7 @@ mlx_lines() {
     local rss="${l%% *}" rest="${l#* }" model
     model="$(printf '%s' "$rest" | sed -n 's/.*--model \([^ ]*\).*/\1/p')"
     printf '  %-28s %-9s %s\n' "$(printf '%s' "$rest" | sed -n 's/.*\(mlx_[a-z]*\.[a-z_]*\).*/\1/p')" "$(awk -v k="$rss" 'BEGIN{printf "%.1f GB", k/1048576}')" "${model:+model $model}"
-  done
+  done || true  # rg exits 1 when nothing matches; under pipefail that is "none running", not an error
 }
 
 lm_status() {
