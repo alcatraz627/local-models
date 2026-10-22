@@ -280,6 +280,8 @@ for phrase, want, cmd in HOW_TABLE:
 
 # a cloud job needs a cloud word that is not negated
 cloud_jobs = {n for n, j in jobs.items() if j.get("leaves_mac")}
+for n in sorted(cloud_jobs):
+    check(f"every example of the cloud job {n} is marked cloud, so the example filter alone keeps it out", all(e.get("cloud") for e in jobs[n]["examples"]))
 NEGATED = ['how many tokens is this file but not on the web', 'do not use the web, tell me what 2+2 is', 'without gemini, summarize this big folder', 'tell me the latest news but keep it local']
 for phrase in NEGATED:
     rc, r = how(phrase)
