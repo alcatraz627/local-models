@@ -45,7 +45,7 @@ show_help() {
   _sec USAGE
   _cmd 'q "<prompt>"'           'ask a question; an image or file path inside it is routed for you'
   _cmd 'q <intent> "<prompt>"'  'ask | cmd | commit | summarize | qa | title | review ... (q intents lists them all)'
-  _cmd 'q again [--big|--code|--web]' 'the last answer was wrong: ask it again on a stronger lane (no flag: one step up; --dry-run shows the plan)'
+  _cmd 'q again [--big|--code|--web]' 'the last answer was wrong: ask it again on a stronger lane (no flag: one step up; --dry-run shows the plan). q --again always works, even in a pipe'
   _cmd 'q -c [N] "<prompt>"'    'follow up on your last exchange (or entry N)'
   _cmd 'q history, show N'      'recent queries, numbered; show -1 is your latest call (--all: anyone, not just you)'
   _sec EXAMPLES
@@ -55,7 +55,7 @@ show_help() {
   _ex 'q summarize --file report.pdf'        '# PDF/Word/etc extracted locally'
   _more
   _cmd 'q on | off | status'    'Tier W warm toggle (= warm)'
-  _cmd 'q check "<command>"'    'check a shell command'"'"'s programs and --flags against their own help, without running it'
+  _cmd 'q check "<command>"'    'check a shell command'"'"'s programs and --flags against their own help, without running it (q --check always works)'
   _cmd 'q intents'              'list available intents (the registry)'
   _cmd 'q models'               'usable models + tiers (= lm models; ● resident)'
   _ex 'q -c "and sorted by size?"'           '# follow-up with context'
@@ -143,6 +143,7 @@ import sys, json, re
 r = json.load(sys.stdin)
 p = r.get("prompt") or ""
 ask = "" if p.startswith("<input") else p.split("\n\n<input")[0]
+ask = re.sub(r"\n\n\(Note from the runtime:[^\n]*\)$", "", ask)   # rows logged before notes stopped being stored
 name = doc = ""
 for m in re.finditer(r"<input name=\"([^\"]*)\"[^>]*>\n(.*?)\n</input>", p, re.S):
     if m.group(1) in ("web-results", "local-probe"):
@@ -168,6 +169,7 @@ print(json.dumps({"ask": ask, "intent": r.get("intent", "ask"), "model": r.get("
   args=(--intent "$intent" "$lane")
   [ -n "$name" ] && args+=(--ctx - --ctx-name "$name")
   nice="${ask:0:50}"; [ -n "$nice" ] || nice="$intent ${name}"
+  nice="${nice//$'\n'/ }"; nice="${nice//$'\t'/ }"   # the narration stays one line
   if [ -t 2 ] && use_color_fd 2; then printf '\033[2m· again: "%s" (was %s) → %s\033[0m\n' "$nice" "$was" "${lane#--}" >&2
   else printf '· again: "%s" (was %s) → %s\n' "$nice" "$was" "${lane#--}" >&2; fi
   $dry && return 0   # shows the narration above and runs nothing
@@ -179,9 +181,13 @@ print(json.dumps({"ask": ask, "intent": r.get("intent", "ask"), "model": r.get("
 }
 
 # Subcommands: help, history, show, again, and the warm toggle.
+# `again` and `check` are subcommands only when a person is typing (stdin is a terminal). With no
+# terminal they are ordinary prompts, as before; --again and --check always dispatch.
 case "${1:-}" in
-  again)                 shift; again_run "$@"; exit $? ;;
-  check)                 shift; exec python3 "$DIR/lib/cmdcheck.py" "$@" ;;
+  --again)               shift; again_run "$@"; exit $? ;;
+  --check)               shift; exec python3 "$DIR/lib/cmdcheck.py" "$@" ;;
+  again)                 if [ -t 0 ]; then shift; again_run "$@"; exit $?; fi ;;
+  check)                 if [ -t 0 ]; then shift; exec python3 "$DIR/lib/cmdcheck.py" "$@"; fi ;;
   -h|--help|help)        show_help; exit 0 ;;
   history)               shift
                          HIST_JSON=false; HIST_N=15
@@ -308,10 +314,10 @@ if $ROUTE && [ "${#positionals[@]}" -gt 0 ]; then
     set -f
     for _w in $RAW_PROMPT; do
       _wc="${_w%[,.;:!?\"\')]}"; _wc="${_wc#[\"\'(]}"
-      case "$_wc" in */*|*.[A-Za-z]*) ;; *) continue ;; esac
+      lm_file_ref "$_wc" || continue
       _wx="${_wc/#\~/$HOME}"
       if [ ! -f "$_wx" ]; then
-        case "$_wc" in */*|*.png|*.jpg|*.jpeg|*.webp|*.pdf|*.md|*.txt|*.csv|*.json) [ -e "$_wx" ] || [ -n "$_missing" ] || _missing="$_wc" ;; esac
+        case "$_wc" in /*|"~/"*|./*|../*) [ -e "$_wx" ] || [ -n "$_missing" ] || _missing="$_wc" ;; esac
         continue
       fi
       case "$(file -b --mime-type "$_wx" 2>/dev/null)" in
@@ -330,9 +336,8 @@ if $ROUTE && [ "${#positionals[@]}" -gt 0 ]; then
       route_say "file in the prompt → reading $(basename "$CTX_FILE") as context (the same as --ctx)"
     elif [ -n "$_missing" ]; then
       route_say "no file at \"$_missing\"; telling the model so"
-      QUERY="$QUERY
-
-(Note from the runtime: no file exists at \"$_missing\"; say so plainly.)"
+      # The model gets the note; history keeps only what the person typed.
+      export Q_RUNTIME_NOTE="(Note from the runtime: no file exists at \"$_missing\"; say so plainly.)"
     fi
   fi
 fi
@@ -835,12 +840,12 @@ def emit_err(code, msg, rc):
     sys.stdout.flush()
     try:  # failures are history too — the feedback sink mines these; never block the exit
         ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        with open(logf, "a") as f:
+        with open(logf, "a", encoding="utf-8", errors="backslashreplace") as f:
             f.write(json.dumps({"ts": ts, "cid": cid or ts, "intent": intent, "model": model,
                                 "think": think == "true", "prompt": query,
                                 "response": "[error: %s]" % code, "error": code, "ms": 0,
                                 "tty": os.environ.get("LM_TTY") or None,
-                                "session": os.environ.get("LM_SESSION") or None}) + "\n")
+                                "session": os.environ.get("LM_SESSION") or None}, ensure_ascii=False) + "\n")
     except Exception:
         pass
     sys.exit(rc)
@@ -865,7 +870,9 @@ for ex in reversed(hist):
 picked.reverse()
 prior = [m for ex in picked for m in
          ({"role": "user", "content": ex["p"]}, {"role": "assistant", "content": ex["r"]})]
-msgs = ([{"role": "system", "content": sysp}] if sysp else []) + prior + [{"role": "user", "content": query}]
+note = os.environ.get("Q_RUNTIME_NOTE", "")   # sent to the model only; the history row keeps `query` as typed
+msgs = ([{"role": "system", "content": sysp}] if sysp else []) + prior + [
+    {"role": "user", "content": query + ("\n\n" + note if note else "")}]
 payload = {
     "model": model, "messages": msgs,
     "think": think == "true", "stream": True,
@@ -992,8 +999,8 @@ try:  # history is best-effort — never break the answer on a log failure
             entry["diy"] = json.loads(diyjson)
         except ValueError:
             pass
-    with open(logf, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+    with open(logf, "a", encoding="utf-8", errors="backslashreplace") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 except Exception:
     pass
 # Same words twice in 5 minutes: the second answer cannot differ (temperature 0), so say
@@ -1001,7 +1008,7 @@ except Exception:
 if mode == "text" and stats == "true" and sys.stderr.isatty() and not os.environ.get("Q_AGAIN"):
     try:
         import calendar
-        with open(logf) as f:
+        with open(logf, encoding="utf-8", errors="replace") as f:
             rows = f.readlines()[-50:-1]   # the line just written is last; look at the ones before it
         now, repeats = time.time(), 0
         for ln in rows:
@@ -1023,7 +1030,7 @@ if lease_hint and mode == "text" and stats == "true" and sys.stderr.isatty():
     try:
         import calendar
         cutoff, n = time.time() - 300, 0
-        with open(logf) as f:
+        with open(logf, encoding="utf-8", errors="replace") as f:
             for ln in f.readlines()[-50:]:
                 try:
                     e = json.loads(ln)

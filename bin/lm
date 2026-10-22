@@ -809,7 +809,7 @@ case "$verb" in
              if wants_help "$@" || [ $# -eq 0 ]; then verb_help doc; [ $# -gt 0 ] || exit 2; exit 0; fi
              docf="$(expand_tilde "$1")"; shift
              if [ $# -gt 0 ]; then exec "$BIN/q" qa --ctx "$docf" "$@"; else exec "$BIN/q" summarize --ctx "$docf"; fi ;;
-  again)     shift; if wants_help "$@"; then verb_help again; exit 0; fi; exec "$BIN/q" again "$@" ;;
+  again)     shift; if wants_help "$@"; then verb_help again; exit 0; fi; exec "$BIN/q" --again "$@" ;;
   find)      shift; lm_find "$@" ;;
   fast)      shift
              if wants_help "$@"; then verb_help fast; exit 0; fi

@@ -326,3 +326,18 @@ server_down_msg() {
   echo "ollama server is DOWN ($OLLAMA_HOST)" >&2
   echo "  start it: launchctl kickstart gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2
 }
+
+# True if a word in a typed prompt names a file: it starts with /, ~, ./ or ../, or it is a bare
+# name with a known file extension that exists here. "I/O", "TCP/IP", "yes/no" and URLs are not files.
+lm_file_ref() { # WORD
+  local w="$1"
+  case "$w" in *://*) return 1 ;; esac
+  case "$w" in
+    /?*|"~/"*|./?*|../?*) return 0 ;;
+  esac
+  case "$(printf '%s' "${w##*.}" | tr 'A-Z' 'a-z')" in
+    png|jpg|jpeg|webp|gif|heic|pdf|md|txt|csv|tsv|json|yaml|yml|toml|xlsx|docx|doc|rtf|odt|html|htm|log|py|sh|js|ts|swift|rs|go)
+      case "$w" in *.*) [ -e "${w/#\~/$HOME}" ] ;; *) return 1 ;; esac ;;
+    *) return 1 ;;
+  esac
+}
