@@ -126,6 +126,13 @@ else
   bad "measure lane — failing checks:"
   printf '%s\n' "$MC" | awk '/FAIL/ {print "       " $0}'
 fi
+CR="$(./.venv/bin/python probe/fixtures/cmdcheck-route.py 2>&1)"; crrc=$?
+if [ "$crrc" -eq 0 ]; then
+  ok "cmdcheck and routing words (q check / q cmd / prompt routing): $(printf '%s' "$CR" | tail -1)"
+else
+  bad "cmdcheck / routing words — failing checks:"
+  printf '%s\n' "$CR" | awk '/FAIL/ {print "       " $0}'
+fi
 
 echo "── findings-gate: mechanical review-findings gate ──"
 FG="$(./.venv/bin/python lib/findings-gate.py --self-test 2>&1)" \
