@@ -233,7 +233,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - **Plain `see` default: DONE 2026-10-22** (owner approved). Qwen3-VL-8B on MLX, minicpm-v4.6 as the automatic fallback (`READ_DEFAULT_MLX` in config.sh).
 - **Odd-one-out and counting lane for `see`: DONE 2026-10-22.** `see count` and `see odd` (`lib/measure.py`, model-free), checked by `probe/fixtures/measure-check.py` in verify.sh.
 - **Qwen3.6-27B (MLX, 16 GB): DONE 2026-10-22.** Run recorded in `probe/vision/REPORT.md` and pruned from disk.
-- **lm usability leftovers:** `--format` still wants a schema file (no inline shorthand); `q history <word>` ignores its argument (use `lm find`); the `--diy` narration still labels an image read `intent=describe-data`; `q again --big|--code` and a real MLX `see diff` judge are wired but were not run live.
+- **lm usability leftovers:** `--format` still wants a schema file (no inline shorthand); `q history <word>` ignores its argument (use `lm find`); the `--diy` narration still labels an image read `intent=describe-data`; `q again --big|--code` and a real MLX `see diff` judge are wired but were not run live. History's "mine" match can claim an old row when macOS reuses a tty name.
 - **Older candidate suite** (`probe/candidates/`): stages 1 to 3 still need runners (granite-docling, image tools, MiniCPM5-2B). The vision harness supersedes its stage 0 and stage 1 reads.
 - **Codex is out of quota until 2026-11-20.** Builds go to sonnet seats until then. Argon stays the ideation and review seat.
 - **Outside-model track record:** `docs/model-notes.md`. Add a row after every Argon, Codex or Gemini run.
