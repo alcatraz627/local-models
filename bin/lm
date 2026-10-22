@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# lm — single entrypoint for local models and the connected Gemini lane.
+# lm — the front door for local models and the connected Gemini lane.
 #
-#   lm                 overview (this screen)
-#   lm q ...           quick local LLM   (= q)
-#   lm imagine ...     local image gen   (= imagine)
-#   lm warm on|off     warm-model toggle (= warm)
-#   lm status          server + warm + models at a glance
+#   lm "question"            answer (an image path, a file or "gemini ..." routes itself)
+#   lm cmd|read|diff|doc|again|find|review ...   one job each, thin aliases over the tools
+#   lm fast 1h               keep answers instant for an hour (= warm on 1h)
+#   lm status                what is loaded, free memory
+#   lm more                  every other command (the old overview)
 set -eo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN="$DIR/bin"
@@ -13,6 +13,28 @@ BIN="$DIR/bin"
 source "$DIR/config.sh" 2>/dev/null || true   # WARM_MODEL etc — doctor checks the configured one
 # shellcheck source=/dev/null
 source "$BIN/_lib.sh"
+wants_all "$@" && HELP_ALL=true
+lm_identify
+
+# The default screen: jobs, not tools. Each line is a thin alias over an existing tool.
+front_door() {
+  printf '%s%slm%s %s— local models on this Mac (nothing leaves the machine unless marked ☁)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  printf '\n%sJOBS%s\n' "$Y" "$Rs"
+  _cmd 'lm "question"'               'answer; an image path, a file or "gemini ..." in it routes itself'
+  _cmd 'lm cmd "task"'               'one shell command, checked against the tool'"'"'s own --help'
+  _cmd 'lm read <img|paste|latest> ["q"]' 'text or an answer from an image (exact text is read first)'
+  _cmd 'lm diff A B'                 'what changed between two images, and where'
+  _cmd 'lm doc <file> ["q"]'         'ask about or summarize a file (says how much of it was read)'
+  _cmd 'lm again [--big|--web]'      'redo your last question on a stronger model (--web leaves this Mac ☁)'
+  _cmd 'lm find "words"'             'search your past answers'
+  _cmd 'lm review'                   'review your uncommitted changes (a few minutes, on the code model)'
+  printf '\n%sKEEP IT HANDY%s\n' "$Y" "$Rs"
+  _cmd 'lm status'                   'what is loaded, free memory, when it unloads'
+  _cmd 'lm fast 1h'                  'keep answers instant for an hour (lm fast off to free the memory)'
+  _cmd 'lm help <job>'               'the steps for one job: ask, cmd, doc, read, diff, count, again, find, web, fast, failed'
+  _cmd 'lm more'                     "everything else: gemini ☁, fleet, rag, index, imagine, probe, bench, ui-verify"
+  printf '\n  %s☁ marks a call that leaves this Mac. Every command takes -h.%s\n' "$Dm" "$Rs"
+}
 
 overview() {
   printf '%s%slm%s %s— local-model toolkit with an optional connected Gemini lane%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
@@ -55,20 +77,116 @@ overview() {
 help_job() {
   help_title() { printf '%s%slm help %s%s %s— %s%s\n' "$Bd" "$C" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
   help_section() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
-  help_example() { printf '  %s%-53s%s %s%s%s\n' "$C" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
-  help_note() { printf '\n  %s%s%s\n' "$Dm" "$1" "$Rs"; }
+  help_example() { _help_row "$C" 44 "$1" "$2"; }
+  help_note() { printf '\n'; _note "$1"; }
   case "${1:-}" in
     "")
-      help_title '<job>' 'pick a task and get a short route'
+      help_title '<job>' 'say what you want to do, get the commands'
       help_section 'JOBS'
-      help_example 'lm help table' 'exact CSV, TSV, JSON, or XLSX profile'
-      help_example 'lm help document' 'file extraction and grounded Q&A'
-      help_example 'lm help screenshot' 'OCR, UI inventory, and claim checks'
-      help_example 'lm help compare' 'visual difference evidence'
-      help_example 'lm help batch' 'one question across independent files'
-      help_example 'lm help retrieval' 'exact search, then local vectors'
-      help_example 'lm help research' 'connected Gemini broad sweep'
-      help_note 'Tool help: lm help q|see|imagine|review|warm|probe|ui-verify|index|bench. Full menu: lm examples' ;;
+      help_example 'lm help ask'     'get a quick answer'
+      help_example 'lm help cmd'     'get one shell command you can trust'
+      help_example 'lm help doc'     'ask about, or summarize, a file'
+      help_example 'lm help read'    'get the text or an answer out of an image or screenshot'
+      help_example 'lm help diff'    'see what changed between two images'
+      help_example 'lm help count'   'count things in an image'
+      help_example 'lm help again'   'the answer was wrong: try again, stronger'
+      help_example 'lm help find'    'find an answer you got before'
+      help_example 'lm help web'     'ask about something current'
+      help_example 'lm help fast'    'keep answers instant for a while'
+      help_example 'lm help status'  'see what is loaded and how much memory is free'
+      help_example 'lm help failed'  'work out why a call failed'
+      help_note 'Also: lm help json | table | gemini | review | imagine | batch | retrieval. Tool help: lm help q|see|imagine|review|warm|probe|ui-verify|index|bench. Everything with examples: lm examples' ;;
+    ask)
+      help_title 'ask' 'a quick answer from the small local model'
+      help_section 'START'
+      help_example 'lm "how do I see what is using port 5432"' 'the answer comes back in a few seconds'
+      help_example 'lm fast 1h'                  'the first answer after a pause takes about 5 s; this keeps it instant'
+      help_example 'lm "what text is in ~/Desktop/shot.png"' 'an image path in the question goes to the image reader'
+      help_note 'Wrong or thin answer? lm help again. A question about something current? lm help web.' ;;
+    cmd)
+      help_title 'cmd' 'one shell command, checked before you run it'
+      help_section 'START'
+      help_example 'lm cmd "list the 5 largest files in ~/Downloads"' 'prints the command and nothing else'
+      help_note 'It checks that the program exists and that each --flag appears in its own --help, then prints a gray line saying what it found. It never runs the command. A flag it cannot find means the model guessed: lm again --web.' ;;
+    doc|document|qa)
+      help_title 'doc' 'ask about, or summarize, a file'
+      help_section 'START'
+      help_example 'lm doc report.pdf'                    'a summary (PDF, Word, HTML, text, spreadsheets)'
+      help_example 'lm doc report.pdf "what is the decision?"' 'an answer grounded in the file'
+      help_example 'q --preflight --ctx report.pdf'       'how big the file is, before asking'
+      help_note 'It tells you how much of the file it read. A long file is cut at 16,000 characters: raise it with --max-ctx 40000, or use cat file | lm gemini "..." (the file leaves this Mac).' ;;
+    read|screenshot|ui|ocr|text)
+      help_title 'read' 'text or an answer out of an image'
+      help_section 'START'
+      help_example 'lm read shot.png'                   'what is in the image'
+      help_example 'lm read shot.png "what is the build id?"' 'asks for text, IDs and numbers are read exactly first'
+      help_example 'lm read paste'                      'the screenshot on your clipboard (Cmd-Ctrl-Shift-4)'
+      help_example 'lm read latest'                     'your newest screenshot file'
+      help_example 'see shot.png --ocr'                 'just the exact text, about a second'
+      help_example 'see shot.png --ui --json'           'a structured list of the buttons and labels'
+      help_example 'lm ui-verify shot.png "Save is disabled"' 'check one claim about a screenshot'
+      help_note 'Exact readers (text, counts) run first; the vision model only adds what they cannot see.' ;;
+    diff|compare)
+      help_title 'diff' 'what changed between two images'
+      help_section 'START'
+      help_example 'lm diff before.png after.png'       'a three-line summary: where, whether text changed, whether colours changed'
+      help_example 'see diff a.png b.png --no-read --json' 'the measured evidence only, no model'
+      help_note 'The summary is measured from the pixels. A vision model adds its own read when one is free; judging whether the change matters is yours.' ;;
+    count)
+      help_title 'count' 'count things in an image by measuring pixels'
+      help_section 'START'
+      help_example 'see count dots.png'                 'how many objects (exact, instant, no model)'
+      help_example 'see count squares.png --color blue'  'only the blue ones'
+      help_example 'see odd grid.png'                   'the one item that differs among repeated items'
+      help_note 'Asking "how many" through lm read runs this first.' ;;
+    again|retry)
+      help_title 'again' 'the answer was wrong; ask the same thing on a stronger model'
+      help_section 'START'
+      help_example 'lm again'               'your last question, one step stronger (small, then big)'
+      help_example 'lm again --big'         'the bigger reasoning model'
+      help_example 'lm again --code'        'the coding model'
+      help_example 'lm again --web'         'search the web first (the question leaves this Mac)'
+      help_example 'q -c "and sorted by size?"' 'a follow-up that continues your last exchange'
+      help_note 'Answers are deterministic: asking the same thing twice gives the same answer, so retyping never helps.' ;;
+    find|history|retrieval-history)
+      help_title 'find' 'search the answers you got before'
+      help_section 'START'
+      help_example 'lm find "port 5432"'    'matching questions and answers across q, see, gemini and imagine, yours first'
+      help_example 'lm timeline 15'         'your last 15 calls, newest last'
+      help_example 'lm timeline --all'      'include agents and hooks (dimmed)'
+      help_example 'lm last'                'your latest call, in full'
+      help_note 'Open one with the handle it prints: q show 3689, see show 1433.' ;;
+    web|current)
+      help_title 'web' 'something current: versions, news, docs'
+      help_section 'START'
+      help_example 'q --web "current node LTS version?"' 'searches the web, answers from the results with citations'
+      help_example 'lm gemini research "state of X"'     'a slower, deeper lookup (Gemini)'
+      help_note 'Both send your question off this Mac. The small local model cannot know what is current.' ;;
+    fast)
+      help_title 'fast' 'keep answers instant'
+      help_section 'START'
+      help_example 'lm fast 1h'     'q answers in under a second until the time it prints'
+      help_example 'lm fast off'    'free the memory now'
+      help_example 'lm status'      'what is loaded and when it unloads'
+      help_note 'Without it the first answer after a pause takes about 5 s while the model loads. Nothing stays loaded on its own.' ;;
+    status|memory)
+      help_title 'status' 'what is loaded and what is free'
+      help_section 'START'
+      help_example 'lm status'    'server, free memory, loaded models, when they unload'
+      help_example 'lm models'    'every installed model and which tier it is'
+      help_example 'lm doctor'    'a health check of the whole toolkit' ;;
+    failed|errors)
+      help_title 'failed' 'work out why a call failed'
+      help_section 'START'
+      help_example 'lm timeline 10 --errors'   'your failed calls, each with its reason and what to do'
+      help_example 'lm last'                   'the latest call in full, error included'
+      help_example 'lm doctor'                 'checks the server, models and PATH'
+      help_note 'A stopped server restarts on the next call, so retrying is usually enough.' ;;
+    json|machine)
+      help_title 'json' 'an answer a script can read'
+      help_section 'START'
+      help_example 'q --json "is 91 a prime number? answer yes or no"' 'one JSON object with text, model and timing'
+      help_example 'q --json --format schema.json "classify: ..."'   'the answer follows your schema, parsed under .data' ;;
     table|describe-data)
       help_title 'table' 'exact rows, missing values, and numeric ranges'
       help_section 'START'
@@ -76,50 +194,44 @@ help_job() {
       help_section 'XLSX'
       help_example 'q --preflight --ctx data.xlsx --json' 'inspect workbook sheets first'
       help_example 'q describe-data --ctx data.xlsx --sheet Summary --json' 'name a sheet when several exist' ;;
-    document|qa)
-      help_title 'document' 'inspect extraction, then ask from the source'
-      help_section 'START'
-      help_example 'q --preflight --ctx report.pdf --json' 'check extraction and context size'
-      help_example 'q qa --ctx report.pdf "What is the decision?"' 'ask a source-grounded question'
-      help_note 'Check consequential model claims against the source.' ;;
-    screenshot|ui)
-      help_title 'screenshot' 'read text, structure, and enumerable UI state'
-      help_section 'START'
-      help_example 'see shot.png --ocr' 'exact labels through Apple Vision'
-      help_example 'see shot.png --ui --json' 'structured UI inventory'
-      help_example 'lm ui-verify shot.png "Save is disabled" --json' 'check a specific claim'
-      help_note 'Inspect the image yourself for visual judgment.' ;;
-    compare)
-      help_title 'compare' 'measure a reference pair'
-      help_section 'START'
-      help_example 'see diff before.png after.png --no-read --json' 'collect differences without a model read'
-      help_note 'Judge which visible differences matter yourself.' ;;
     batch|fleet)
-      help_title 'batch' 'ask one question of independent files'
+      help_title 'batch' 'ask one question of many independent files'
       help_section 'START'
       help_example 'lm fleet qa --prompt "who owns this?" docs/*.md' 'fan out across files'
-      help_example 'lm fleet sample <run-dir>' 'inspect a source and answer sample'
-      help_note 'A default pass checks only a nonempty response; add a task-specific --judge.' ;;
+      help_example 'lm fleet sample <run-dir>' 'look at a sample of what it answered'
+      help_note 'The default check only confirms each answer is non-empty; add a task-specific --judge.' ;;
     retrieval|rag)
-      help_title 'retrieval' 'search exact text first, then synonyms'
+      help_title 'retrieval' 'search exact text first, then by meaning'
       help_section 'START'
       help_example 'rg -n "term" docs/' 'find exact names and paths'
-      help_example 'lm rag index docs/' 'build a local vector index'
-      help_example 'lm rag search "concept"' 'retrieve related passages' ;;
+      help_example 'lm rag index docs/' 'build a local search-by-meaning index'
+      help_example 'lm rag search "concept"' 'find related passages' ;;
     research|gemini)
-      help_title 'research' 'connected broad-context sweep'
+      help_title 'gemini' 'the cloud lane: huge documents and web research'
       help_section 'START'
-      help_example 'lm gemini ingest-repo .' 'give Gemini a bounded repo corpus'
-      help_example 'lm gemini ask "List source paths and exact evidence for each candidate"' 'request checkable leads'
-      help_note 'Gemini is an external service. Supply an output contract and sample-check its leads.' ;;
+      help_example 'lm gemini --file big.md "summarize the risks"' 'a file too big for the local model'
+      help_example 'lm gemini research "state of X"'  'web lookup, with null where it is unsure'
+      help_example 'lm gemini ingest-repo .'  'load a whole repo, then lm gemini ask "..."'
+      help_note 'Gemini is an external service: the text you send leaves this Mac. Sample-check what it says.' ;;
+    review)
+      help_title 'review' 'review code, a PR or your uncommitted changes'
+      help_section 'START'
+      help_example 'lm review'   'your uncommitted changes (takes a few minutes; loads the 23 GB code model)'
+      help_example 'review 214'  'a GitHub PR'
+      help_note 'More flags: review -h' ;;
+    imagine)
+      help_title 'imagine' 'draw an image locally'
+      help_section 'START'
+      help_example 'imagine "a cozy reading nook"' 'about 1-2 minutes with the default model, free, offline'
+      help_example 'imagine refine 12 "warmer light"' 'steer a past image' ;;
     # A tool name routes to that tool's own help, so `lm help see` works like `see -h`.
-    q|see|imagine|review|warm|probe) exec "$BIN/$1" -h ;;
+    q|see|warm|probe) exec "$BIN/$1" -h ;;
     ui-verify) exec "$DIR/lib/ui-verify" -h ;;
     index)     exec "$DIR/lib/repo-index" -h ;;
     bench)     exec python3 "$DIR/scripts/bench.py" -h ;;
     opencode)  printf 'lm opencode [args]: run opencode on the local code tier; the model is leased for the session and released on exit\n' ;;
-    *) local g; g="$(did_you_mean "$1" table document screenshot compare batch retrieval research q see imagine review warm probe fleet gemini rag index ui-verify bench opencode)"
-       printf "lm help: unknown job '%s'%s\n  jobs: table document screenshot compare batch retrieval research\n  tools: q see imagine review warm probe fleet gemini rag index ui-verify bench opencode\n" \
+    *) local g; g="$(did_you_mean "$1" ask cmd doc read diff count again find web fast status failed json table batch retrieval research gemini review imagine q see warm probe fleet rag index ui-verify bench opencode)"
+       printf "lm help: unknown job '%s'%s\n  jobs: ask cmd doc read diff count again find web fast status failed json\n  more: table batch retrieval gemini review imagine\n  tools: q see imagine review warm probe fleet gemini rag index ui-verify bench opencode\n" \
          "$1" "${g:+ (did you mean '$g'?)}" >&2; return 2 ;;
   esac
 }
@@ -127,9 +239,18 @@ help_job() {
 # lm examples — a colored, comprehensive showcase of the suite, grouped by task.
 # Everything here is a real command you can paste; connected examples are labeled.
 examples_table() {
-  _r() { printf '  %s%-53s%s %s%s%s\n' "$C" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
+  _r() { _help_row "$C" 53 "$1" "$2"; }
   _s() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
   printf '%s%slm examples%s %s— local/offline tools plus connected web and Gemini lanes%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+
+  _s 'THE DAILY JOBS — lm'
+  _r 'lm "how do I see what is using port 5432"'    'quick answer; paths and typos in it route themselves'
+  _r 'lm cmd "5 largest files in ~/Downloads"'      'one shell command, checked against its --help'
+  _r 'lm read paste "what does the error say?"'     'the screenshot on your clipboard'
+  _r 'lm doc report.pdf "what is the decision?"'    'a file, and how much of it was read'
+  _r 'lm again --web'                               'the last answer was wrong: same question, stronger'
+  _r 'lm find "port 5432"'                          'search your past answers'
+  _r 'lm fast 1h'                                   'keep answers instant for an hour'
 
   _s 'ASK & FILE Q&A — q'
   _r 'q "explain this stack trace: <paste>"'        'quick answer on the warm model'
@@ -160,7 +281,7 @@ examples_table() {
   _r 'lm gemini ingest-repo .'                      'connected Gemini: pack repo, gitignore-aware'
 
   _s 'VISION — see (read a screenshot into text)'
-  _r 'see shot.png "what state is the toggle in?"'   'grounded read (minicpm-v4.6)'
+  _r 'see shot.png "what state is the toggle in?"'   'grounded read (Qwen3-VL on MLX; minicpm-v4.6 if memory is tight)'
   _r 'see dashboard.png --ui'                        'UI inventory (Qwen3-VL by default)'
   _r 'see modal.png --mlx "is the dropdown open?"'   'high-accuracy mlx structure read'
   _r 'see receipt.png --ocr'                         'exact text, Apple Vision, ~300ms'
@@ -186,7 +307,7 @@ examples_table() {
   _r 'lm gemini ingest-repo . && lm gemini ask "where is retry handled?"' 'whole-repo Q&A'
   _r 'lm gemini research "current state of X" --json' 'web-shaped, null-when-unsure'
 
-  _s 'IMAGE GEN — imagine (Flux/Qwen on the GPU)'
+  _s 'IMAGE GEN — imagine (qwen by default, on the GPU)'
   _r 'imagine --enhance "a cozy reading nook"'       'LLM-expanded prompt'
   _r 'imagine refine 12 "warmer light"'              'seed-locked iterate on gen 12'
 
@@ -249,6 +370,27 @@ tier_label() { # MODEL
   return 0
 }
 
+# One memory line from the guard's own reading: "20 GB available · pressure normal · swap 5.7 GB".
+# Empty when the guard cannot run, so status never fails over it.
+mem_line() {
+  local py="$DIR/.venv/bin/python" first avail pressure swap
+  [ -x "$py" ] || py=python3
+  first="$("$py" "$DIR/scripts/mem-guard.py" --once 2>/dev/null | head -n 1)" || return 0
+  avail="$(printf '%s' "$first" | sed -n 's/.*available~=\([0-9.]*\)G.*/\1/p')"
+  pressure="$(printf '%s' "$first" | sed -n 's/.*pressure=\([a-z]*\).*/\1/p')"
+  swap="$(printf '%s' "$first" | sed -n 's/.*swap_used=\([0-9]*\)M.*/\1/p')"
+  [ -n "$avail" ] || return 0
+  printf '%.0f GB available · pressure %s%s' "$avail" "${pressure:-?}" "${swap:+ · swap $(awk -v m="$swap" 'BEGIN{printf "%.1f", m/1000}') GB}"
+}
+# MLX models live outside ollama, so `ollama ps` never shows them: read the process table.
+mlx_lines() {
+  ps -axo rss=,command= 2>/dev/null | rg 'mlx_(vlm|lm)\.' | rg -v ' rg ' | while IFS= read -r l; do
+    local rss="${l%% *}" rest="${l#* }" model
+    model="$(printf '%s' "$rest" | sed -n 's/.*--model \([^ ]*\).*/\1/p')"
+    printf '  %-28s %-9s %s\n' "$(printf '%s' "$rest" | sed -n 's/.*\(mlx_[a-z]*\.[a-z_]*\).*/\1/p')" "$(awk -v k="$rss" 'BEGIN{printf "%.1f GB", k/1048576}')" "${model:+model $model}"
+  done || true  # rg exits 1 when nothing matches; under pipefail that is "none running", not an error
+}
+
 lm_status() {
   printf '%sserver%s   ' "$Y" "$Rs"
   if ollama_up; then
@@ -256,7 +398,9 @@ lm_status() {
   else
     echo "down (starts on demand, stops after idle) — start now: launchctl kickstart gui/$(id -u)/$LM_LAUNCHD_LABEL"
   fi
-  printf '%sloaded%s   resident models (warm) · how long they stay · which tier they are\n' "$Y" "$Rs"
+  local mem; mem="$(mem_line)"
+  [ -z "$mem" ] || printf '%smemory%s   %s\n' "$Y" "$Rs" "$mem"
+  printf '%sloaded%s   ollama models: size · when they unload · which tier\n' "$Y" "$Rs"
   local ps_out col l name until size tier
   ps_out="$(ollama_cli ps 2>/dev/null || true)"
   if [ "$(printf '%s\n' "$ps_out" | sed '1d' | grep -c .)" -gt 0 ]; then
@@ -270,6 +414,9 @@ lm_status() {
   else
     echo "  none (idle, ~0 RAM)"
   fi
+  local mlx; mlx="$(mlx_lines)"
+  if [ -n "$mlx" ]; then printf '%smlx%s      running now (outside ollama)\n%s\n' "$Y" "$Rs" "$mlx"
+  else printf '%smlx%s      none running\n' "$Y" "$Rs"; fi
   printf '%smodels%s   on disk\n' "$Y" "$Rs"
   local list
   if list="$(ollama_cli list 2>/dev/null)"; then
@@ -401,18 +548,39 @@ lm_models() {
     "$Y" "$Rs" "$model" "$big" "$code" "$sweep" "$vision" "$Dm" "$Rs"
 }
 
+# jq helpers shared by timeline and find.
+# userwords: what the person typed, without the document inlined after it.
+# remedy: what to do about an error code, in words.
+JQ_HIST='
+  def flat($s; $k): ((($s // "")[0:200]) | gsub("\\s+"; " "))[0:$k];
+  def first_line: (. // "") | split("\n") | map(select(test("\\S"))) | (.[0] // "") | gsub("\\s+"; " ");
+  def userwords: ((.prompt // "")[0:2000]) | (if startswith("<input") then "" else (split("\n\n<input")[0] // "") end);
+  def docname: ((.prompt // "")[0:2000]) | (capture("<input name=\"(?<f>[^\"]*)\"") | .f) // "";
+  def qtext($k): (userwords | gsub("\\s+"; " ")) as $w | docname as $d
+    | (if $w == "" then ((.intent // "ask") + (if $d != "" then " " + $d else "" end))
+       else $w + (if $d != "" then "  [" + $d + "]" else "" end) end)[0:$k];
+'
+# One timeline row; needs --arg tool.
+JQ_ROW='def row($ln; $kind; $err; $text):
+    {ts, tool: $tool, n: $ln, kind: $kind, err: $err, text: $text,
+     resp: ((.response // "")[0:600]), code: (.error // null), tty: (.tty // null), session: (.session // null)};'
+
 # Merged history of q, imagine, see, fleet and gemini, newest last. Each row leads
-# with tool#N so it points straight at `<tool> show N` (lm last opens it).
-#   lm timeline [N] [--errors] [--tool q|see|imagine|fleet|gemini] [--json]
+# with tool#N so it points straight at `<tool> show N` (lm last opens it). By default
+# only YOUR calls (same terminal) are listed; --all adds agents and hooks, dimmed.
+#   lm timeline [N] [--errors] [--tool q|see|imagine|fleet|gemini] [--all] [--json]
 lm_timeline() {
-  local n=20 errors=false json=false tool=""
+  local n=20 errors=false json=false tool="" all=false
+  lm_all_on && all=true
   while [ $# -gt 0 ]; do
     case "$1" in
       --errors) errors=true; shift ;;
       --json)   json=true; shift ;;
+      --all)    all=true; shift ;;
+      -h|--help) verb_help timeline; return 0 ;;
       --tool)   need_arg "lm timeline" "$1" "${2:-}"; tool="$2"; shift 2 ;;
       *) if [[ "$1" =~ ^[1-9][0-9]*$ ]]; then n="$1"; shift
-         else reject_unknown_flag "lm timeline" "$1"; echo "lm timeline: unexpected '$1' (lm timeline [N] [--errors] [--tool T] [--json])" >&2; exit 2; fi ;;
+         else reject_unknown_flag "lm timeline" "$1"; echo "lm timeline: unexpected '$1' (lm timeline [N] [--errors] [--tool T] [--all] [--json])" >&2; exit 2; fi ;;
     esac
   done
   case "$tool" in
@@ -421,43 +589,77 @@ lm_timeline() {
     *) local g; g="$(did_you_mean "$tool" q see imagine fleet gemini)"
        echo "lm timeline: unknown tool '$tool'${g:+ (did you mean '$g'?)}; one of q see imagine fleet gemini" >&2; exit 2 ;;
   esac
+  lm_identify
   # Only the newest N lines of each log can hold the newest N rows overall, so tail
   # first: parsing a 12 MB history for 20 rows took 40 seconds. A filter can need to
   # look further back, so it scans the newest 5000 entries of each log.
   local win="$n"; { $errors || [ -n "$tool" ]; } && win=5000
-  # gsub runs on a 200-char slice, never the whole prompt (some hold whole documents).
-  local pre='def flat($s; $k): ((($s // "")[0:200]) | gsub("\\s+"; " "))[0:$k];
-    def row($kind; $err; $text): {ts, tool: $tool, n: (input_line_number + $off), kind: $kind, err: $err, text: $text};'
+  # Your own rows are found by their tty/session text first (rg is fast), then parsed.
+  local -a pats=(-e "\"tty\": ?\"$LM_TTY\""); [ -n "$LM_SESSION" ] && pats+=(-e "\"session\": ?\"$LM_SESSION\"")
+  local have_id=false; [ -n "$LM_TTY$LM_SESSION" ] && have_id=true
   tl_src() { # TOOL FILE JQ_BODY
     [ -f "$2" ] || return 0
     { [ -z "$tool" ] || [ "$tool" = "$1" ]; } || return 0
-    local total cnt; total="$(wc -l < "$2" | tr -d ' ')"
-    cnt="$win"; [ "$total" -lt "$cnt" ] && cnt="$total"
-    # raw lines + fromjson? so one torn line is dropped instead of hiding every newer row
-    tail -n "$cnt" "$2" | jq -cR --arg tool "$1" --argjson off "$(( total - cnt ))" "$pre fromjson? | $3"
+    if $all; then
+      local total cnt; total="$(wc -l < "$2" | tr -d ' ')"
+      cnt="$win"; [ "$total" -lt "$cnt" ] && cnt="$total"
+      # raw lines + fromjson? so one torn line is dropped instead of hiding every newer row
+      tail -n "$cnt" "$2" | jq -cR --arg tool "$1" --argjson off "$(( total - cnt ))" "$JQ_HIST $JQ_ROW (input_line_number + \$off) as \$ln | fromjson? | $3" || true
+    else
+      $have_id || return 0
+      rg -n "${pats[@]}" "$2" 2>/dev/null | tail -n "$win" \
+        | jq -cR --arg tool "$1" "$JQ_HIST $JQ_ROW index(\":\") as \$i | (.[0:\$i] | tonumber) as \$ln | (.[\$i+1:] | fromjson?) | $3" || true
+    fi
   }
   local rows
   rows="$({
-    tl_src q       "$DIR/logs/q-history.jsonl"          'row(.intent; (.error != null); flat(.prompt; 56))'
-    tl_src imagine "$DIR/outputs/imagine-history.jsonl" 'row((.kind // "gen") + (if .star then " ★" else "" end); false; flat(.prompt // .image; 56))'
-    tl_src see     "$DIR/logs/see-history.jsonl"        'row(.mode // "read"; (.error != null or ((.response // "") | startswith("(visual read failed"))); ((.img // "?") | split("/") | last) + "  " + flat(.prompt // "describe"; 40))'
-    tl_src fleet   "$DIR/logs/fleet-history.jsonl"      'row(.intent; ((.fail // 0) > 0); "×\(.items)  \(.pass)✓/\(.fail)✗")'
-    tl_src gemini  "$DIR/logs/gem-history.jsonl"        'row(.kind; (.kind == "error"); flat(.prompt; 50))'
-  } | jq -cs --argjson n "$n" --argjson errors "$errors" "$JQ_LOCAL_TS"'
-    map(select(if $errors then .err else true end)) | sort_by(.ts) | .[-$n:] | map(. + {time: (.ts | lts)})')"
+    tl_src q       "$DIR/logs/q-history.jsonl"          'row($ln; .intent; (.error != null); qtext(56))'
+    tl_src imagine "$DIR/outputs/imagine-history.jsonl" 'row($ln; (.kind // "gen") + (if .star then " ★" else "" end); false; flat(.prompt // .image; 56))'
+    tl_src see     "$DIR/logs/see-history.jsonl"        'row($ln; .mode // "read"; (.error != null or ((.response // "") | startswith("(visual read failed"))); ((.img // "?") | split("/") | last) + "  " + flat(.prompt // "describe"; 40))'
+    tl_src fleet   "$DIR/logs/fleet-history.jsonl"      'row($ln; .intent; ((.fail // 0) > 0); "×\(.items)  \(.pass)✓/\(.fail)✗")'
+    tl_src gemini  "$DIR/logs/gem-history.jsonl"        'row($ln; .kind; (.kind == "error"); flat(.prompt; 50)) | .code = ((.resp | capture("^(?<c>[a-z_]+):") | .c) // null)'
+  } | jq -cs --argjson n "$n" --argjson errors "$errors" --arg t "$LM_TTY" --arg s "$LM_SESSION" --argjson all "$all" "$JQ_HIST $JQ_REMEDY $JQ_MINE $JQ_LOCAL_TS"'
+    map(. + {mine: mine($t; $s)})
+    | map(select(if $errors then .err else true end))
+    | map(select($all or .mine))
+    | sort_by(.ts) | .[-$n:]
+    | map(. + {time: (.ts | lts),
+               answer: (if .err then ((.code // "error") + (if remedy(.code // "") != "" then " · " + remedy(.code // "") else "" end))
+                        else (.resp | first_line | .[0:60]) end)}
+          | del(.resp))')"
   [ -n "$rows" ] || rows='[]'
+  local empty=false; [ "$(printf '%s' "$rows" | jq 'length')" -eq 0 ] && empty=true
+  if $empty && [ -z "${LM_TIMELINE_QUIET:-}" ]; then
+    # JSON callers get the same one-line reason on stderr, so [] is not mistaken for "no history"
+    if $all; then echo "no history yet" >&2
+    elif $have_id; then echo "none of your calls from this terminal yet. lm timeline --all shows agents and hooks too." >&2
+    else echo "this call has no terminal, so none of the history is 'yours'. lm timeline --all shows everything." >&2; fi
+  fi
   if $json; then printf '%s\n' "$rows"; return; fi
-  printf '%s' "$rows" | jq -r '.[] |
+  ! $empty || return 0
+  printf '%s' "$rows" | jq -r --arg dim "$Dm" --arg rs "$Rs" '.[] |
     def pad($w): (. + "              ")[0:$w];
-    "\(.time)  \("\(.tool)#\(.n)" | pad(11))  \(.kind)\(if .err then " ✗" else "" end)  \(.text)"'
+    (if .mine then "" else $dim end) as $d | (if .mine then "" else $rs end) as $r
+    | $d + "\(.time)  \("\(.tool)#\(.n)" | pad(11))  \(.kind)\(if .err then " ✗" else "" end)  \(.text)" + (if .answer != "" then "  → \(.answer)" else "" end) + $r'
 }
 
 # Open the newest history entry (optionally of one tool) in full: the tool's own `show N`.
+# Yours by default; --all takes the newest from anyone.
 lm_last() {
-  local tool="${1:-}" row n
-  if [ -n "$tool" ]; then row="$(lm_timeline 1 --tool "$tool" --json)"; else row="$(lm_timeline 1 --json)"; fi
+  local tool="" row n args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -h|--help) verb_help last; return 0 ;;
+      --all) args+=(--all); shift ;;
+      -*) reject_unknown_flag "lm last" "$1"; shift ;;
+      *) tool="$1"; shift ;;
+    esac
+  done
+  if [ -n "$tool" ]; then row="$(LM_TIMELINE_QUIET=1 lm_timeline 1 --tool "$tool" --json ${args[@]+"${args[@]}"})"; else row="$(LM_TIMELINE_QUIET=1 lm_timeline 1 --json ${args[@]+"${args[@]}"})"; fi
   tool="$(printf '%s' "$row" | jq -r '.[0].tool // empty')"; n="$(printf '%s' "$row" | jq -r '.[0].n // empty')"
-  [ -n "$tool" ] || { echo "lm last: no history yet" >&2; exit 12; }
+  if [ -z "$tool" ]; then
+    echo "lm last: none of your calls from this terminal yet (lm last --all takes the newest from anyone)" >&2; exit 12
+  fi
   printf '%s%s#%s%s\n' "$eDm" "$tool" "$n" "$eRs" >&2
   case "$tool" in
     q)       exec "$BIN/q" show "$n" ;;
@@ -468,9 +670,165 @@ lm_last() {
   esac
 }
 
-case "${1:-}" in
-  ''|-h|--help) overview ;;
-  help) shift; help_job "${1:-}" ;;
+# lm find "words": search what you asked and what you were told, across every history,
+# your own calls first. It reads the words you typed and the answer, never the
+# documents that were pasted inside a prompt, so a long file does not match everything.
+lm_find() {
+  local limit=15 all_terms=() a
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -h|--help) verb_help find; return 0 ;;
+      -n) need_arg "lm find" "$1" "${2:-}"; limit="$2"; shift 2 ;;
+      --) shift; all_terms+=("$@"); break ;;
+      -*) reject_unknown_flag "lm find" "$1"; all_terms+=("$1"); shift ;;
+      *) all_terms+=("$1"); shift ;;
+    esac
+  done
+  [ "${#all_terms[@]}" -gt 0 ] || { verb_help find >&2; exit 2; }
+  [[ "$limit" =~ ^[1-9][0-9]*$ ]] || usage_fail "lm find" "-n needs a number, got '$limit'"
+  lm_identify
+  local words="${all_terms[*]}" first="${all_terms[0]}" pre
+  [ -n "${words//[[:space:]]/}" ] || usage_fail "lm find" "give at least one word to look for"
+  # The log holds JSON: quotes and backslashes are escaped there, and older rows escape non-ASCII too.
+  # A first word that would not match as typed skips the quick text filter (the newest 4000 rows are still read).
+  pre="$first"
+  case "$first" in *'"'*|*'\'*) pre="" ;; esac
+  [ -z "$(printf '%s' "$first" | LC_ALL=C tr -d '\000-\177')" ] || pre=""
+  find_src() { # TOOL FILE JQ_BODY  (a row object with prompt/response in scope)
+    [ -f "$2" ] || return 0
+    rg -n -i -F -e "$pre" "$2" 2>/dev/null | tail -n 4000 \
+      | jq -cR --arg tool "$1" "$JQ_HIST index(\":\") as \$i | (.[0:\$i] | tonumber) as \$ln | (.[\$i+1:] | fromjson?) | select(. != null) | $3" || true
+  }
+  # Each source yields {ts, tool, n, tty, session, ask, ans, hay}: ask = the question as typed.
+  local found
+  found="$({ find_src q       "$DIR/logs/q-history.jsonl"          'select((.intent // "") != "title" and (.intent // "") != "diy-plan") | {ts, tool:$tool, n:$ln, tty:(.tty // null), session:(.session // null), ask:qtext(70), ans:((.response // "") | first_line | .[0:70]), hay:((userwords) + " " + docname + " " + (.response // ""))}'
+    find_src see     "$DIR/logs/see-history.jsonl"        '{ts, tool:$tool, n:$ln, tty:(.tty // null), session:(.session // null), ask:(((.img // "?") | split("/") | last) + "  " + flat(.prompt // "describe"; 40)), ans:((.response // "") | first_line | .[0:70]), hay:((.prompt // "") + " " + (.img // "") + " " + (.response // ""))}'
+    find_src gemini  "$DIR/logs/gem-history.jsonl"        '{ts, tool:$tool, n:$ln, tty:(.tty // null), session:(.session // null), ask:flat(.prompt; 70), ans:((.response // "") | first_line | .[0:70]), hay:((.prompt // "") + " " + (.response // ""))}'
+    find_src imagine "$DIR/outputs/imagine-history.jsonl" '{ts, tool:$tool, n:$ln, tty:(.tty // null), session:(.session // null), ask:flat(.prompt // .image; 70), ans:((.output // .image // "") | split("/") | last), hay:((.prompt // "") + " " + (.response // ""))}'
+  } | jq -cs --arg words "$words" --arg t "$LM_TTY" --arg s "$LM_SESSION" --argjson limit "$limit" "$JQ_MINE $JQ_LOCAL_TS"'
+      ($words | ascii_downcase | split(" ") | map(select(. != ""))) as $terms
+      | map(select(.hay | ascii_downcase | . as $h | all($terms[]; . as $w | $h | contains($w))))
+      | map(. + {mine: mine($t; $s)})
+      | (map(select(.mine)) | sort_by(.ts) | reverse) + (map(select(.mine | not)) | sort_by(.ts) | reverse)
+      | .[0:$limit]
+      | map(. + {time: (.ts | lts)} | del(.hay))')"
+  if [ "$(printf '%s' "$found" | jq 'length')" -eq 0 ]; then
+    echo "lm find: nothing matches \"$words\" in q, see, gemini or imagine history" >&2
+    return 0
+  fi
+  printf '%s' "$found" | jq -r --arg dim "$Dm" --arg rs "$Rs" '.[] |
+    def pad($w): (. + "              ")[0:$w];
+    (if .mine then "" else $dim end) as $d | (if .mine then "" else $rs end) as $r
+    | $d + "\("\(.tool)#\(.n)" | pad(9))  \(.time)  \(.ask)" + (if .ans != "" then "  → \(.ans)" else "" end) + $r'
+}
+
+# Help for the verbs lm implements itself (the tools answer their own -h). Asking for
+# help never runs the verb.
+verb_help() {
+  local v="$1" d=""
+  case "$v" in
+    ask) d='a quick answer from the small local model' ;;
+    timeline) d='your recent calls, newest last' ;;
+    last) d='your latest call, in full' ;;
+    find) d='search the answers you got before' ;;
+    status) d='what is loaded, free memory, when it unloads' ;;
+    models) d='installed models and which tier each is' ;;
+    doctor) d='health check of the whole toolkit' ;;
+    examples) d='a showcase of everything, grouped by job' ;;
+    help) d='the steps for one job' ;;
+    cmd) d='one shell command, checked before you run it' ;;
+    read) d='text or an answer out of an image' ;;
+    diff) d='what changed between two images' ;;
+    doc) d='ask about, or summarize, a file' ;;
+    again) d='redo your last question on a stronger model' ;;
+    fast) d='keep answers instant for a while' ;;
+    more) d='every command, including the rarely used ones' ;;
+  esac
+  printf '%s%slm %s%s %s— %s%s\n' "$Bd" "$C" "$v" "$Rs" "$Dm" "$d" "$Rs"
+  _sec USAGE
+  case "$v" in
+    ask)
+      _cmd 'lm ask "question"'      'a quick answer from the small local model (plain lm "question" does the same)'
+      _note 'An image or file path inside the question is routed for you. More options: q -h' ;;
+    timeline)
+      _cmd 'lm timeline [N]'        'your last N calls (default 20) across q, see, imagine, fleet and gemini'
+      _cmd 'lm timeline --errors'   'only failed calls, each with its reason and what to do'
+      _cmd 'lm timeline --all'      'also agents, hooks and other terminals (dimmed)'
+      _cmd 'lm timeline --tool T'   'one of q, see, imagine, fleet, gemini'
+      _cmd 'lm timeline --json'     'rows as JSON (adds mine, answer, code)'
+      _note 'Each row starts with a handle like q#3689: open it with q show 3689.' ;;
+    last)
+      _cmd 'lm last [tool]'         'your newest call, in full (optionally of one tool)'
+      _cmd 'lm last --all'          'the newest call from anyone, including agents and hooks' ;;
+    find)
+      _cmd 'lm find "words"'        'questions and answers containing all the words, yours first'
+      _cmd 'lm find port -n 40'     'show up to 40 matches (default 15)'
+      _note 'It searches what you typed and what came back, not the documents pasted inside a prompt. Rows from other terminals, agents and hooks are dimmed.' ;;
+    status)
+      _cmd 'lm status'              'server, free memory, loaded models and when they unload, MLX processes'
+      _cmd 'lm status --json'       'the machine-readable status other tools read' ;;
+    models)
+      _cmd 'lm models'              'installed models, which are loaded, and which tier each fills'
+      _cmd 'lm models --json'       'the same as JSON' ;;
+    doctor)
+      _cmd 'lm doctor'              'one pass or fail line per dependency; exits 1 if any fail'
+      _cmd 'lm doctor --json'       'the same as JSON' ;;
+    examples)
+      _cmd 'lm examples'            'real commands you can paste, grouped by job' ;;
+    help)
+      _cmd 'lm help'                'the list of jobs'
+      _cmd 'lm help <job>'          'the steps for one job: ask, cmd, doc, read, diff, count, again, find, web, fast, status, failed' ;;
+    cmd)
+      _cmd 'lm cmd "task"'          'one shell command; it checks the program and each --flag against its own --help'
+      _ex 'lm cmd "list the 5 largest files in ~/Downloads"' '' ;;
+    read)
+      _cmd 'lm read <img> ["q"]'    'text or an answer from an image; text, IDs and counts are read exactly first'
+      _cmd 'lm read paste ["q"]'    'the image on your clipboard'
+      _cmd 'lm read latest ["q"]'   'your newest screenshot'
+      _note 'More options (--ui, --crop, --ocr, --json): see -h' ;;
+    diff)
+      _cmd 'lm diff A B ["focus"]'  'a plain three-line summary, a heatmap, and a model read if memory allows'
+      _note 'More options (--no-read, --only, --grid, --json): see -h' ;;
+    doc)
+      _cmd 'lm doc <file>'          'summarize the file (PDF, Word, HTML, text, spreadsheet)'
+      _cmd 'lm doc <file> "q"'      'answer a question from the file'
+      _note 'It says how much of the file it read. More options: q -h' ;;
+    again)
+      _cmd 'lm again'               'your last question, one step stronger (small, then big); the web only when you ask for it'
+      _cmd 'lm again --big|--code|--web' 'pick the lane (--web sends the question off this Mac)' ;;
+    fast)
+      _cmd 'lm fast [1h]'           'keep the small model loaded so q answers instantly (default 1h)'
+      _cmd 'lm fast off'            'unload it now and free the memory' ;;
+    more)
+      _cmd 'lm more'                'the full command list' ;;
+  esac
+}
+
+# A question typed straight after lm: route it through q (paths, typos and "gemini ..." are handled there).
+ask_q() { exec "$BIN/q" --route "$@"; }
+
+verb="${1:-}"
+case "$verb" in
+  '')        front_door ;;
+  -h|--help) front_door ;;
+  more)      shift; if wants_help "$@"; then verb_help more; else overview; fi ;;
+  help)      shift; if wants_help "$@"; then verb_help help; else help_job "${1:-}"; fi ;;
+  ask)       shift; if wants_help "$@" || [ $# -eq 0 ]; then verb_help ask; [ $# -gt 0 ] || exit 2; exit 0; fi; ask_q "$@" ;;
+  cmd)       shift; if wants_help "$@" || [ $# -eq 0 ]; then verb_help cmd; [ $# -gt 0 ] || exit 2; exit 0; fi; exec "$BIN/q" cmd "$@" ;;
+  read)      shift; if wants_help "$@" || [ $# -eq 0 ]; then verb_help read; [ $# -gt 0 ] || exit 2; exit 0; fi; exec "$BIN/see" "$@" ;;
+  diff)      shift; if wants_help "$@" || [ $# -lt 2 ]; then verb_help diff; [ $# -gt 0 ] || exit 2; wants_help "$@" && exit 0; exit 2; fi; exec "$BIN/see" diff "$@" ;;
+  doc)       shift
+             if wants_help "$@" || [ $# -eq 0 ]; then verb_help doc; [ $# -gt 0 ] || exit 2; exit 0; fi
+             docf="$(expand_tilde "$1")"; shift
+             if [ $# -gt 0 ]; then exec "$BIN/q" qa --ctx "$docf" "$@"; else exec "$BIN/q" summarize --ctx "$docf"; fi ;;
+  again)     shift; if wants_help "$@"; then verb_help again; exit 0; fi; exec "$BIN/q" --again "$@" ;;
+  find)      shift; lm_find "$@" ;;
+  fast)      shift
+             if wants_help "$@"; then verb_help fast; exit 0; fi
+             case "${1:-1h}" in
+               off) exec "$BIN/warm" off ;;
+               *)   exec "$BIN/warm" on "${1:-1h}" ;;
+             esac ;;
   q)        shift; exec "$BIN/q" "$@" ;;
   imagine)  shift; exec "$BIN/imagine" "$@" ;;
   see)      shift; exec "$BIN/see" "$@" ;;
@@ -484,13 +842,14 @@ case "${1:-}" in
   bench)    shift; exec python3 "$DIR/scripts/bench.py" "$@" ;;
   opencode)
     # Run opencode against the local code tier without paying the no-idle tax:
-    # lease the model for the session (bounded — self-heals if we die hard),
-    # release when opencode exits. NOT exec — the trap must outlive the child.
+    # lease the model for the session (bounded, self-heals if we die hard),
+    # release when opencode exits. NOT exec, the trap must outlive the child.
     shift
+    if wants_help "$@"; then help_job opencode; exit 0; fi
     command -v opencode >/dev/null 2>&1 || { echo "lm: opencode not installed (brew install opencode)" >&2; exit 12; }
     "$BIN/warm" on code "${LM_OPENCODE_LEASE:-4h}" >&2
     trap '"$BIN/warm" off code >/dev/null 2>&1 || true' EXIT INT TERM
-    # Sessions log like everything else here (histories are the API) — this was
+    # Sessions log like everything else here (histories are the API): this was
     # the one tool in the suite whose usage was invisible to the self-audit.
     _oc_t0=$(date +%s)
     set +e; opencode "$@"; _oc_rc=$?; set -e
@@ -500,17 +859,19 @@ case "${1:-}" in
     exit "$_oc_rc"
     ;;
   warm)     shift; exec "$BIN/warm" "$@" ;;
-  status)   v=status; shift; jf="$(json_only "lm $v" "$@")" || exit 2
+  status)   shift; if wants_help "$@"; then verb_help status; exit 0; fi
+            jf="$(json_only "lm status" "$@")" || exit 2
             if [ -n "$jf" ]; then lm_status_json; else lm_status; fi ;;
   models|doctor)
-            v="$1"; shift; jf="$(json_only "lm $v" "$@")" || exit 2
-            "lm_$v" "$jf" ;;
+            shift; if wants_help "$@"; then verb_help "$verb"; exit 0; fi
+            jf="$(json_only "lm $verb" "$@")" || exit 2
+            "lm_$verb" "$jf" ;;
   timeline) shift; lm_timeline "$@" ;;
-  last)     shift
-            case "${1:-}" in -h|--help) echo "usage: lm last [q|see|imagine|fleet|gemini]"; exit 0 ;; -*) reject_unknown_flag "lm last" "$1" ;; esac
-            lm_last "${1:-}" ;;
-  examples) examples_table ;;
+  last)     shift; lm_last "$@" ;;
+  examples) shift; if wants_help "$@"; then verb_help examples; exit 0; fi; examples_table ;;
   --version|-V|version) echo "lm ${LM_VERSION:-unknown}" ;;
-  *) g="$(did_you_mean "$1" help q imagine see review probe fleet index gemini ui-verify rag bench opencode warm status models doctor timeline last examples version)"
-     echo "lm: unknown verb '$1'${g:+ (did you mean '$g'?)}; run lm for the full list" >&2; exit 2 ;;
+  *) # Several words, or one with spaces, is a question typed straight after lm.
+     if [ $# -gt 1 ] || [[ "$verb" == *" "* ]]; then ask_q "$@"; fi
+     g="$(did_you_mean "$verb" more help ask cmd read diff doc again find fast q imagine see review probe fleet index gemini ui-verify rag bench opencode warm status models doctor timeline last examples version)"
+     echo "lm: unknown verb '$verb'${g:+ (did you mean '$g'?)}; run lm for the jobs, or lm \"your question\" to ask" >&2; exit 2 ;;
 esac

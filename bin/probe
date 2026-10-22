@@ -81,8 +81,20 @@ def run_item(model, it):
 
 
 def main():
-    if len(sys.argv) < 2:
-        sys.exit("usage: probe <model> [--out PATH]")
+    if any(a in ("-h", "--help") for a in sys.argv[1:]):
+        print("probe <model> [--out PATH]   check whether a local model can be trusted to take a task on its own\n"
+              "\n"
+              "  Runs about nine short judgment tests against the model (does it ask when it should,\n"
+              "  admit when it does not know, stay consistent, follow multi-turn instructions) and\n"
+              "  writes a report to probe/runs/ for you to read and mark. It takes a few minutes and\n"
+              "  loads the model, so name one you mean to test.\n"
+              "\n"
+              "  probe qwen3.6:35b-a3b          test that model\n"
+              "  probe gemma4:26b --out r.md    write the report to r.md")
+        sys.exit(0)
+    if len(sys.argv) < 2 or sys.argv[1].startswith("-"):
+        print("usage: probe <model> [--out PATH]   (probe -h explains what it does)", file=sys.stderr)
+        sys.exit(2)
     model = sys.argv[1]
     items = load_items()
     ts = time.strftime("%Y%m%d-%H%M%S")
