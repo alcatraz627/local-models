@@ -10,8 +10,10 @@ whatever you're touching (`docs/03`–`docs/10`).
 
 ## The three hard rules
 
-1. **Bounded residency.** Per-request expiry and `warm` leases prevent accidental
-   large-model pins. Scheduled warmth jobs may keep the small companion resident.
+1. **Nothing stays warm by default.** Models load per request and unload after it.
+   `warm on` is a bounded lease (2h for the companion, 60m for other tiers); only an
+   explicit `forever` pins. There is no scheduled morning warm-up (owner, 2026-10-22:
+   the models are not used on most days). The 19:00 `warm off all` sweep is the backstop.
 2. **Trust = a task-appropriate check, never model confidence.** A schema or a nonempty
    response proves only that transport worked. Exact table facts come from the deterministic
    profiler. Other consequential claims need a source check, executable judge, or human review.

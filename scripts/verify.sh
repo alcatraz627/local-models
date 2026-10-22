@@ -203,7 +203,9 @@ echo "── gcc schedules (labels present) ──"
 S=$(bash ~/.claude/scripts/schedule/schedule.sh list --all 2>/dev/null)
 # image-tools-review and tier-telemetry-review were retired with their gcc
 # schedules (complements-only ruling 2026-08-30; plan §12 flagged the choice).
-for name in warm-morning warm-evening-off lm-self-audit; do
+# warm-morning was retired on 2026-10-22: nothing stays warm by default. The
+# evening sweep stays as a backstop and runs inside the shared gcc-cron.
+for name in warm-evening-off lm-self-audit; do
   printf '%s' "$S" | grep -q "$name" && ok "scheduled: $name" || bad "schedule missing: $name"
 done
 
@@ -222,7 +224,8 @@ _re="$(./bin/see reshoot "$_rd/nope" 2>/dev/null || true)"
 printf '%s' "$_re" | jq -e '.code == "item_missing"' >/dev/null \
   && ok "see reshoot: missing loop-dir dies structured" || bad "see reshoot error path"
 rm -rf "$_rd"
-for _job in com.alcatraz.warm-evening-off com.alcatraz.local-models-ollama; do
+# warm-evening-off runs inside gcc-cron (no plist of its own); its registration is checked above.
+for _job in com.alcatraz.local-models-ollama; do
   _info="$(launchctl print "gui/$(id -u)/$_job" 2>/dev/null)" \
     || { bad "launchd: $_job not loaded"; continue; }
   case "$_info" in

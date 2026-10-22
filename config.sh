@@ -10,9 +10,10 @@ WARM_MODEL="${WARM_MODEL:-gemma4-e4b-warm}"   # = small
 BIG_MODEL="${BIG_MODEL:-gemma4:26b}"          # MoE (3.8B active): ~30-45 tok/s, best prose + long-ctx
 CODE_MODEL="${CODE_MODEL:-qwen3.6:35b-a3b}"   # MoE: strongest local tool-calling + coding
 
-# -1 = stay resident until `warm off` (never auto-unload). This is the whole
-# point of the toggle: residency is a deliberate choice, not a timer.
-WARM_KEEP_ALIVE="-1"
+# Nothing stays resident by default (owner, 2026-10-22: models "are not used on
+# most days"). A bare `warm on` is a 2h lease, so a forgotten pin unloads itself;
+# `warm on small forever` is the explicit opt-in to stay until `warm off`.
+WARM_KEEP_ALIVE="${WARM_KEEP_ALIVE:-2h}"
 
 OLLAMA_HOST="${OLLAMA_HOST:-http://127.0.0.1:11434}"
 

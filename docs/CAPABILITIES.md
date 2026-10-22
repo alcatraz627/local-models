@@ -253,7 +253,8 @@ the worker contract (`q complete --ctx -`).
 The no-idle policy (server `KEEP_ALIVE=0`) means models load per call unless pinned. Two pins:
 
 ```bash
-warm on                        # the companion (small, forever) — q goes sub-second
+warm on                        # lease the small companion for 2h, so q goes sub-second
+warm on small forever          # pin it until warm off (nothing stays warm by default)
 warm off                       # back to zero idle RAM
 warm on code                   # LEASE the code tier — bounded 60m, self-heals if forgotten
 warm on code 4h                # longer session · 'forever' opts out of the bound

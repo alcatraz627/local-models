@@ -32,7 +32,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 | `lm index [find X]` | repo symbol map — "where is X" with live staleness | `lm index -h` |
 | `lm opencode [args]` | opencode on the local code tier — auto lease/release around the session | — |
 | `lm gemini "..."` | the gemini lane (default gemini-3.8-flash, opt-in gemini-4-argon, wrapper-only, read-only posture); `ingest`/`ask` per-project sessions (UUID create/resume); structured `gemini_unavailable` fallback. **VERIFIED end-to-end 2026-07-07** — auth = API key in `~/.gemini/.env` (600, wrapper-loaded; settings selectedType=gemini-api-key). Note: plan-mode gemini can READ the workspace it runs in — don't point it at dirs holding secrets | `lm gemini -h` |
-| `warm on\|off [tier\|model] [ttl]` | companion pin (forever) or **bounded lease** for big tiers; `warm off all` sweeps | `warm -h` |
+| `warm on\|off [tier\|model] [ttl]` | **bounded lease** (companion 2h, big tiers 60m; `forever` opts in to a pin); `warm off all` sweeps | `warm -h` |
 | `lm status` / `models` / `doctor` / `timeline` | server + resident + on-disk · tiers · smoke-check · merged history (q/imagine/see/fleet/gemini), `lm last`, `lm --version` | `lm` |
 
 ## Architecture
@@ -41,14 +41,11 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
   (`bin/lm-serve`). Policy baked in: `MAX_LOADED_MODELS=2`, `KEEP_ALIVE=0`, flash-attn + q8 KV.
   Port 127.0.0.1:11434. **MLX is format-routed inside Ollama** (safetensors tags → MLX runner,
   GGUF → llama-server); measured verdict in `docs/05` §1 — Q4_K_M/llama.cpp kept for the code tier.
-- **Two-tier model lifecycle:** one small **warm** companion (`gemma4-e4b-warm`, ~5.6 GB,
-  `warm on` = forever-pin) + on-demand big models. **Leases** (`warm on code [ttl]`) pin a big
-  model with a bounded TTL that self-heals — used by `lm fleet` and `lm opencode` automatically.
-  Scheduled warmth: `warm-morning` (daily 09:30, re-registered 2026-08-30 after the original
-  died on launchd's PATH and was removed ~08-05) + `warm-evening-off` (daily 19:00 `off all`,
-  the shutdown backstop; exit-127-dead for its first 8 weeks, fixed 2026-08-30) via
-  gcc-schedule. The fix lives in `bin/_lib.sh` (prepends /opt/homebrew/bin for launchd jobs);
-  the weekly self-audit now checks both jobs' last exit codes.
+- **Model lifecycle: cold by default (owner, 2026-10-22).** Every model loads per request and
+  unloads after it (server `KEEP_ALIVE=0`). `warm on` leases the small companion
+  (`gemma4-e4b-warm`, ~5.6 GB) for 2h; `warm on code [ttl]` leases a big tier for 60m by default,
+  and `lm fleet` / `lm opencode` lease automatically. Only an explicit `forever` pins. There is
+  no morning warm-up; `warm-evening-off` (daily 19:00 `off all`, inside gcc-cron) is the backstop.
 - **Tiers (config.sh):** small=`gemma4-e4b-warm` · big=`gemma4:26b` · code=`qwen3.6:35b-a3b`
   (probe-gated 9/9) · vision=`minicpm-v4.6`. `see --ui` uses Qwen3-VL-8B through MLX by default.
 - **Intents are data:** `intents/<name>.toml` (including ask/cmd/title/commit/summarize/

@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # Tier W on/off control — decide when to pay the warm-start cost vs shut it down.
 #
-#   warm on                 load the warm companion model and pin it resident (snappy)
+#   warm on                 load the warm companion for a 2h lease (snappy q)
 #   warm on code [2h]       lease any tier/model — BOUNDED pin (default 60m, self-heals)
 #   warm off [code|all]     unload the companion / a leased model / everything
 #   warm status             show what's resident + how long it stays
 #   warm restart            off -> on (companion)
 #
-# Two kinds of residency, deliberately different:
-#   the COMPANION (bare `warm on`) pins forever — it's small and the point is snappy.
-#   a LEASE (`warm on code|big|<model>`) is bounded — big models must self-heal if
-#   you forget them, so keep_alive is a TTL, never -1 (say 'forever' to override).
+# Nothing stays resident by default: every pin is a lease that unloads itself.
+# The companion (bare `warm on`) gets WARM_KEEP_ALIVE (2h); other tiers get 60m.
+# Say 'forever' (`warm on small forever`) to opt into a pin that waits for `warm off`.
 # Residency is tracked by Ollama itself (ollama ps), not a state file here.
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -104,9 +103,9 @@ case "$cmd" in
     echo "warm — Tier W warm-model toggle + bounded leases for the big tiers"
     echo
     echo "usage: warm {on [tier|model] [ttl] | off [tier|model|all] | status | restart}"
-    echo "  on               load \$WARM_MODEL ($WARM_MODEL) and pin it resident — snappy q"
+    echo "  on               load \$WARM_MODEL ($WARM_MODEL) for a $WARM_KEEP_ALIVE lease — snappy q"
     echo "  on code [2h]     lease a tier (small/big/code) or any model, BOUNDED (default $DEFAULT_LEASE;"
-    echo "                   'forever' to pin like the companion) — an opencode/agent session helper"
+    echo "                   'forever' pins until warm off) — an opencode/agent session helper"
     echo "  off [code|all]   unload the companion, one leased model, or everything resident"
     echo "  status [--json]  show what's resident + how long it stays (default; bare 'warm')"
     echo "  restart          off -> on (companion)"

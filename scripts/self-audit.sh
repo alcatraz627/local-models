@@ -58,7 +58,8 @@ count() { [ -n "$1" ] && printf '%s\n' "$1" | wc -l | tr -d ' ' || echo 0; }
   # A scheduled job that fails does so silently (the warm jobs sat on exit 127 for
   # 8 weeks unnoticed); surface each job's last exit code in the digest.
   echo "## launchd"
-  for job in com.alcatraz.warm-morning com.alcatraz.warm-evening-off com.alcatraz.local-models-ollama; do
+  # warm-evening-off runs inside gcc-cron and has no plist; warm-morning was retired.
+  for job in com.alcatraz.local-models-ollama; do
     info=$(launchctl print "gui/$(id -u)/$job" 2>/dev/null) || { echo "- $job: NOT LOADED"; continue; }
     case "$info" in *"state = running"*) echo "- $job: ok (running)"; continue ;; esac
     case "$info" in *"last exit code = (never exited)"*) echo "- $job: ok (loaded, not yet fired)"; continue ;; esac
