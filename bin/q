@@ -220,8 +220,13 @@ DIY=false          # --diy: a planner pass picks intent/web/file/tier from the p
 
 # Pull leading flags; everything else is positional.
 positionals=()
+FLAGGED=false      # any flag beyond display ones turns routing off: flags keep their exact meaning
+ROUTE_FORCE=false; NO_ROUTE=false
 while [ $# -gt 0 ]; do
+  case "$1" in --no-stats|--glow|--think|--all|--route|--no-route|--|-h|--help) ;; -*) FLAGGED=true ;; esac
   case "$1" in
+    --route) ROUTE_FORCE=true; shift ;;
+    --no-route) NO_ROUTE=true; shift ;;
     --) shift; positionals+=("$@"); SAW_DD=true; break ;;
     --think) THINK=true; shift ;;
     --raw)   RAW=true; shift ;;
@@ -252,10 +257,18 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Routing: for a plain prompt typed by a person (text mode, no flags, a terminal on stdin),
+# cheap checks run before any model call. See the ROUTE block below. Machine modes, flags,
+# --diy (which has its own planner) and `--` never route; --route forces it, --no-route stops it.
+ROUTE=false
+if ! $NO_ROUTE && [ -z "${Q_NO_ROUTE:-}" ] && [ -z "${SAW_DD:-}" ] && [ "$MODE" = text ] && ! $DIY; then
+  if $ROUTE_FORCE || { ! $FLAGGED && [ -t 0 ]; }; then ROUTE=true; fi
+fi
+
 # A leading intent token selects the intent (if it's a registered intent); rest is the query.
 if [ "${#positionals[@]}" -gt 0 ] && intent_exists "${positionals[0]}"; then
-  INTENT="${positionals[0]}"; USER_INTENT=true; positionals=("${positionals[@]:1}")
-elif [ "${#positionals[@]}" -eq 1 ] && [ -z "${SAW_DD:-}" ] && [[ "${positionals[0]}" =~ ^[A-Za-z][A-Za-z-]{2,}$ ]]; then
+  INTENT="${positionals[0]}"; USER_INTENT=true; positionals=("${positionals[@]:1}"); ROUTE=false
+elif ! $ROUTE && [ "${#positionals[@]}" -eq 1 ] && [ -z "${SAW_DD:-}" ] && [[ "${positionals[0]}" =~ ^[A-Za-z][A-Za-z-]{2,}$ ]]; then
   # A lone word one typo away from an intent is almost surely that intent; sending
   # it as a prompt would cost a model call. `--` or `q ask ...` sends it anyway.
   _names=$(cd "$INTENT_DIR" && ls ./*.toml 2>/dev/null | sed 's|^\./||;s|\.toml$||')
@@ -267,6 +280,60 @@ elif [ "${#positionals[@]}" -eq 1 ] && [ -z "${SAW_DD:-}" ] && [[ "${positionals
   fi
 fi
 QUERY="${positionals[*]}"
+
+# ── ROUTE: send a plain request to the right place before spending a model call ──
+# Everything here is a deterministic check; each hit is narrated in one gray stderr line.
+# An image path goes to `see` (which reads text exactly first), a file path becomes
+# --ctx, a near-miss intent word is called out (and runs as ask), and a leading
+# "gemini"/"web" is pointed at the lanes that really search.
+if $ROUTE && [ "${#positionals[@]}" -gt 0 ]; then
+  _dim=""; _rs=""; use_color_fd 2 && { _dim=$'\033[2m'; _rs=$'\033[0m'; }
+  route_say() { printf '%s· %s%s\n' "$_dim" "$1" "$_rs" >&2; }
+  RAW_PROMPT="${positionals[*]}"
+  _first="${RAW_PROMPT%%[[:space:]]*}"
+  if [[ "$_first" =~ ^[A-Za-z][A-Za-z-]{3,}$ ]]; then
+    _names=$(cd "$INTENT_DIR" && ls ./*.toml 2>/dev/null | sed 's|^\./||;s|\.toml$||')
+    # shellcheck disable=SC2086
+    _guess=$(did_you_mean "$_first" $_names)
+    [ -z "$_guess" ] || route_say "'$_first' is not an intent; did you mean 'q $_guess'? Running it as a plain question."
+  fi
+  case "$(printf '%s' "$_first" | tr 'A-Z' 'a-z')" in
+    gemini|web|google|search)
+      route_say "'$_first' at the start does not search anything. Answering locally. For the web: q --web \"...\"; for Gemini: lm gemini \"...\" (both send the question off this Mac)" ;;
+  esac
+  if [ -z "$CTX_FILE" ]; then
+    _missing=""
+    set -f
+    for _w in $RAW_PROMPT; do
+      _wc="${_w%[,.;:!?\"\')]}"; _wc="${_wc#[\"\'(]}"
+      case "$_wc" in */*|*.[A-Za-z]*) ;; *) continue ;; esac
+      _wx="${_wc/#\~/$HOME}"
+      if [ ! -f "$_wx" ]; then
+        case "$_wc" in */*|*.png|*.jpg|*.jpeg|*.webp|*.pdf|*.md|*.txt|*.csv|*.json) [ -e "$_wx" ] || [ -n "$_missing" ] || _missing="$_wc" ;; esac
+        continue
+      fi
+      case "$(file -b --mime-type "$_wx" 2>/dev/null)" in
+        image/*)
+          set +f
+          route_say "image in the prompt → see ($(basename "$_wx")); text, IDs and counts are read exactly first"
+          exec "$DIR/bin/see" "$_wx" "$RAW_PROMPT" ;;
+      esac
+      case "$(printf '%s' "${_wx##*.}" | tr 'A-Z' 'a-z')" in
+        pdf|doc|docx|rtf|odt|html|htm|xlsx) CTX_FILE="$_wx"; break ;;
+      esac
+      if [ "$(file -b --mime-encoding "$_wx" 2>/dev/null)" != binary ]; then CTX_FILE="$_wx"; break; fi
+    done
+    set +f
+    if [ -n "$CTX_FILE" ]; then
+      route_say "file in the prompt → reading $(basename "$CTX_FILE") as context (the same as --ctx)"
+    elif [ -n "$_missing" ]; then
+      route_say "no file at \"$_missing\"; telling the model so"
+      QUERY="$QUERY
+
+(Note from the runtime: no file exists at \"$_missing\"; say so plainly.)"
+    fi
+  fi
+fi
 
 # Structured failure for machine modes; plain stderr for humans. The error CODES
 # and exit codes are the extension contract (q-spec §API) — never branch on text.
