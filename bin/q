@@ -45,7 +45,7 @@ show_help() {
   _sec USAGE
   _cmd 'q "<prompt>"'           'ask a question; an image or file path inside it is routed for you'
   _cmd 'q <intent> "<prompt>"'  'ask | cmd | commit | summarize | qa | title | review ... (q intents lists them all)'
-  _cmd 'q again [--big|--code|--web]' 'the last answer was wrong: ask it again on a stronger lane'
+  _cmd 'q again [--big|--code|--web]' 'the last answer was wrong: ask it again on a stronger lane (no flag: one step up; --dry-run shows the plan)'
   _cmd 'q -c [N] "<prompt>"'    'follow up on your last exchange (or entry N)'
   _cmd 'q history, show N'      'recent queries, numbered; show -1 is your latest call (--all: anyone, not just you)'
   _sec EXAMPLES
@@ -108,8 +108,78 @@ show_entry() {
     '"#\($i)  \(.ts)  [\(.intent)]  \(.ms)ms  \(.model)\(if .diy then "\nDIY: " + .diy.trace else "" end)\n\nPROMPT:\n\(.prompt)\n\nRESPONSE:\n\(.response)"'
 }
 
-# Subcommands: help, history, show, and the warm toggle.
+
+# ── q again: redo your last question on a stronger lane ──
+# Answers are deterministic (temperature 0), so retyping the same thing gives the same
+# answer. The way forward is a different lane: the big model, the code model, or the web.
+again_row() { # SCOPE (mine|all) -> the newest user-facing row as JSON, or nothing
+  local scope="$1"
+  [ -f "$LOG" ] || return 0
+  if [ "$scope" = all ]; then tail -n 80 "$LOG"
+  else
+    [ -n "$LM_TTY$LM_SESSION" ] || return 0
+    rg -e "\"tty\": ?\"$LM_TTY\"" ${LM_SESSION:+-e "\"session\": ?\"$LM_SESSION\""} "$LOG" 2>/dev/null | tail -n 40 || true
+  fi | jq -cR 'fromjson? | select(.intent != "title" and .intent != "diy-plan" and .error == null)' | tail -n 1
+}
+again_run() {
+  local dry=false lane="" scope="$LM_ENTRY_SCOPE" row plan intent ask name last_model was nice
+  local -a passthru=() args=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --big|--code|--web) lane="$1"; shift ;;
+      --all) scope=all; shift ;;
+      --dry-run) dry=true; shift ;;
+      -h|--help) show_help; return 0 ;;
+      *) passthru+=("$1"); shift ;;
+    esac
+  done
+  row="$(again_row "$scope")"
+  if [ -z "$row" ]; then
+    echo "q again: none of your calls from this terminal to repeat (q again --all takes the newest from anyone)" >&2; return 2
+  fi
+  plan="$(printf '%s' "$row" | python3 -c '
+import sys, json, re
+r = json.load(sys.stdin)
+p = r.get("prompt") or ""
+ask = "" if p.startswith("<input") else p.split("\n\n<input")[0]
+name = doc = ""
+for m in re.finditer(r"<input name=\"([^\"]*)\"[^>]*>\n(.*?)\n</input>", p, re.S):
+    if m.group(1) in ("web-results", "local-probe"):
+        continue
+    name, doc = m.group(1), m.group(2)
+    break
+if not doc:
+    m = re.search(r"<input>\n(.*?)\n</input>", p, re.S)
+    if m:
+        doc = m.group(1)
+print(json.dumps({"ask": ask, "intent": r.get("intent", "ask"), "model": r.get("model", ""),
+                  "name": name, "doc": doc, "web": "<input name=\"web-results\"" in p}))')"
+  intent="$(printf '%s' "$plan" | jq -r .intent)"; ask="$(printf '%s' "$plan" | jq -r .ask)"
+  name="$(printf '%s' "$plan" | jq -r .name)"; last_model="$(printf '%s' "$plan" | jq -r .model)"
+  was=small; [ "$last_model" = "$(resolve_tier big)" ] && was=big
+  [ "$last_model" = "$(resolve_tier code)" ] && was=code
+  [ "$(printf '%s' "$plan" | jq -r .web)" = true ] && was="$was+web"
+  if [ -z "$lane" ]; then
+    # With no lane named, take one step up the local ladder. Going off this Mac is always asked for by name.
+    if [ "$was" = small ]; then lane=--big
+    else echo "q again: the last answer already used $was. Name a lane: q again --web (sends the question off this Mac) or --code" >&2; return 2; fi
+  fi
+  args=(--intent "$intent" "$lane")
+  [ -n "$name" ] && args+=(--ctx - --ctx-name "$name")
+  nice="${ask:0:50}"; [ -n "$nice" ] || nice="$intent ${name}"
+  if [ -t 2 ] && use_color_fd 2; then printf '\033[2m· again: "%s" (was %s) → %s\033[0m\n' "$nice" "$was" "${lane#--}" >&2
+  else printf '· again: "%s" (was %s) → %s\n' "$nice" "$was" "${lane#--}" >&2; fi
+  $dry && return 0   # shows the narration above and runs nothing
+  if [ -n "$name" ]; then
+    printf '%s' "$plan" | jq -r .doc | Q_AGAIN=1 "$0" "${args[@]}" ${passthru[@]+"${passthru[@]}"} ${ask:+"$ask"}
+  else
+    Q_AGAIN=1 "$0" "${args[@]}" ${passthru[@]+"${passthru[@]}"} ${ask:+"$ask"} </dev/null
+  fi
+}
+
+# Subcommands: help, history, show, again, and the warm toggle.
 case "${1:-}" in
+  again)                 shift; again_run "$@"; exit $? ;;
   -h|--help|help)        show_help; exit 0 ;;
   history)               shift
                          HIST_JSON=false; HIST_N=15
@@ -831,6 +901,26 @@ try:  # history is best-effort — never break the answer on a log failure
         f.write(json.dumps(entry) + "\n")
 except Exception:
     pass
+# Same words twice in 5 minutes: the second answer cannot differ (temperature 0), so say
+# what to do instead of letting the person retype it a third time.
+if mode == "text" and stats == "true" and sys.stderr.isatty() and not os.environ.get("Q_AGAIN"):
+    try:
+        import calendar
+        with open(logf) as f:
+            rows = f.readlines()[-50:-1]   # the line just written is last; look at the ones before it
+        now, repeats = time.time(), 0
+        for ln in rows:
+            try:
+                e = json.loads(ln)
+            except ValueError:
+                continue
+            if e.get("prompt") == query and e.get("intent") == intent and \
+               calendar.timegm(time.strptime(e["ts"], "%Y-%m-%dT%H:%M:%SZ")) >= now - 300:
+                repeats += 1
+        if repeats:
+            sys.stderr.write("%s· same input gives the same answer (temp 0); try: q again --big · q again --web%s\n" % (dim, rs))
+    except Exception:
+        pass
 # The lease nudge: 3+ cold loads of this model inside 5 minutes says the user
 # is in a session with it — suggest the bounded lease. Counts the log just
 # written (so this call is included); never breaks the answer.

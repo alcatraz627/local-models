@@ -142,7 +142,7 @@ help_job() {
     again|retry)
       help_title 'again' 'the answer was wrong; ask the same thing on a stronger model'
       help_section 'START'
-      help_example 'lm again'               'your last question, same lane (only useful after changing the input)'
+      help_example 'lm again'               'your last question, one step stronger (small, then big)'
       help_example 'lm again --big'         'the bigger reasoning model'
       help_example 'lm again --code'        'the coding model'
       help_example 'lm again --web'         'search the web first (the question leaves this Mac)'
@@ -797,7 +797,7 @@ verb_help() {
       _cmd 'lm doc <file> "q"'      'answer a question from the file'
       _note 'It says how much of the file it read. More options: q -h' ;;
     again)
-      _cmd 'lm again'               'your last question, one step stronger (small, then big, then the web)'
+      _cmd 'lm again'               'your last question, one step stronger (small, then big); the web only when you ask for it'
       _cmd 'lm again --big|--code|--web' 'pick the lane (--web sends the question off this Mac)' ;;
     fast)
       _cmd 'lm fast [1h]'           'keep the small model loaded so q answers instantly (default 1h)'
