@@ -375,8 +375,8 @@ fi
 emit_error() { # CODE MESSAGE EXIT
   case "$MODE" in
     stream) jq -cn --arg c "$1" --arg m "$2" '{t:"error", code:$c, message:$m}' ;;
-    json)   jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}' ;;
-    *)      echo "q: $2" >&2 ;;
+    json)   lm_err_json "$1" "$2" ;;
+    *)      echo "q: $2" >&2; lm_fix_line "$1" ;;
   esac
   exit "$3"
 }
@@ -850,7 +850,7 @@ if $GLOW && [ "$MODE" = text ] && [ -t 1 ] && command -v glow >/dev/null 2>&1; t
 # exec so python IS this process: a GUI host's SIGTERM must reach the signal
 # handlers (cancelled/130), not kill a bash wrapper around them (143).
 mkdir -p "$DIR/logs"
-export LM_DIR="$DIR"
+export LM_DIR="$DIR" Q_SMALL_MODEL="$WARM_MODEL"
 [ "$KEEP" = "0" ] && lm_step q "$MODEL cold load · intent=$INTENT"
 exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" "$GLOW_OK" "$LEASE_HINT" "${DIY_LOG:-}" <<'PY'
 import sys, os, json, time, signal, urllib.request, urllib.error
@@ -862,7 +862,14 @@ def emit_err(code, msg, rc):
     if mode == "stream":
         sys.stdout.write(json.dumps({"t": "error", "code": code, "message": msg}) + "\n")
     elif mode == "json":
-        sys.stdout.write(json.dumps({"ok": False, "code": code, "message": msg}) + "\n")
+        fix = {"remedy": "see the message; -h lists the flags and examples", "next": None}
+        try:
+            sys.path.insert(0, os.path.join(os.environ.get("LM_ROOT_DIR", "."), "lib"))
+            import verbs
+            fix = verbs.remedy_for(verbs.load(), code)
+        except Exception:
+            pass
+        sys.stdout.write(json.dumps({"ok": False, "code": code, "message": msg, **fix}) + "\n")
     else:
         sys.stderr.write("q: %s\n" % msg)
     sys.stdout.flush()
@@ -1033,6 +1040,7 @@ except Exception:
     pass
 # Same words twice in 5 minutes: the second answer cannot differ (temperature 0), so say
 # what to do instead of letting the person retype it a third time.
+hint_key = None   # at most one gray `next:` line, chosen below; the words live in lib/verbs.toml
 if mode == "text" and stats == "true" and sys.stderr.isatty() and not os.environ.get("Q_AGAIN"):
     try:
         import calendar
@@ -1048,9 +1056,22 @@ if mode == "text" and stats == "true" and sys.stderr.isatty() and not os.environ
                calendar.timegm(time.strptime(e["ts"], "%Y-%m-%dT%H:%M:%SZ")) >= now - 300:
                 repeats += 1
         if repeats:
-            sys.stderr.write("%s· same input gives the same answer (temp 0); try: q again --big · q again --web%s\n" % (dim, rs))
+            hint_key = "repeat"
     except Exception:
         pass
+    if hint_key is None and truncated:
+        hint_key = "truncated"
+    if hint_key is None and model == os.environ.get("Q_SMALL_MODEL") and intent in ("ask", "qa", "summarize", "explain-code") and os.environ.get("LM_HINTS", "1") != "0":
+        hint_key = "small_answer"
+    if hint_key and os.environ.get("LM_HINTS", "1") != "0":
+        try:
+            sys.path.insert(0, os.path.join(os.environ.get("LM_DIR", "."), "lib"))
+            import verbs
+            line = verbs.hint_line(verbs.load(), hint_key, color=not os.environ.get("NO_COLOR"), n=40000)
+            if line:
+                sys.stderr.write(line + "\n")
+        except Exception:
+            pass
 # The lease nudge: 3+ cold loads of this model inside 5 minutes says the user
 # is in a session with it — suggest the bounded lease. Counts the log just
 # written (so this call is included); never breaks the answer.

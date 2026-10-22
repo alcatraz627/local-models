@@ -53,8 +53,8 @@ show_help() {
 }
 
 emit_error() { # CODE MESSAGE EXIT
-  if [ "$MODE" = json ]; then jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}'
-  else echo "fleet: $2" >&2; fi
+  if [ "$MODE" = json ]; then lm_err_json "$1" "$2"
+  else echo "fleet: $2" >&2; lm_fix_line "$1"; fi
   exit "$3"
 }
 
@@ -159,7 +159,7 @@ fleet_worker() {
   [ "$FLEET_MODEL" = deterministic:tabular ] || args+=(-m "$FLEET_MODEL")
   [ -n "$FLEET_PROMPT" ] && args+=("$FLEET_PROMPT")
   "$FLEET_Q" "${args[@]}" > "$tmp" 2>/dev/null || true
-  [ -s "$tmp" ] || jq -cn '{ok:false, code:"worker_died", message:"worker produced no output"}' > "$tmp"
+  [ -s "$tmp" ] || jq -cn '{ok:false, code:"worker_died", message:"worker produced no output", remedy:"a worker produced nothing; run again, or check the server", next:"lm doctor"}' > "$tmp"
   mv -f "$tmp" "$out"
   [ "$FLEET_QUIET" = true ] || echo "  · $(basename "$item")" >&2
 }

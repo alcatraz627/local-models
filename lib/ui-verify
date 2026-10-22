@@ -54,8 +54,8 @@ show_help() {
 }
 
 emit_error() { # CODE MESSAGE EXIT
-  if [ "$MODE" = json ]; then jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}'
-  else echo "lm ui-verify: $2" >&2; fi
+  if [ "$MODE" = json ]; then lm_err_json "$1" "$2"
+  else echo "lm ui-verify: $2" >&2; lm_fix_line "$1"; fi
   exit "$3"
 }
 

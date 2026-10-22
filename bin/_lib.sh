@@ -11,6 +11,34 @@ LM_LAUNCHD_LABEL="com.alcatraz.local-models-ollama"
 # every bin/* script sources _lib.sh before its first tool call.
 case ":$PATH:" in *:/opt/homebrew/bin:*) ;; *) PATH="/opt/homebrew/bin:$PATH" ;; esac
 
+LM_ROOT_DIR="${BASH_SOURCE[0]%/*}/.."; export LM_ROOT_DIR
+
+# Run lib/verbs.py (the registry reader) with the project python when there is one.
+lm_verbs() {
+  local py="$LM_ROOT_DIR/.venv/bin/python"
+  [ -x "$py" ] || py=python3
+  "$py" "$LM_ROOT_DIR/lib/verbs.py" "$@"
+}
+
+# A --json error envelope that carries the fix: {ok:false, code, message, remedy, next}.
+# remedy is one sentence, next is a runnable command or null. Unknown codes get a generic remedy.
+lm_err_json() { # CODE MESSAGE
+  local fix; fix="$(lm_verbs remedy "$1" 2>/dev/null)" || fix=""
+  [ -n "$fix" ] || fix='{"remedy":"see the message; -h lists the flags and examples","next":null}'
+  jq -cn --arg c "$1" --arg m "$2" --argjson f "$fix" '{ok:false, code:$c, message:$m} + $f'
+}
+
+# On a terminal only, one gray line under a text-mode error saying what to do about it.
+lm_fix_line() { # CODE
+  [ -t 2 ] || return 0
+  [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ] && local dm=$'\033[2m' rs=$'\033[0m' || local dm="" rs=""
+  local fix r n; fix="$(lm_verbs remedy "$1" 2>/dev/null)" || return 0
+  r="$(printf '%s' "$fix" | jq -r '.remedy // empty' 2>/dev/null)" || return 0
+  n="$(printf '%s' "$fix" | jq -r '.next // empty' 2>/dev/null)" || n=""
+  [ -n "$r" ] || return 0
+  printf '%s  → %s%s%s\n' "$dm" "$r" "${n:+ (try: $n)}" "$rs" >&2
+}
+
 # ── Terminal colors (TTY / NO_COLOR / TERM=dumb aware) ──
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
   Y=$'\033[1;33m'; C=$'\033[36m'; G=$'\033[32m'; Dm=$'\033[2m'; Rs=$'\033[0m'; Bd=$'\033[1m'
@@ -207,7 +235,7 @@ need_arg_present() { # TOOL FLAG ARGC
 usage_fail() { # TOOL MESSAGE
   printf '%s: %s\n' "$1" "$2" >&2
   case "${MODE:-}" in
-    json)   jq -cn --arg m "$2" '{ok:false, code:"invalid_args", message:$m}' ;;
+    json)   lm_err_json invalid_args "$2" ;;
     stream) jq -cn --arg m "$2" '{t:"error", code:"invalid_args", message:$m}' ;;
   esac
   exit 2
