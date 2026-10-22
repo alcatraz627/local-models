@@ -22,6 +22,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$DIR/config.sh"
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"
+wants_all "$@" && HELP_ALL=true
+lm_identify
 
 # `q intents` — list the registry (the live source of truth for intents). Defined
 # early because the subcommand dispatch runs before the per-call intent helpers.
@@ -35,41 +37,43 @@ list_intents() {
     [ "$(yq -p toml -r '.needs_ctx // false' "$f" 2>/dev/null)" = true ] && n="$n *"
     _opt "$n" "$s"
   done
-  printf '  %s* needs a document (--ctx/--file/stdin); add one by dropping a .toml in intents/%s\n' "$Dm" "$Rs"
+  _note '* needs a document (--ctx/--file/stdin); add one by dropping a .toml in intents/'
 }
 
 show_help() {
   printf '%s%sq%s %s— quick local LLM companion (macOS / Apple Silicon)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
-  _cmd 'q "<prompt>"'           'ask a question (default intent)'
-  _cmd 'q <intent> "<prompt>"'  "intent = $(cd "$DIR/intents" && ls ./*.toml | sed 's|^\./||;s|\.toml$||' | paste -sd'|' - | sed 's/|/ | /g')"
-  _cmd 'q -c [N] "<prompt>"'    'continue the last exchange (or entry N) — multi-turn'
-  _cmd 'q on | off | status'    'Tier W warm toggle (= warm)'
-  _cmd 'q history [N] [--json]' 'recent queries, numbered (default 15); --json adds each entry number n'
-  _cmd 'q show N'               'full prompt + response of entry N'
-  _cmd 'q intents'              'list available intents (the registry)'
-  _cmd 'q models'               'usable models + tiers (= lm models; ● resident)'
+  _cmd 'q "<prompt>"'           'ask a question; an image or file path inside it is routed for you'
+  _cmd 'q <intent> "<prompt>"'  'ask | cmd | commit | summarize | qa | title | review ... (q intents lists them all)'
+  _cmd 'q again [--big|--code|--web]' 'the last answer was wrong: ask it again on a stronger lane'
+  _cmd 'q -c [N] "<prompt>"'    'follow up on your last exchange (or entry N)'
+  _cmd 'q history, show N'      'recent queries, numbered; show -1 is your latest call (--all: anyone, not just you)'
   _sec EXAMPLES
   _ex 'q "how do I check disk usage"'        '# terse answer'
-  _ex 'q -c "and sorted by size?"'           '# follow-up with context'
-  _ex 'q cmd "kill everything on port 3001"' '# one macOS command'
-  _ex 'q title "<conversation text>"'        '# 2-5 word title'
+  _ex 'q cmd "kill everything on port 3001"' '# one macOS command, checked against its --help'
   _ex 'git diff | q commit'                  '# commit message from the diff'
   _ex 'q summarize --file report.pdf'        '# PDF/Word/etc extracted locally'
+  _more
+  _cmd 'q on | off | status'    'Tier W warm toggle (= warm)'
+  _cmd 'q intents'              'list available intents (the registry)'
+  _cmd 'q models'               'usable models + tiers (= lm models; ● resident)'
+  _ex 'q -c "and sorted by size?"'           '# follow-up with context'
+  _ex 'q title "<conversation text>"'        '# 2-5 word title'
   _ex 'q describe-data --file data.csv'      '# schema + observations'
   _ex 'q --preflight --file data.xlsx --json' '# extracted size and workbook sheets, no model call'
   _ex 'q --json --ctx - qa "who signs off?" < doc.md'  '# machine mode'
   _ex 'q --think "harder reasoning task"'    '# show the thinking trace'
   _ex 'q -m qwen2.5-coder:3b cmd "..."'      '# swap model per call'
-  _ex 'q show 14'                            '# full prompt + response of entry 14'
+  _ex 'q show -1'                            '# your latest call, in full'
   _sec OPTIONS
-  _opt '--think'        'show the reasoning trace (dimmed, on stderr; off by default)'
+  _opt '--big / --code'  'use the big (reasoning) / code tier for this call'
   _opt '--web'          'search the web first (DDG, no key) and answer from the results, cited'
-  _opt '--diy'          'let q route itself: a planner pass picks intent/web/file/tier, narrated in gray'
-  _opt '--no-stats'     'hide the gray token line (text mode; machine modes always carry the counts)'
-  _opt '-c, --continue [N]' 'continue last exchange / entry N'
-  _opt '--big / --code' 'use the big (reasoning) / code tier for this call'
+  _opt '--route / --no-route' 'force or skip the automatic routing of image paths, file paths and typos'
+  _opt '--diy'          'let q route itself with a planner pass: intent, web, file, tier, narrated in gray'
+  _opt '-c, --continue [N]' 'continue your last exchange / entry N'
   _opt '-m, --model M'  "model or tier alias: small | big | code | sweep | <name> (default: small)"
+  _opt '--think'        'show the reasoning trace (dimmed, on stderr; off by default)'
+  _opt '--no-stats'     'hide the gray token line (text mode; machine modes always carry the counts)'
   _opt '--raw'          'no system prompt (bare model)'
   _opt '--json'         'machine mode: one JSON object on stdout, no ANSI'
   _opt '--stream-json'  'machine mode: NDJSON chunk/done/error lines'
@@ -80,18 +84,16 @@ show_help() {
   _opt '--sheet NAME|N' 'XLSX sheet to read (1-based number or name; required for multi-sheet describe-data)'
   _opt '--preflight'    'inspect extracted input, context size, and sheet selection without a model call'
   _opt '--prose'        'describe-data only: add optional model interpretation after exact profile'
-  _opt '--max-ctx N'    'truncate context to N chars (default 16000)'
+  _opt '--max-ctx N'    'read at most N chars of the document (default 16000; the cut is printed)'
   _opt '--timeout S'    'wall-clock cap; structured timeout error after'
   _opt '--intent X'     'intent as a flag (same set as the positional token)'
-  _opt '-h, --help'     'show this help'
-  list_intents   # the live registry — same source as `q intents`, never drifts
+  _opt '--all'          'with show -1, -c or history: include calls from other terminals, agents and hooks'
+  list_intents   # the live registry, same source as `q intents`, never drifts
   _sec DEFAULTS
-  printf '  %smacOS/Apple-Silicon assumed; Linux only if you say "linux server/container".%s\n' "$Dm" "$Rs"
-  printf '  %sthinking off · deterministic (temp 0) · never asks · logged to logs/q-history.jsonl%s\n' "$Dm" "$Rs"
-  printf '  %s--ctx/--file extracts text locally: PDF (poppler), Word/RTF/HTML (textutil), xlsx (zconvert→csv),%s\n' "$Dm" "$Rs"
-  printf '  %stext/csv/json/code as-is; binaries refused. Large tables fail rather than truncate.%s\n' "$Dm" "$Rs"
+  _note 'macOS/Apple-Silicon assumed; Linux only if you say "linux server/container". Thinking off, deterministic (temp 0), never asks, logged to logs/q-history.jsonl. --ctx/--file extracts text locally: PDF (poppler), Word/RTF/HTML (textutil), xlsx (zconvert to csv), text/csv/json/code as-is; binaries refused. Large tables fail rather than truncate.'
   _sec CONFIGURATION
-  printf '  %s%s/config.sh%s %s(WARM_MODEL, keep-alive)%s\n' "$C" "$DIR" "$Rs" "$Dm" "$Rs"
+  _note "$DIR/config.sh (WARM_MODEL, keep-alive)"
+  _help_end 'q -h'
 }
 
 LOG="$DIR/logs/q-history.jsonl"

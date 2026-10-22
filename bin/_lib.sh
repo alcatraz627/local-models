@@ -21,12 +21,70 @@ if [ -t 2 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
   eY=$'\033[1;33m'; eC=$'\033[36m'; eDm=$'\033[2m'; eRs=$'\033[0m'; eRed=$'\033[31m'; eG=$'\033[32m'; eBd=$'\033[1m'
 else eY= eC= eDm= eRs= eRed= eG= eBd= ; fi
 
-# ── Help rendering (conventions/cli-help-design.md) ──
-_sec() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
-_cmd() { printf '  %s%-32s%s %s%s%s\n' "$C" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
-_opt() { printf '  %s%-32s%s %s%s%s\n' "$G" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
-_ex()  { printf '  %s$%s %-44s %s%s%s\n' "$Dm" "$Rs" "$1" "$Dm" "$2" "$Rs"; }
-_kv()  { printf '  %s%-9s%s %s\n' "$Dm" "$1" "$Rs" "$2"; }
+# ── Help rendering ──
+# Rows wrap at HELP_W columns so no line runs off a normal terminal. A help screen
+# is the short version by default: everything after `_more` is shown only with
+# --all, and `_help_end` says how much was left out.
+HELP_W=100
+HELP_ALL=false     # set by the tool when --all is among its args
+_help_hide=false; _help_hidden=0
+_more() { $HELP_ALL || _help_hide=true; }
+_help_end() { # COMMAND the user types to see the rest, e.g. "q -h --all"
+  local was=$_help_hide n=$_help_hidden
+  _help_hide=false; _help_hidden=0
+  if $was && [ "$n" -gt 0 ]; then printf '\n  %s%s --all   shows the other %s rows (every flag, the rest of the examples)%s\n' "$Dm" "$1" "$n" "$Rs"; fi
+}
+# Fill the array _WL with TEXT broken into lines of at most AVAIL characters.
+_wrap_lines() { # AVAIL TEXT
+  local avail="$1" line="" word; local -a words
+  _WL=()
+  read -ra words <<<"$2"
+  for word in ${words[@]+"${words[@]}"}; do
+    if [ -n "$line" ] && [ $(( ${#line} + 1 + ${#word} )) -gt "$avail" ]; then _WL+=("$line"); line="$word"
+    else line="${line:+$line }$word"; fi
+  done
+  _WL+=("$line")
+}
+_help_row() { # COLOR WIDTH LABEL DESC
+  if $_help_hide; then _help_hidden=$((_help_hidden + 1)); return 0; fi
+  local col="$1" w="$2" label="$3" avail lead l
+  avail=$(( HELP_W - w - 3 )); [ "$avail" -lt 30 ] && avail=30
+  _wrap_lines "$avail" "$4"
+  lead="$(printf '%*s' $((w + 3)) '')"
+  if [ "${#label}" -gt "$w" ]; then
+    printf '  %s%s%s\n' "$col" "$label" "$Rs"
+    for l in "${_WL[@]}"; do printf '%s%s%s%s\n' "$lead" "$Dm" "$l" "$Rs"; done
+  else
+    printf '  %s%-*s%s %s%s%s\n' "$col" "$w" "$label" "$Rs" "$Dm" "${_WL[0]}" "$Rs"
+    for l in "${_WL[@]:1}"; do printf '%s%s%s%s\n' "$lead" "$Dm" "$l" "$Rs"; done
+  fi
+}
+_sec() { $_help_hide && return 0; printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
+_cmd() { _help_row "$C" 32 "$1" "$2"; }
+_opt() { _help_row "$G" 32 "$1" "$2"; }
+_ex()  {
+  if $_help_hide; then _help_hidden=$((_help_hidden + 1)); return 0; fi
+  local avail=$(( HELP_W - 49 )) l
+  _wrap_lines "$avail" "$2"
+  if [ "${#1}" -gt 44 ]; then
+    printf '  %s$%s %s\n' "$Dm" "$Rs" "$1"
+    for l in "${_WL[@]}"; do printf '%*s%s%s%s\n' 5 '' "$Dm" "$l" "$Rs"; done
+  else
+    printf '  %s$%s %-44s %s%s%s\n' "$Dm" "$Rs" "$1" "$Dm" "${_WL[0]}" "$Rs"
+    for l in "${_WL[@]:1}"; do printf '%*s%s%s%s\n' 49 '' "$Dm" "$l" "$Rs"; done
+  fi
+}
+_kv()  { $_help_hide && return 0; printf '  %s%-9s%s %s\n' "$Dm" "$1" "$Rs" "$2"; }
+# A gray note line under a help section; wraps like the rows do.
+_note() {
+  if $_help_hide; then _help_hidden=$((_help_hidden + 1)); return 0; fi
+  local l; _wrap_lines $(( HELP_W - 2 )) "$1"
+  for l in "${_WL[@]}"; do printf '  %s%s%s\n' "$Dm" "$l" "$Rs"; done
+}
+# True when any argument asks for help (-h, --help, help). Verbs call it first so
+# that asking for help can never run the verb.
+wants_help() { local a; for a in "$@"; do case "$a" in -h|--help) return 0 ;; esac; done; return 1; }
+wants_all() { local a; for a in "$@"; do [ "$a" = --all ] && return 0; done; return 1; }
 
 # ── JSONL history: numbered list + full entry ──
 # Entry numbers are stable JSONL line numbers, so `show N` works forever.
@@ -39,12 +97,54 @@ jsonl_history() { # LOG N LINE_JQ
   # one torn line must not hide every newer row, so unparseable lines become a marker
   tail -n "$n" "$log" | jq -rR "(fromjson? | $fmt) // \"(unreadable history line)\"" | nl -ba -v "$start" -w4 -s'  '
 }
+
+# ── Whose call was it ──
+# Every history row records the terminal (tty) and terminal session it came from, so
+# "my last call" can mean mine and not whatever a hook or agent ran a second ago.
+# Both are null for a call with no terminal (agents, hooks, cron). Old rows have no
+# such field and count as not mine.
+lm_identify() { # sets LM_TTY and LM_SESSION once per process
+  [ -n "${_LM_IDENTIFIED:-}" ] && return 0
+  _LM_IDENTIFIED=1
+  local t; t="$(ps -o tty= -p "$$" 2>/dev/null)"; t="${t//[[:space:]]/}"
+  case "$t" in ''|'?'|'??') t="" ;; esac
+  LM_TTY="$t"
+  LM_SESSION="${TERM_SESSION_ID:-${ITERM_SESSION_ID:-${WEZTERM_PANE:-${KITTY_WINDOW_ID:-${TMUX_PANE:-}}}}}"
+  export LM_TTY LM_SESSION
+}
+# jq fragment for a history row's identity: use with --arg tty "$LM_TTY" --arg sess "$LM_SESSION".
+JQ_WHO='{tty:(if $tty == "" then null else $tty end), session:(if $sess == "" then null else $sess end)}'
+# jq def: true for a row that came from the caller's own terminal or session.
+JQ_MINE='def mine($t; $s): ($t != "" and (.tty // "") == $t) or ($s != "" and (.session // "") == $s);'
+
+# Stable line number of the caller's K-th latest row in LOG (K=1 is the newest), or nothing.
+mine_line() { # LOG K
+  local log="$1" k="${2:-1}"
+  lm_identify
+  [ -f "$log" ] || return 1
+  [ -n "$LM_TTY$LM_SESSION" ] || return 1
+  local hits
+  hits="$(rg -n -e "\"tty\": ?\"$LM_TTY\"" ${LM_SESSION:+-e "\"session\": ?\"$LM_SESSION\""} "$log" 2>/dev/null | tail -n "$k" | sed 's/:.*//')"
+  [ "$(printf '%s\n' "$hits" | grep -c .)" -ge "$k" ] || return 1
+  printf '%s' "$hits" | head -n 1
+}
+# Which rows a -1 / latest lookup may land on: mine (default) or all. LM_ALL=1 or --all in the tool flips it.
+LM_ENTRY_SCOPE=mine; [ -n "${LM_ALL:-}" ] && LM_ENTRY_SCOPE=all
+
 jsonl_entry() { # LOG N ENTRY_JQ ($i bound to N in jq). N>0 = stable line no; N<0 counts from the end (-1 = latest)
   local log="$1" i="$2" fmt="$3"
   # Exit codes follow the table in docs/CAPABILITIES.md: 2 bad usage, 12 missing entry.
   [ -f "$log" ] || { echo "no history yet" >&2; return 12; }
   local total; total=$(wc -l < "$log" | tr -d ' ')
-  [[ "$i" =~ ^-[0-9]+$ ]] && i=$(( total + i + 1 ))   # -1 -> latest, -2 -> second-latest
+  if [[ "$i" =~ ^-[0-9]+$ ]]; then
+    if [ "$LM_ENTRY_SCOPE" = mine ]; then
+      # -1 means YOUR latest call from this terminal, not the newest row anyone wrote.
+      i="$(mine_line "$log" "${i#-}")" || i=""
+      [ -n "$i" ] || { echo "none of your calls from this terminal are in this history yet (--all, or a number from 'history', reaches the rest)" >&2; return 12; }
+    else
+      i=$(( total + i + 1 ))   # -1 -> latest, -2 -> second-latest
+    fi
+  fi
   [[ "$i" =~ ^[0-9]+$ ]] || { echo "usage: show <N>   (N from 'history', or -1 for the latest)" >&2; return 2; }
   (( i >= 1 )) || { echo "no entry #$2 (there are $total)" >&2; return 12; }
   local line; line=$(sed -n "${i}p" "$log")

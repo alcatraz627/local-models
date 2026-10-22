@@ -14,6 +14,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$DIR/config.sh"
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"
+wants_all "$@" && HELP_ALL=true
+lm_identify
 
 # A cold model-load via the ollama API can leave the terminal cursor hidden;
 # `see` doesn't emit cursor codes itself, but it guarantees the cursor is shown
@@ -54,46 +56,51 @@ ART_KEEP=150   # newest artifact folders kept; older ones pruned each run
 UI_SCHEMA="$DIR/intents/ui-inventory.schema.json"
 
 show_help() {
-  printf '%s%ssee%s %s— read an image into text with a local vision model%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  printf '%s%ssee%s %s— read an image into text with a local vision model (the image never leaves this Mac)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
   _sec USAGE
-  _cmd 'see <image> ["question"]' 'describe an image, or answer a question about it'
+  _cmd 'see <image> ["question"]' 'describe an image or answer a question; text, IDs and counts are measured first'
+  _cmd 'see paste ["q"]'          'read the image on your clipboard (Cmd-Ctrl-Shift-4 puts a screenshot there)'
+  _cmd 'see latest ["q"]'         'read your newest screenshot'
+  _cmd 'see <image> --ocr'        'the exact text, no model, about a second'
+  _cmd 'see count <img> [--color C]' 'count objects by measuring pixels: exact, instant, no model'
+  _cmd 'see diff <A> <B>'         'what changed between two images, and where (plain summary first)'
+  _cmd 'see more ["q"]'           'follow up on the last image you read'
+  _sec EXAMPLES
+  _ex 'see ~/Desktop/shot.png "what is the build id?"' '# exact text is read first, then the model'
+  _ex 'see paste "what does the error say?"'  '# straight from the clipboard'
+  _ex 'see count squares.png --color red'     '# only the red objects'
+  _more
   _cmd 'see <image> --ui'         'UI mode: enumerated elements, layout, hierarchy, icons, patterns'
   _cmd 'see --menubar ["q"]'      'capture the live macOS menu-bar strip, then read it (implies --ui)'
-  _cmd 'see <image> --ui --json'  'UI mode as a schema-constrained object in .data (regions/elements/…)'
+  _cmd 'see <image> --ui --json'  'UI mode as a schema-constrained object in .data (regions/elements/...)'
   _cmd 'see <image> --json'       'machine mode: one JSON object for agents/GUIs'
-  _cmd 'see diff <A> <B> ["focus"]' 'compare two images: deterministic evidence pack (text/color/hash/shape) + judged read'
-  _cmd 'see diff <A> <B> --only E5' 'slice rerun of one extractor — returns the delta, no model call'
-  _cmd 'see count <img> [--color C] [--filled-only]' 'count objects by measuring pixels, no model (exact where models guess)'
+  _cmd 'see diff <A> <B> --only E5' 'slice rerun of one extractor: returns the delta, no model call'
   _cmd 'see odd <img>'            'find the one item that differs among repeated items, by measurement; says ambiguous rather than guess'
-  _cmd 'see more ["q"] [flags]'   'follow-up read of the LAST image (from its artifact copy)'
-  _cmd 'see history [N] · show N' 'past reads, numbered (default 15) · one full read (-1 = latest)'
+  _cmd 'see history [N], show N' 'past reads, numbered (default 15) · one full read (-1 = your latest; --all: anyone'"'"'s)'
   _cmd 'see open [N]'             'print (and reveal, if TTY) the artifact folder of read N (default -1)'
-  _cmd 'see note [N] "text"'      'append a note to read N'\''s artifact folder (default -1 = latest)'
+  _cmd 'see note [N] "text"'      'append a note to read N'"'"'s artifact folder (default -1)'
   _cmd 'see reshoot <loop-dir>'   'replay the loop recipe (web: playwright capture; static: candidate file) into a new round image'
-  _sec EXAMPLES
-  _ex 'see ~/Desktop/shot.png'                 '# verbatim text + UI + layout'
-  _ex 'see chart.png "is it trending up?"'     '# grounded answer'
   _ex 'see dashboard.png --ui'                 '# sectioned inventory of a website/app/widget UI'
-  _ex 'see shot.png --region left --ui'        '# crop first, then read — small crops read near-perfectly'
+  _ex 'see shot.png --region left --ui'        '# crop first, then read: small crops read near-perfectly'
   _ex 'see shot.png --crop 800x600+0+120 "?"'  '# exact pixel window (WxH+X+Y from top-left)'
   _ex 'see more "what does the badge say?"'    '# drill into the image you just read'
   _ex 'see diff logo-a.png logo-b.png --json'  '# full evidence pack in .evidence + judged prose'
   _ex 'see diff a.png b.png --only E5 --grid 32' '# refine one extractor, get the delta (no model)'
-  _ex 'see diff a.png b.png --no-read --json'  '# loop rounds: evidence pack only, VLM prose seat skipped'
-  _ex 'see diff a.png b.png --mlx'             '# judged read by Qwen3-VL on MLX instead of the 17GB gemma tier'
-  _ex 'see count dots.png --filled-only --json' '# solid dots only, hollow rings dropped; exact, no model'
-  _ex 'see count squares.png --color red'      '# count only the red objects'
+  _ex 'see diff a.png b.png --no-read --json'  '# loop rounds: evidence pack only, no model'
+  _ex 'see count dots.png --filled-only --json' '# solid dots only, hollow rings dropped'
   _ex 'see odd grid.png --json'                '# the outlier among repeated items, or ambiguous'
-  _ex 'see --menubar "which app is focused?"''# grab + read the top strip (crop-first beats full-screen)'
+  _ex 'see --menubar "which app is focused?"'  '# grab + read the top strip (crop-first beats full-screen)'
   _ex 'see panel.png --ui --json | jq .data'   '# structured elements array for an agent'
   _sec OPTIONS
+  _opt '--ocr'         'EXACT text via Apple Vision (no model, ~instant); composes with --crop'
   _opt '--ui'          'UI-inventory read for screenshots/mocks (KIND/LAYOUT/HIERARCHY/ELEMENTS/ICONS/PATTERNS/PALETTE)'
-  _opt '--ocr'         'EXACT text via Apple Vision (no model, ~instant) — verbatim but unstructured; composes with --crop'
+  _opt '--no-measure'  'skip the exact-first step: go straight to the model read'
   _opt '--menubar'     'screencapture the main-display top strip and --ui it (needs Screen Recording perm)'
   _opt '--crop WxH+X+Y' 'read only this pixel window of the image (crop-then-read lifts recall)'
   _opt '--region NAME' 'named crop: top|bottom (third) · left|right (half) · center (middle quarter)'
-  _opt '--only E5[,E6]' 'diff only: re-run just these extractors (E3/E4/E5/E6), return the delta — no model'
+  _opt '--only E5[,E6]' 'diff only: re-run just these extractors (E3/E4/E5/E6), return the delta, no model'
   _opt '--grid N'      'diff only: grid resolution 4-64 for E5/E6 (default 8 icons / 16 UIs)'
+  _opt '--no-read'     'diff only: evidence pack and plain summary, no model read'
   _opt '--color C'     'count only: objects of this colour (red green blue yellow orange purple gray black white, or #hex)'
   _opt '--filled-only' 'count only: drop hollow outlines, keep solid shapes'
   _opt '--min-area N'  'count/odd: ignore blobs smaller than N pixels (default scales with image size)'
@@ -101,11 +108,10 @@ show_help() {
   _opt '--glow'        'render the read through glow (TTY-only, no-op without glow)'
   _opt '-m, --model M' "vision model (default: Qwen3-VL on MLX, falling back to \$VISION_MODEL = $MODEL when a big ollama model is resident or MLX fails); -m mlx:<hf-repo> uses the mlx-vlm backend"
   _opt '--mlx'         "route to the mlx-vlm backend outside ollama (Qwen3-VL, higher UI-structure accuracy) = \$UI_VISION_MLX"
-  _opt '-h, --help'    'this help'
+  _opt '--all'         'with more, open -1 or show -1: include reads from other terminals, agents and hooks'
   _sec NOTES
-  printf '  %slocal-only · the image is never uploaded · model loads on demand, unloads after%s\n' "$Dm" "$Rs"
-  printf '  %severy read lands outputs/see/<ts>-<mode>-<img>/ (source copy + read.md + meta.json) — see open -1%s\n' "$Dm" "$Rs"
-  printf '  %s--menubar reads black while a fullscreen app is frontmost (macOS hides the menu bar then)%s\n' "$Dm" "$Rs"
+  _note 'Local only: the image is never uploaded, and the model loads on demand and unloads after. Every read lands outputs/see/<ts>-<mode>-<img>/ (source copy, read.md, meta.json), found with see open -1. --menubar reads black while a fullscreen app is frontmost (macOS hides the menu bar then).'
+  _help_end 'see -h'
 }
 
 # Runtime failures (exit != 2) land in history as error rows, like q's, so a

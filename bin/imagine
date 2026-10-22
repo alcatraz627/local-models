@@ -22,6 +22,8 @@ LOG="$DIR/outputs/imagine-history.jsonl"
 source "$DIR/config.sh" 2>/dev/null || true     # for WARM_MODEL (prompt-enhance LLM)
 # shellcheck source=/dev/null
 source "$DIR/bin/_lib.sh"                       # colors, help/_kv helpers, jsonl_*, ollama_*
+wants_all "$@" && HELP_ALL=true
+lm_identify
 
 # Model registry — friendly name → mflux binary + variant args + sane step/guidance
 # defaults + the HF repo its weights live in (for the cache preflight below).
@@ -113,33 +115,34 @@ enhance_prompt() {
 }
 
 show_help() {
-  printf '%s%simagine%s %s— local image generation (Flux on Apple Silicon, runs on YOUR GPU)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  local d="${IMAGINE_MODEL:-qwen}"   # whichever model config.sh makes the default
+  printf '%s%simagine%s %s— draw an image on this Mac'"'"'s GPU, offline and free (default model: %s)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$d" "$Rs"
   _sec USAGE
-  _cmd 'imagine "<prompt>"'      'generate (default model + model-aware steps)'
-  _cmd 'imagine redo|vary N'     're-run entry N exactly / with a fresh seed'
-  _cmd 'imagine refine N "delta"' 'seed-locked prompt tweak of entry N'
-  _cmd 'imagine history [N|--json]' 'recent generations, numbered (★ = starred)'
-  _cmd 'imagine show N'          'full metadata of generation N'
-  _cmd 'imagine star N'          'toggle the star on entry N (kept by prune)'
-  _cmd 'imagine prune [-y]'      'list (or -y: Trash) unstarred output images'
-  _cmd 'imagine gallery'         'regenerate outputs/index.html from history'
-  _cmd 'imagine critique IMG ["goal"]' 'local gemma4-vision critique of an image'
+  _cmd 'imagine "<prompt>"'      'generate with the default model (qwen takes about 1-2 minutes)'
+  _cmd 'imagine refine N "delta"' 'keep the look of entry N and change the prompt a little'
+  _cmd 'imagine vary N'          'same prompt as entry N, new roll of the dice'
+  _cmd 'imagine history, show N' 'recent images, numbered (★ = starred) · one in full'
+  _cmd 'imagine star N, prune'  'keep one safe · list (or -y: Trash) the images you did not star'
   _sec EXAMPLES
-  printf '  %s$%s imagine "a neon city at night, rain"\n' "$Dm" "$Rs"
-  printf '  %s$%s imagine --enhance "tired developer at 3am"   %s# gemma4 expands the prompt%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s imagine refine 12 "warmer light, less fog"    %s# keep the image, steer it%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s imagine vary 12                               %s# same prompt, new roll%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s imagine --from photo.png "make it watercolor" %s# img2img from an input image%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s imagine --style photo "a corgi on a skateboard"\n' "$Dm" "$Rs"
-  printf '  %s$%s imagine -m qwen "a sign reading OPEN"         %s# qwen = legible text%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s imagine critique out.png "a moody forest"     %s# local vision critique%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s imagine star 12 && imagine prune -y           %s# keep the good one, Trash the rest%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
+  _ex 'imagine "a neon city at night, rain"' ''
+  _ex 'imagine --enhance "tired developer at 3am"' '# a model writes a richer prompt first'
+  _ex 'imagine -m qwen "a sign reading OPEN"' '# qwen and dev draw legible text'
+  _ex 'imagine refine 12 "warmer light"' '# steer entry 12 without losing it'
+  _more
+  _cmd 'imagine redo N'          're-run entry N exactly'
+  _cmd 'imagine gallery'         'regenerate outputs/index.html from history'
+  _cmd 'imagine critique IMG ["goal"]' 'local vision-model critique of an image'
+  _ex 'imagine vary 12' '# same prompt, new roll'
+  _ex 'imagine --from photo.png "make it watercolor"' '# start from an input image'
+  _ex 'imagine --style photo "a corgi on a skateboard"' ''
+  _ex 'imagine critique out.png "a moody forest"' '# local vision critique'
+  _ex 'imagine star 12 && imagine prune -y' '# keep the good one, Trash the rest'
   _sec OPTIONS
-  _opt '-e, --enhance'      'gemma4 rewrites your idea into a rich prompt (smart default)'
+  _opt '-e, --enhance'      'a model rewrites your idea into a rich prompt (smart default)'
   _opt '--from IMG [--strength X]' 'img2img: start from an input image (X=0..1, default 0.5)'
   _opt '--style NAME'       'photo | cinematic | anime | watercolor | 3d | cyberpunk'
   _opt '-s, --steps N'      'denoising steps (model-aware default: schnell 4, qwen ~20)'
-  _opt '--neg "..."'        'negative prompt (dev/qwen only — ignored with a warning elsewhere)'
+  _opt '--neg "..."'        'negative prompt (dev/qwen only, ignored with a warning elsewhere)'
   _opt '--guidance N'       'prompt adherence (dev/qwen; model default applied)'
   _opt '--seed N'           'reproducibility (default: random, always recorded)'
   _opt '--stepwise'         'save each denoising step to outputs/steps/<ts>/'
@@ -148,18 +151,15 @@ show_help() {
   _opt '-m, --model M'      'model name (see MODELS); default in config.sh IMAGINE_MODEL'
   _opt '-o, --output PATH'  'output path (default outputs/img-<ts>.png)'
   _opt '--open / --no-open' 'force/suppress auto-open (default: open only on a TTY)'
-  _opt '-h, --help'         'show this help'
   _sec MODELS
-  local d="${IMAGINE_MODEL:-schnell}"   # mark whichever model config.sh makes the default
   _opt "schnell$([ "$d" = schnell ] && echo '  (default)')"  'fast ~46s · great light · weak text/coherence'
   _opt "flux2$([ "$d" = flux2 ] && echo '  (default)')"     'newer · better coherence · 4B, mid download'
   _opt "qwen$([ "$d" = qwen ] && echo '  (default)')"       'legible text · strongest overall · ~1-2 min'
   _opt "dev$([ "$d" = dev ] && echo '  (default)')"         'high quality · gated · non-commercial · slow'
-  printf '  %sdefault: config.sh IMAGINE_MODEL · per-call: -m <name> · first use downloads weights%s\n' "$Dm" "$Rs"
+  _note 'default: config.sh IMAGINE_MODEL · per-call: -m <name> · first use downloads weights'
   _sec NOTES
-  printf '  %sLocal; no network after the one-time download. No tokens/billing — "spend" is%s\n' "$Dm" "$Rs"
-  printf '  %ssteps x wall-time, $0. Each PNG self-documents; history records the full config,%s\n' "$Dm" "$Rs"
-  printf '  %sso redo/vary/refine can reproduce any past run. For legible TEXT use qwen/dev.%s\n' "$Dm" "$Rs"
+  _note 'Local; no network after the one-time download. No tokens or billing. Each PNG documents itself and history records the full config, so redo, vary and refine can reproduce any past run.'
+  _help_end 'imagine -h'
 }
 
 show_history() {
@@ -319,8 +319,8 @@ critique_image() {
   # One history line per critique (kind=critique) so it shows in timeline and history.
   # The path goes in .image, never .output, so prune cannot mistake it for a generation.
   jq -cn --arg ts "$(date -u +%FT%TZ)" --arg image "$img" --arg goal "$goal" --arg model "$model" \
-     --arg r "$text" --argjson ms "$ms" \
-     '{ts:$ts, kind:"critique", image:$image, prompt:(if $goal == "" then null else $goal end), model:$model, ms:$ms, response:$r}' \
+     --arg r "$text" --argjson ms "$ms" --arg tty "$LM_TTY" --arg sess "$LM_SESSION" \
+     '{ts:$ts, kind:"critique", image:$image, prompt:(if $goal == "" then null else $goal end), model:$model, ms:$ms, response:$r} + '"$JQ_WHO" \
      >> "$LOG" 2>/dev/null || true
   case "$text" in "(no response)") return 1 ;; esac
 }
@@ -464,7 +464,7 @@ if [ "$rc" -eq 0 ] && [ -f "$OUT" ]; then
     --argjson width "$WIDTH" --argjson height "$HEIGHT" \
     --arg style "${STYLE:-}" --arg neg "${NEG:-}" --arg from "${FROM:-}" \
     --arg strength "$STRENGTH" --arg raw_idea "$RAW_IDEA" --argjson enhance "$ENHANCE" \
-    --arg parent "${PARENT:-}" --arg kind "$KIND" \
+    --arg parent "${PARENT:-}" --arg kind "$KIND" --arg tty "$LM_TTY" --arg sess "$LM_SESSION" \
     '{ts:$ts, prompt:$prompt, model:$model, steps:$steps, seed:$seed, output:$output,
       bytes:$bytes, ms:$ms, quant:$quant, width:$width, height:$height,
       guidance:(if $guidance == "" then null else ($guidance|tonumber) end),
@@ -474,7 +474,7 @@ if [ "$rc" -eq 0 ] && [ -f "$OUT" ]; then
       strength:($strength|tonumber), enhance:$enhance,
       raw_idea:(if $enhance then $raw_idea else null end),
       parent:(if $parent == "" then null else ($parent|tonumber) end),
-      kind:$kind}' >> "$LOG" 2>/dev/null || true
+      kind:$kind} + '"$JQ_WHO" >> "$LOG" 2>/dev/null || true
   case "$AUTO_OPEN" in
     yes) command -v open >/dev/null && open "$OUT" ;;
     no)  : ;;
