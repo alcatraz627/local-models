@@ -336,7 +336,8 @@ class Done:
 
 
 real_run = V.subprocess.run
-V.subprocess.run = lambda argv, **kw: (calls.append((argv, kw)) or Done())
+# Keep only argv and the shell flag: the real kwargs carry env, and env holds live API tokens.
+V.subprocess.run = lambda argv, **kw: (calls.append((argv, {"shell": kw.get("shell")})) or Done())
 try:
     calls.clear()
     rc, o, e = inproc(V.cmd_how, regV, ["--go", "--no-model", "what is using memory"])
@@ -612,6 +613,16 @@ check("--big and --code each get their own description", big and code_ and big.g
 check("see completes a value after -m and --model", "'-m[" in ztext_see and re.search(r"'-m\[[^\]]*\]:model:", ztext_see) and re.search(r"'--model\[[^\]]*\]:model:", ztext_see))
 check("screenshot names with spaces are offered as single candidates",
       'compadd -- "${shots[@]}"' in ztext_see and "(${shots})" not in ztext_see)
+
+# A job whose input is the request itself answers with the person's words, never an unrelated example.
+rc, r = how("do not use the web, tell me what 2+2 is")
+check("ask carries the person's own words", rc == 0 and r.get("command") == 'lm "do not use the web, tell me what 2+2 is"' and r.get("go") is False, str(r)[:200])
+rc, r = how("search the web for rust news")
+check("web carries the person's own words", rc == 0 and r.get("command") == 'q --web "search the web for rust news"', str(r)[:200])
+rc, r = how('search the web for "rust" news $(touch /x) `id`')
+check("the words are escaped for the shell", rc == 0 and r.get("command") == 'q --web "search the web for \\"rust\\" news \\$(touch /x) \\`id\\`"', str(r)[:200])
+rc, r = how("commit message from my diff")
+check("a specific example still wins over the words template", rc == 0 and r.get("command") == "git diff | q commit", str(r)[:200])
 
 fails = [c for c in CHECKS if not c[1]]
 for name, ok, detail in CHECKS:

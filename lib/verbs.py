@@ -447,11 +447,23 @@ def how_answer(reg, query):
         web = next(e for e in jobs["web"]["examples"] if e.get("cloud"))
         alts = []
         add({"cmd": web["cmd"], "says": web["says"] + " (leaves this Mac)"}, cloud=True)
+    # A job whose only input is the request itself gets the person's own words, not a canned example,
+    # unless the match was a specific example of a different shape (git diff | q commit).
+    if j.get("words") and ex["cmd"].startswith(j["words"].split("{words}")[0]):
+        return {"command": with_words(j, query), "job": j["name"],
+                "why": why or (f"{j['summary']}" + (f" (matched \"{phrase}\")" if phrase else "")),
+                "alternatives": alts, "matched_by": "keywords", "go": False, "fill": None, "example": ex["cmd"]}
     runnable = ex["cmd"] in go_list(j)
     return {"command": ex["cmd"], "job": j["name"],
             "why": why or (f"{j['summary']}" + (f" (matched \"{phrase}\")" if phrase else "")),
             "alternatives": alts, "matched_by": "keywords", "go": runnable,
             "fill": None if runnable else (j.get("fill") or None)}
+
+
+def with_words(job, query):
+    """The job's command carrying the request verbatim, escaped so a pasted copy cannot expand anything in the shell."""
+    safe = query.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
+    return job["words"].replace("{words}", safe)
 
 
 def ask_small(prompt, schema):
@@ -492,6 +504,9 @@ def how_model(reg, query):
         return None, "the model did not name one of the jobs"
     j = by_name(reg)[name]
     ex = next(e for e in j["examples"] if asked or not e.get("cloud"))
+    if j.get("words"):
+        return {"command": with_words(j, query), "job": name, "why": f"{j['summary']} (chosen by the small model)",
+                "alternatives": [], "matched_by": "model", "go": False, "fill": None, "example": ex["cmd"]}, ""
     runnable = ex["cmd"] in go_list(j)
     return {"command": ex["cmd"], "job": name, "why": f"{j['summary']} (chosen by the small model)", "alternatives": [],
             "matched_by": "model", "go": runnable, "fill": None if runnable else (j.get("fill") or None)}, ""
@@ -547,7 +562,7 @@ def cmd_how(reg, args):
         return 0
     jobs = by_name(reg)
     ex = next((e for e in jobs[ans["job"]]["examples"] if e["cmd"] == ans["command"]), {})
-    print(paint_cmd(p, ans["command"], ex, ans["go"]))
+    print(paint_cmd(p, ans["command"], ex, ans["go"] or bool(ans.get("example"))))
     print(f"{p.Dm}why: {ans['why']}{p.Rs}")
     for a in ans["alternatives"]:
         mark = f"{p.Y}☁{p.Rs} " if a.get("leaves_mac") else ""
