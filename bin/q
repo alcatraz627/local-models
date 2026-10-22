@@ -55,6 +55,7 @@ show_help() {
   _ex 'q summarize --file report.pdf'        '# PDF/Word/etc extracted locally'
   _more
   _cmd 'q on | off | status'    'Tier W warm toggle (= warm)'
+  _cmd 'q check "<command>"'    'check a shell command'"'"'s programs and --flags against their own help, without running it'
   _cmd 'q intents'              'list available intents (the registry)'
   _cmd 'q models'               'usable models + tiers (= lm models; ● resident)'
   _ex 'q -c "and sorted by size?"'           '# follow-up with context'
@@ -180,6 +181,7 @@ print(json.dumps({"ask": ask, "intent": r.get("intent", "ask"), "model": r.get("
 # Subcommands: help, history, show, again, and the warm toggle.
 case "${1:-}" in
   again)                 shift; again_run "$@"; exit $? ;;
+  check)                 shift; exec python3 "$DIR/lib/cmdcheck.py" "$@" ;;
   -h|--help|help)        show_help; exit 0 ;;
   history)               shift
                          HIST_JSON=false; HIST_N=15
@@ -669,7 +671,16 @@ if [ -n "$CTX" ]; then
   [ "${#CTX}" -gt 400000 ] && emit_error ctx_too_large "document is ${#CTX} chars (hard cap 400000)" 12
   if [ "${#CTX}" -gt "$MAX_CTX" ]; then
     [ "$INTENT" = describe-data ] && emit_error ctx_truncated "describe-data needs the whole table to report size and outliers; input has ${#CTX} characters, limit is $MAX_CTX. Narrow the table or raise --max-ctx only if the model can fit it." 12
+    _ctx_total=${#CTX}
     CTX="${CTX:0:$MAX_CTX}"; TRUNC=true
+    if [ "$MODE" = text ]; then
+      # Say it to the person, not only to the model: a summary of 65% of a file reads as the whole thing.
+      _fmt() { printf '%s' "$1" | awk '{s=$0; r=""; while (length(s) > 3) {r="," substr(s, length(s)-2) r; s=substr(s, 1, length(s)-3)} print s r}'; }
+      _d=""; _r=""; use_color_fd 2 && { _d=$'\033[2m'; _r=$'\033[0m'; }
+      if [ "$_ctx_total" -le 28000 ]; then _more_hint="the whole file: --max-ctx $(( (_ctx_total + 999) / 1000 * 1000 ))"
+      else _more_hint="too big for the small model in one go; try --big, or cat FILE | lm gemini \"...\" (that leaves this Mac)"; fi
+      printf '%s· read %s of %s chars (%s%%); %s%s\n' "$_d" "$(_fmt "$MAX_CTX")" "$(_fmt "$_ctx_total")" "$(( MAX_CTX * 100 / _ctx_total ))" "$_more_hint" "$_r" >&2
+    fi
   fi
   CTX_OPEN="<input>"
   [ -n "$CTX_NAME" ] && CTX_OPEN="<input name=\"$CTX_NAME\">"
@@ -806,6 +817,7 @@ if $GLOW && [ "$MODE" = text ] && [ -t 1 ] && command -v glow >/dev/null 2>&1; t
 # exec so python IS this process: a GUI host's SIGTERM must reach the signal
 # handlers (cancelled/130), not kill a bash wrapper around them (143).
 mkdir -p "$DIR/logs"
+export LM_DIR="$DIR"
 [ "$KEEP" = "0" ] && lm_step q "$MODEL cold load · intent=$INTENT"
 exec python3 - "$MODEL" "$SYS" "$QUERY" "$THINK" "$KEEP" "$INTENT" "$LOG" "$HIST" "$CID" "$MODE" "$TIMEOUT" "$TRUNC" "$OLLAMA_HOST" "$STATS" "$FORMAT" "$GLOW_OK" "$LEASE_HINT" "${DIY_LOG:-}" <<'PY'
 import sys, os, json, time, signal, urllib.request, urllib.error
@@ -911,6 +923,16 @@ if in_thinking:
     sys.stderr.write(rs + "\n"); sys.stderr.flush()
 ms = int((time.time() - t0) * 1000)
 text = "".join(parts).strip()
+# A shell-command answer gets checked against the program's own man page / --help (never
+# run): an invented flag is the usual failure. Humans see a gray line, --json gets .checked.
+checked = None
+if intent == "cmd" and text and (mode == "json" or (mode == "text" and sys.stderr.isatty())):
+    try:
+        sys.path.insert(0, os.path.join(os.environ["LM_DIR"], "lib"))
+        import cmdcheck
+        checked = cmdcheck.check(text)
+    except Exception:
+        checked = None
 try:  # the JSONL line this call will occupy → `q show N` re-pulls it later, no lookup
     n_entry = sum(1 for _ in open(logf)) + 1
 except Exception:
@@ -930,6 +952,8 @@ if mode == "text":
         cold = " · cold" if keep == "0" else ""
         sys.stderr.write("%s· %s%s · %s in / %s out · %d tok/s · %.1fs · q show %d%s\n"
                          % (dim, model, cold, format(tok_in, ","), format(tok_out, ","), tps, ms / 1000, n_entry, rs))
+    if checked and checked.get("checked"):
+        sys.stderr.write("%s%s%s\n" % (dim, cmdcheck.line(checked), rs))
 elif mode == "stream":
     sys.stdout.write(json.dumps({"t": "done", "model": model, "ms": ms,
                                  "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated}) + "\n")
@@ -937,6 +961,8 @@ elif mode == "json":
     envelope = {"ok": True, "text": text, "model": model, "ms": ms,
                 "tokens_in": tok_in, "tokens_out": tok_out, "truncated": truncated,
                 "intent": intent, "entry": n_entry, "cold_load": keep == "0"}
+    if checked is not None:
+        envelope["checked"] = checked
     if fmt:  # constrained output: hand consumers the parsed object, not a string to re-parse
         try:
             envelope["data"] = json.loads(text)
@@ -959,6 +985,8 @@ try:  # history is best-effort — never break the answer on a log failure
         "tty": os.environ.get("LM_TTY") or None,
         "session": os.environ.get("LM_SESSION") or None,
     }
+    if checked is not None:
+        entry["checked"] = checked
     if diyjson:  # --diy routing rides into history so `q show N` can explain it
         try:
             entry["diy"] = json.loads(diyjson)
