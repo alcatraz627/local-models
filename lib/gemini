@@ -86,8 +86,8 @@ now_ms() { python3 -c 'import time; print(int(time.time()*1000))'; }
 T0_MS=""   # set when the backend call starts, so an error row can carry its real duration
 
 emit_error() { # CODE MESSAGE EXIT
-  if [ "$MODE" = json ]; then jq -cn --arg c "$1" --arg m "$2" '{ok:false, code:$c, message:$m}'
-  else echo "lm gemini: $2" >&2; fi
+  if [ "$MODE" = json ]; then lm_err_json "$1" "$2"
+  else echo "lm gemini: $2" >&2; lm_fix_line "$1"; fi
   # Keep the reason, not just the code, and how long the (possibly paid) call ran.
   # Usage mistakes (exit 2) never reached the backend, so they stay out of history.
   [ "$3" = 2 ] || log_line "error" "$1: $2" "$([ -n "$T0_MS" ] && echo $(( $(now_ms) - T0_MS )) || echo 0)" || true
@@ -188,7 +188,8 @@ case "$CMD" in
              printf '%spick per call: lm gemini -m <model> · set the default: GEMINI_MODEL in config.sh · extend the list: GEMINI_MODELS%s\n' "$Dm" "$Rs"
            fi
            exit 0 ;;
-  "")      show_help; exit 0 ;;
+  "")      [ "$MODE" = json ] && emit_error invalid_args "give a prompt, or a subcommand such as ask or models (lm gemini -h)" 2
+           show_help; exit 0 ;;
 esac
 
 # Validate the model against the pick-list EARLY — a typo errors here instead of

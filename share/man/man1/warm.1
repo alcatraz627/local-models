@@ -1,0 +1,71 @@
+.TH WARM 1 "2026-10-22" "local-models"
+.SH NAME
+warm \- keep a model loaded so q answers instantly, and say when it
+unloads
+.SH SYNOPSIS
+.B warm
+on|off|status [tier|model] [time]
+.SH DESCRIPTION
+Keep a model loaded so q answers instantly, and say when it unloads.
+.PP
+Input: on, off, status or restart; a tier or model; a duration such as
+1h30m.
+.PP
+Output: what is loaded and when it unloads; status \-\-json is the
+machine view.
+.SH EXAMPLES
+.TP
+.B warm on 1h
+Keep the small model loaded for an hour.
+.TP
+.B warm on code 4h
+Keep the coding model loaded for a long session.
+.TP
+.B warm status
+What is loaded and when it unloads.
+.TP
+.B warm status \-\-json
+The machine view: what is loaded and when each model expires.
+.TP
+.B warm off
+Unload the small model and give the memory back.
+.TP
+.B warm off all
+Back to zero memory.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+The work ran and failed, or a check failed.
+.TP
+.B 2
+Bad usage: unknown flag, missing value, or a single unknown word
+(several words are taken as a question).
+.TP
+.B 10
+Server down or a backend call failed.
+.TP
+.B 11
+Model or backend not available.
+.TP
+.B 12
+Input missing or unreadable (file, image, history entry, optional
+dependency).
+.TP
+.B 13
+Wall\-clock timeout.
+.TP
+.B 127
+A required program is not installed.
+.TP
+.B 130
+Cancelled by the caller.
+.SH FILES
+.TP
+.B logs/*\-history.jsonl
+One JSON line per call. History is per terminal by default; \-\-all or
+LM_ALL=1 reaches every caller.
+.SH SEE ALSO
+lm(1), q(1), see(1), imagine, review

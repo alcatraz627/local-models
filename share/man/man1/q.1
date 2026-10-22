@@ -1,0 +1,191 @@
+.TH Q 1 "2026-10-22" "local-models"
+.SH NAME
+q \- quick local LLM companion: answers, shell commands, commit
+messages, file Q&A
+.SH SYNOPSIS
+.B q
+[intent] \(dq<prompt>\(dq [\-\-big|\-\-code|\-\-web] [\-\-ctx FILE]
+[\-\-json]
+.SH DESCRIPTION
+Quick local LLM companion: answers, shell commands, commit messages,
+file Q&A.
+.PP
+Input: a prompt, optional intent, optional document (\-\-ctx FILE or
+stdin).
+.PP
+Output: plain text; \-\-json one object; \-\-stream\-json NDJSON;
+\-\-format SCHEMA adds parsed .data.
+.SH OPTIONS
+.TP
+.B \-\-big / \-\-code
+use the big (reasoning) / code tier for this call
+.TP
+.B \-\-web
+search the web first (DDG, no key) and answer from the results, cited
+.TP
+.B \-\-route / \-\-no\-route
+force or skip the automatic routing of image paths, file paths and typos
+.TP
+.B \-\-diy
+let q route itself with a planner pass: intent, web, file, tier,
+narrated in gray
+.TP
+.B \-c, \-\-continue [N]
+continue your last exchange / entry N
+.TP
+.B \-m, \-\-model M
+model or tier alias: small | big | code | sweep | <name> (default:
+small)
+.TP
+.B \-\-think
+show the reasoning trace (dimmed, on stderr; off by default)
+.TP
+.B \-\-no\-stats
+hide the gray token line (text mode; machine modes always carry the
+counts)
+.TP
+.B \-\-raw
+no system prompt (bare model)
+.TP
+.B \-\-json
+machine mode: one JSON object on stdout, no ANSI
+.TP
+.B \-\-stream\-json
+machine mode: NDJSON chunk/done/error lines
+.TP
+.B \-\-format FILE
+constrain output to a JSON schema (with \-\-json: adds parsed .data)
+.TP
+.B \-\-glow
+render the reply through glow (buffers output; TTY\-only, no\-op without
+glow)
+.TP
+.B \-\-ctx, \-\-file FILE | \-
+context document from a file or stdin (\- = stdin)
+.TP
+.B \-\-ctx\-name S
+the document's display name (framing hint)
+.TP
+.B \-\-sheet NAME|N
+XLSX sheet to read (1\-based number or name; required for multi\-sheet
+describe\-data)
+.TP
+.B \-\-preflight
+inspect extracted input, context size, and sheet selection without a
+model call
+.TP
+.B \-\-prose
+describe\-data only: add optional model interpretation after exact
+profile
+.TP
+.B \-\-max\-ctx N
+read at most N chars of the document (default 16000; the cut is printed)
+.TP
+.B \-\-timeout S
+wall\-clock cap; structured timeout error after
+.TP
+.B \-\-intent X
+intent as a flag (same set as the positional token)
+.TP
+.B \-\-all
+with show \-1, \-c or history: include calls from other terminals,
+agents and hooks
+.SH INTENTS
+.TP
+.B ask
+Direct answer, <=2 sentences.
+.TP
+.B cmd
+A single macOS shell command, nothing else.
+.TP
+.B code\-dispatch
+Scoped code change under a pre\-written judge \[u2014] the local coder
+as a worker, never an architect.
+.TP
+.B commit
+A git commit message (pipe the diff in).
+.TP
+.B complete
+Finish an unfinished code file \[u2014] implement stubs to spec, output
+the whole file.
+.TP
+.B describe\-data
+Deterministic row, schema, missing\-value, and numeric range profile.
+.TP
+.B diy\-plan
+Internal: classify a prompt into {intent, web, file, image, tier, probe}
+for \-\-diy.
+.TP
+.B explain\-code
+What the code does + flags dangerous bits.
+.TP
+.B qa
+Answer grounded ONLY in the context document.
+.TP
+.B review
+Code/PR review \[u2014] bugs, risks, broken invariants, missing tests.
+.TP
+.B summarize
+TL;DR of the context document, length\-adaptive.
+.TP
+.B title
+A 2\-5 word title (tab titles, fire\-and\-forget).
+.SH EXAMPLES
+.TP
+.B q \(dqhow do I check disk usage\(dq
+Terse answer.
+.TP
+.B q cmd \(dqkill everything on port 3001\(dq
+One macOS command, checked against its \-\-help.
+.TP
+.B git diff | q commit
+Commit message from the diff.
+.TP
+.B q summarize \-\-file report.pdf
+PDF, Word and the like extracted locally.
+.TP
+.B q \-\-big \(dqreason through this tradeoff\(dq
+The heavier model, on demand.
+.TP
+.B q intents
+List the available intents.
+.TP
+.B q show \-1
+Your latest call, in full.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+The work ran and failed, or a check failed.
+.TP
+.B 2
+Bad usage: unknown flag, missing value, or a single unknown word
+(several words are taken as a question).
+.TP
+.B 10
+Server down or a backend call failed.
+.TP
+.B 11
+Model or backend not available.
+.TP
+.B 12
+Input missing or unreadable (file, image, history entry, optional
+dependency).
+.TP
+.B 13
+Wall\-clock timeout.
+.TP
+.B 127
+A required program is not installed.
+.TP
+.B 130
+Cancelled by the caller.
+.SH FILES
+.TP
+.B logs/*\-history.jsonl
+One JSON line per call. History is per terminal by default; \-\-all or
+LM_ALL=1 reaches every caller.
+.SH SEE ALSO
+lm(1), see(1), warm(1), imagine, review

@@ -1,0 +1,241 @@
+.TH LM 1 "2026-10-22" "local-models"
+.SH NAME
+lm \- local models on this Mac: the front door to q, see, review,
+imagine and warm
+.SH SYNOPSIS
+.B lm
+\(dqquestion\(dq | verb [args]
+.br
+.B lm
+.RB [ \-\-capabilities ]
+.br
+.B lm how
+\(dqwhat I want\(dq
+.SH DESCRIPTION
+Local models on this Mac. Nothing leaves the machine unless a command is
+marked as leaving it
+(lm gemini, and q \-\-web).
+.PP
+Every command takes \-h. This page is generated from lib/verbs.toml, the
+same registry
+that drives the lm screens, lm \-\-capabilities and lm how.
+.SH COMMANDS
+.TP
+.B lm \(dqquestion\(dq
+A quick answer from the small local model.
+.TP
+.B lm cmd \(dqtask\(dq
+One shell command, checked before you run it.
+.TP
+.B lm read <img|paste|latest> [\(dqq\(dq]
+Text or an answer out of an image.
+.TP
+.B lm diff A B
+What changed between two images.
+.TP
+.B lm doc <file> [\(dqq\(dq]
+Ask about, or summarize, a file.
+.TP
+.B lm again [\-\-big|\-\-code|\-\-web]
+The answer was wrong; ask the same thing on a stronger model.
+.TP
+.B lm find \(dqwords\(dq
+Search the answers you got before.
+.TP
+.B lm review [PR|files|dir]
+Review code, a PR or your uncommitted changes.
+.TP
+.B lm status [\-\-json]
+What is loaded and what is free.
+.TP
+.B lm fast [1h|off]
+Keep answers instant.
+.TP
+.B lm help [job]
+The steps for one job.
+.TP
+.B lm more
+Every command, including the rarely used ones.
+.TP
+.B lm how \(dqwhat I want\(dq [\-\-go] [\-\-json]
+Find the command for what you want, without running it.
+.TP
+.B lm gemini \(dq...\(dq
+The cloud lane: huge documents and web research. Leaves this Mac.
+.TP
+.B lm fleet <intent> [\-\-prompt P] files...
+Ask one question of many independent files.
+.TP
+.B lm rag index|search|ask ...
+Search exact text first, then by meaning.
+.TP
+.B lm index [find X]
+Repo symbol map: build once, ask where a name is defined.
+.TP
+.B imagine \(dqprompt\(dq
+Draw an image locally.
+.TP
+.B lm probe <model>
+Judge whether a local model is trustworthy.
+.TP
+.B lm bench <set>
+Run a fixed behavior and latency fixture set.
+.TP
+.B lm ui\-verify <img> \(dqclaim\(dq
+Check claims about a screenshot against a UI inventory.
+.TP
+.B lm opencode [args]
+Opencode on the local code model, leased for the session.
+.TP
+.B lm timeline [N] [\-\-errors] [\-\-tool T] [\-\-all] [\-\-json]
+Your recent calls, newest last.
+.TP
+.B lm last [tool] [\-\-all] [\-\-json]
+Your latest call, in full.
+.TP
+.B lm models [\-\-json]
+Installed models and which tier each is.
+.TP
+.B lm doctor [\-\-json]
+Health check of the whole toolkit.
+.TP
+.B lm examples
+A showcase of everything, grouped by job.
+.TP
+.B q [intent] \(dq<prompt>\(dq [\-\-big|\-\-code|\-\-web] [\-\-ctx \
+FILE] [\-\-json]
+Quick local LLM companion: answers, shell commands, commit messages,
+file Q&A.
+.TP
+.B see <image|paste|latest> [\(dqquestion\(dq] [\-\-ocr|\-\-ui] \
+[\-\-json]
+Read an image into text with a local vision model (the image never
+leaves this Mac).
+.TP
+.B warm on|off|status [tier|model] [time]
+Keep a model loaded so q answers instantly, and say when it unloads.
+.SH AGENT MENU
+.TP
+.B lm \-\-capabilities [job] [\-\-json]
+Every job with its inputs, output shape, exit codes, cost and side
+effects.
+.TP
+.B lm how "what I want" [\-\-go] [\-\-json]
+Find the command for a request. Words first, the small model only when
+no job matches.
+.SH EXAMPLES
+.TP
+.B lm \(dqhow do I see what is using port 5432\(dq
+The answer comes back in a few seconds.
+.TP
+.B lm cmd \(dqlist the 5 largest files in ~/Downloads\(dq
+Prints the command and nothing else.
+.TP
+.B lm read shot.png
+What is in the image.
+.TP
+.B lm diff before.png after.png
+A three\-line summary: where, whether text changed, whether colours
+changed.
+.TP
+.B lm doc report.pdf
+A summary (PDF, Word, HTML, text, spreadsheets).
+.TP
+.B lm again
+Your last question, one step stronger (small, then big).
+.TP
+.B lm find \(dqport 5432\(dq
+Matching questions and answers across q, see, gemini and imagine, yours
+first.
+.TP
+.B lm review
+Your uncommitted changes (takes a few minutes; loads the 23 GB code
+model).
+.TP
+.B lm status
+Server, free memory, loaded models, when they unload.
+.TP
+.B lm fast 1h
+q answers in under a second until the time it prints.
+.TP
+.B lm help
+The list of jobs.
+.TP
+.B lm more
+The full command list.
+.TP
+.B lm how \(dqtext from my last screenshot\(dq
+Prints the command, runs nothing.
+.TP
+.B lm gemini \-\-file big.md \(dqsummarize the risks\(dq
+A file too big for the local model.
+.TP
+.B lm fleet qa \-\-prompt \(dqwho owns this?\(dq docs/*.md
+Fan out across files.
+.TP
+.B lm index find fleet_worker
+Where is X, no model call.
+.TP
+.B lm probe gemma4:26b
+Run the reliability eval on one model.
+.TP
+.B lm bench quick
+Fixed correctness, latency, disk workload.
+.TP
+.B lm ui\-verify shot.png \(dqthe CTA is disabled\(dq
+Strict pass/fail/unsure gate.
+.TP
+.B lm opencode
+Start opencode with the code model loaded, released when you exit.
+.TP
+.B lm timeline
+Your last 20 calls across q, see, imagine, fleet and gemini.
+.TP
+.B lm last
+Your newest call, in full.
+.TP
+.B lm models
+Installed models, which are loaded, and which tier each fills.
+.TP
+.B lm doctor
+One pass or fail line per dependency; exits 1 if any fail.
+.TP
+.B lm examples
+Real commands you can paste, grouped by job.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+The work ran and failed, or a check failed.
+.TP
+.B 2
+Bad usage: unknown flag, missing value, or a single unknown word
+(several words are taken as a question).
+.TP
+.B 10
+Server down or a backend call failed.
+.TP
+.B 11
+Model or backend not available.
+.TP
+.B 12
+Input missing or unreadable (file, image, history entry, optional
+dependency).
+.TP
+.B 13
+Wall\-clock timeout.
+.TP
+.B 127
+A required program is not installed.
+.TP
+.B 130
+Cancelled by the caller.
+.SH FILES
+.TP
+.B logs/*\-history.jsonl
+One JSON line per call. History is per terminal by default; \-\-all or
+LM_ALL=1 reaches every caller.
+.SH SEE ALSO
+q(1), see(1), warm(1), imagine, review

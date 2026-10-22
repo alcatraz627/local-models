@@ -338,7 +338,8 @@ case "${1:-}" in
   prune)             shift; prune_outputs "${1:-}"; exit $? ;;
   gallery)           shift; make_gallery; exit $? ;;
   critique)          shift; critique_image "$@"; exit $? ;;
-  redo|vary|refine)  VERB="$1"; shift ;;
+  redo|vary|refine)  case " $* " in *" -h "*|*" --help "*) show_help; exit 0 ;; esac
+                     VERB="$1"; shift ;;
 esac
 
 MODEL="${IMAGINE_MODEL:-schnell}"; STEPS=""; GUIDANCE=""; QUANT=8; OUT=""; SEED=""

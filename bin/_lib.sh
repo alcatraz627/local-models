@@ -11,6 +11,34 @@ LM_LAUNCHD_LABEL="com.alcatraz.local-models-ollama"
 # every bin/* script sources _lib.sh before its first tool call.
 case ":$PATH:" in *:/opt/homebrew/bin:*) ;; *) PATH="/opt/homebrew/bin:$PATH" ;; esac
 
+LM_ROOT_DIR="${BASH_SOURCE[0]%/*}/.."; export LM_ROOT_DIR
+
+# Run lib/verbs.py (the registry reader) with the project python when there is one.
+lm_verbs() {
+  local py="$LM_ROOT_DIR/.venv/bin/python"
+  [ -x "$py" ] || py=python3
+  "$py" "$LM_ROOT_DIR/lib/verbs.py" "$@"
+}
+
+# A --json error envelope that carries the fix: {ok:false, code, message, remedy, next}.
+# remedy is one sentence, next is a runnable command or null. Unknown codes get a generic remedy.
+lm_err_json() { # CODE MESSAGE
+  local fix; fix="$(lm_verbs remedy "$1" 2>/dev/null)" || fix=""
+  [ -n "$fix" ] || fix='{"remedy":"see the message; -h lists the flags and examples","next":null}'
+  jq -cn --arg c "$1" --arg m "$2" --argjson f "$fix" '{ok:false, code:$c, message:$m} + $f'
+}
+
+# On a terminal only, one gray line under a text-mode error saying what to do about it.
+lm_fix_line() { # CODE
+  [ -t 2 ] || return 0
+  [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ] && local dm=$'\033[2m' rs=$'\033[0m' || local dm="" rs=""
+  local fix r n; fix="$(lm_verbs remedy "$1" 2>/dev/null)" || return 0
+  r="$(printf '%s' "$fix" | jq -r '.remedy // empty' 2>/dev/null)" || return 0
+  n="$(printf '%s' "$fix" | jq -r '.next // empty' 2>/dev/null)" || n=""
+  [ -n "$r" ] || return 0
+  printf '%s  → %s%s%s\n' "$dm" "$r" "${n:+ (try: $n)}" "$rs" >&2
+}
+
 # ── Terminal colors (TTY / NO_COLOR / TERM=dumb aware) ──
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
   Y=$'\033[1;33m'; C=$'\033[36m'; G=$'\033[32m'; Dm=$'\033[2m'; Rs=$'\033[0m'; Bd=$'\033[1m'
@@ -127,7 +155,7 @@ JQ_REMEDY='def remedy($c): {
       ctx_required: "that intent needs a file; add --ctx FILE",
       ctx_unreadable: "the file could not be read; check the path",
       ctx_binary: "the file is binary; extract its text first",
-      ctx_too_large: "the file is too big; cut it down or use lm gemini --file",
+      ctx_too_large: "the file is too big; cut it down, or send it to the cloud lane with lm gemini --file (that leaves this Mac)",
       cancelled: "it was cancelled before it finished",
       mlx_failed: "the MLX read failed; run it again, or add -m minicpm-v4.6",
       model_error: "the vision model failed; run it again, or lm doctor",
@@ -207,20 +235,21 @@ need_arg_present() { # TOOL FLAG ARGC
 usage_fail() { # TOOL MESSAGE
   printf '%s: %s\n' "$1" "$2" >&2
   case "${MODE:-}" in
-    json)   jq -cn --arg m "$2" '{ok:false, code:"invalid_args", message:$m}' ;;
+    json)   lm_err_json invalid_args "$2" ;;
     stream) jq -cn --arg m "$2" '{t:"error", code:"invalid_args", message:$m}' ;;
   esac
   exit 2
 }
 
-# For verbs whose only option is --json, in any position: prints --json when given,
-# refuses anything else. Use as: jf="$(json_only "lm doctor" "$@")" || exit 2
+# For verbs whose only option is --json, in any position: sets JSON_ONLY to --json when given and
+# refuses anything else (usage error, exit 2). Call it directly, never inside $( ), or the JSON
+# error envelope is swallowed by the substitution.
 json_only() { # TOOL ARG...
-  local tool="$1" out=""; shift
+  local tool="$1" a; shift
+  JSON_ONLY=""
   for a in "$@"; do
-    case "$a" in --json) out=--json ;; *) usage_fail "$tool" "unexpected '$a' (the only option is --json)" ;; esac
+    case "$a" in --json) JSON_ONLY=--json ;; *) usage_fail "$tool" "unexpected '$a' (the only option is --json)" ;; esac
   done
-  printf '%s' "$out"
 }
 
 # Call from the parser's catch-all branch. Only a flag-shaped word (-x, --xyz,
