@@ -435,12 +435,12 @@ def how_answer(reg, query):
     same = [e for e in j["examples"] if e is not ex and (asked or not e.get("cloud"))]
     same.sort(key=lambda e: -len(set(toks(e["says"] + " " + e["cmd"], stop, canon)) & q))
     for e in same[:1]:
-        if set(toks(e["says"] + " " + e["cmd"], stop, canon)) & q:
+        if len(set(toks(e["says"] + " " + e["cmd"], stop, canon)) & q) >= 2:
             add(e)
     for r in ranked[1:]:
         if len(alts) >= 2:
             break
-        if r[1] is not j and r[0] >= thr:
+        if r[1] is not j and r[1]["name"] not in ("how", "help", "more", "examples") and r[0] >= thr:
             add(r[3])
     alts = alts[:2]
     if fresh and j["name"] == "ask":
