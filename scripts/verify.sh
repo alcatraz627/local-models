@@ -133,6 +133,13 @@ else
   bad "cmdcheck / routing words — failing checks:"
   printf '%s\n' "$CR" | awk '/FAIL/ {print "       " $0}'
 fi
+VD="$(./.venv/bin/python probe/fixtures/verbs-drift.py 2>&1)"; vdrc=$?
+if [ "$vdrc" -eq 0 ]; then
+  ok "verbs registry in sync (screens, menu, how, completion, man, tldr, docs): $(printf '%s' "$VD" | tail -1)"
+else
+  bad "verbs registry drift — failing checks (fix, then scripts/gen-verbs.sh):"
+  printf '%s\n' "$VD" | awk '/FAIL/ {print "       " $0}'
+fi
 
 echo "── findings-gate: mechanical review-findings gate ──"
 FG="$(./.venv/bin/python lib/findings-gate.py --self-test 2>&1)" \
