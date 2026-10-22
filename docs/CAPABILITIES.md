@@ -91,6 +91,9 @@ see diff ref.png candidate.png                  # compare two images: $0 evidenc
 see diff a.png b.png --json | jq .evidence      # full pack: scores/text/color/grid/shape + nudges
 see diff a.png b.png --only E5 --grid 32        # slice rerun of one extractor — delta, no model call
 see diff a.png b.png --mlx                      # judged read by Qwen3-VL on MLX instead of the 17 GB gemma tier
+see count dots.png --filled-only --json         # EXACT object count by pixel measurement, no model; hollow rings dropped
+see count squares.png --color red               # count only objects of one colour (name or #hex)
+see odd grid.png --json | jq .data              # the one item that differs among repeated items; "ambiguous" + 2 candidates when unsure
 see more "what does the badge say?"             # drill into the LAST image (from its artifact copy)
 see photo.png --glow                            # rendered read
 see ui.png -m gemma4:26b                        # the stronger general-scene reasoner
@@ -105,6 +108,17 @@ temp dir), `read.md`, `meta.json`, and `notes.md` via `see note`. `see open N` j
 it, `see more` re-targets it for follow-ups, and the newest 150 are kept. History lines
 carry `artifact` + `crop` fields; the `--json` envelope exposes `artifact` for agents
 building evidence trails.
+
+**`see count` / `see odd` (measuring lane).** Vision models miscount many small shapes
+and miss which of several look-alikes differs; a script does both exactly, so these verbs
+call `lib/measure.py` (PIL + numpy + scipy, no model, no server). Foreground is whatever
+is far (CIE76) from the dominant border colour; objects are connected components. `odd`
+compares size, aspect, Lab colour and a 16x16 shape mask against the median object and
+reports the 1-based reading-order index, but returns `"ambiguous": true` with two
+candidates when the runner-up is close, and the same for touching objects in `count`
+(with a `range`). Use it for plain shapes on a plain background; a busy scene where the
+items touch or overlap other art (a rug border photo, say) comes back ambiguous, not guessed.
+Exit 2 usage, 12 unreadable image; history mode is `count` / `odd`.
 
 **`see diff` evidence layer (L1).** A diff runs deterministic `$0` extractors
 (`lib/vis-compare.py`, pure PIL — no numpy/opencv) and returns the full pack under
