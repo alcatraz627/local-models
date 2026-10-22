@@ -119,6 +119,13 @@ else
   printf '%s\n' "$VB" | awk '/FAIL/ {print "       " $0}'
 fi
 ./.venv/bin/python probe/vision/selftest.py >/dev/null 2>&1 && ok "vision harness selftest (probe/vision, model-free)" || bad "vision harness selftest failing: run probe/vision/selftest.py"
+MC="$(./.venv/bin/python probe/fixtures/measure-check.py 2>&1)"; mcrc=$?
+if [ "$mcrc" -eq 0 ]; then
+  ok "measure lane (see count / see odd): $(printf '%s' "$MC" | tail -1)"
+else
+  bad "measure lane — failing checks:"
+  printf '%s\n' "$MC" | awk '/FAIL/ {print "       " $0}'
+fi
 
 echo "── findings-gate: mechanical review-findings gate ──"
 FG="$(./.venv/bin/python lib/findings-gate.py --self-test 2>&1)" \
