@@ -1,0 +1,1023 @@
+# The one registry of what lm can do. Everything a person or an agent reads about lm is generated
+# from this file: the lm screens, lm --capabilities, lm how, completion, man pages, tldr pages and
+# the front-door block in docs/CAPABILITIES.md. Edit here, then run scripts/gen-verbs.sh.
+# probe/fixtures/verbs-drift.py fails when anything drifts.
+#
+# Job fields
+#   name, kind (job | tool | topic), aliases, summary (a person's one-liner), usage
+#   examples = [{cmd, says, section?, cloud?, keywords?}]    section defaults to START
+#   note              the gray closing line of `lm help <job>`
+#   inputs, output, exit_codes, cost_tier, cost_secs, leaves_mac, side_effects
+#   keywords          phrases `lm how` matches against; the first one is the job's own best phrase
+#   see_also          other job names
+#   front_label/front_says, more_label/more_says, help_says   one line on the lm, lm more, lm help screens
+
+version = 1
+
+[conventions]
+json_flag = "--json on q, see, lm status|models|doctor|timeline, warm status, lm how, lm --capabilities: one JSON object (or array) on stdout, no colour"
+exit_codes = { "0" = "success", "1" = "the work ran and failed, or a check failed", "2" = "bad usage: unknown flag, missing value, unknown verb", "10" = "server down or a backend call failed", "11" = "model or backend not available", "12" = "input missing or unreadable (file, image, history entry, optional dependency)", "13" = "wall-clock timeout", "127" = "a required program is not installed", "130" = "cancelled by the caller" }
+history_scope = "q, see and lm history default to calls from your own terminal. A caller with no terminal (an agent, hook or cron job) has no 'mine': pass --all or set LM_ALL=1 to reach the newest row."
+no_tty_behaviour = "No colour, no gray hints, no prompts. Scripted forms (flags, --json, pipes) behave the same with or without a terminal. Error envelopes in --json mode are {ok:false, code, message, remedy, next}: branch on code, not on message."
+
+[screens]
+front_title = "local models on this Mac (nothing leaves the machine unless marked ☁)"
+front_jobs = ["ask", "cmd", "read", "diff", "doc", "again", "find", "review"]
+front_handy = ["status", "fast", "how", "help", "more"]
+front_footer = "☁ marks a call that leaves this Mac. Every command takes -h."
+help_index = ["ask", "cmd", "doc", "read", "diff", "count", "again", "find", "web", "fast", "status", "failed"]
+help_index_note = "Also: lm help json | table | gemini | review | imagine | batch | retrieval. Tool help: lm help q|see|imagine|review|warm|probe|ui-verify|index|bench. Everything with examples: lm examples"
+more_title = "local-model toolkit with an optional connected Gemini lane"
+more_order = ["q", "imagine", "see", "review", "probe", "fleet", "opencode", "index", "gemini", "ui-verify", "rag", "warm", "status", "models", "doctor", "timeline", "last", "examples", "how", "help", "bench"]
+more_examples = [
+  { cmd = 'lm q cmd "free up port 3001"', says = "one macOS command" },
+  { cmd = "lm q summarize --file report.pdf", says = "read a local file (no cloud)" },
+  { cmd = 'lm q --big "reason through this"', says = "heavier on-demand model" },
+  { cmd = "git diff | lm q commit", says = "commit message from the diff" },
+  { cmd = 'lm imagine --enhance "a cozy reading nook"', says = "" },
+  { cmd = 'lm imagine refine 12 "warmer light"', says = "iterate on generation 12" },
+  { cmd = "lm models   ·   lm status   ·   lm doctor", says = "what is installed / running / healthy" },
+  { cmd = "lm warm on", says = "pin the small model — q is then sub-second" },
+]
+more_footer = [
+  "per-command help (every flag + examples):  {c}lm help <verb>{r}, or {c}<verb> -h{r} for q, see, imagine, review, warm, gemini, fleet",
+  "the full menu with examples:  {c}glow ~/Code/local-models/docs/CAPABILITIES.md{r}",
+  "{d}docs: ~/Code/local-models/docs/  (STATE · CAPABILITIES · q-spec · 03-tool-orchestration-decision · research){r}",
+]
+
+[how]
+cloud_triggers = ["web", "gemini", "internet", "online", "google", "news", "research", "browse", "current"]
+stopwords = ["a", "an", "the", "my", "me", "i", "of", "to", "for", "on", "in", "is", "are", "it", "that", "this", "these", "those", "what", "how", "do", "does", "with", "from", "and", "or", "please", "can", "you", "want", "so", "about", "at", "be", "get", "some", "if", "when"]
+synonyms = [
+  ["latest", "last", "newest", "recent"],
+  ["big", "bigger", "larger", "heavier"],
+  ["image", "screenshot", "picture", "photo", "png", "pic"],
+  ["before", "yesterday", "earlier", "previous", "past", "old", "ago"],
+  ["instant", "quick", "snappy", "fast"],
+  ["file", "document", "pdf"],
+  ["change", "changed", "differ", "different", "difference", "compare", "diff"],
+  ["review", "audit"],
+]
+threshold = 3.0
+
+# What a gray `next:` line says after an answer. The text is the command to run.
+[hints]
+small_answer = { text = "lm again --big", why = "not right? the bigger model" }
+truncated = { text = "--max-ctx {n}", why = "only part of the file was read" }
+low_confidence = { text = "see {img} --ocr", why = "the vision model was unsure: read the exact text" }
+repeat = { text = "lm again", why = "the same question twice gives the same answer: try a stronger model" }
+
+# Where a failed call points next. {code} is the error code in the --json envelope.
+[remedies]
+server_down = { remedy = "the local server was stopped; it restarts on the next call, or run lm doctor", next = "lm doctor" }
+model_missing = { remedy = "that model is not installed; lm models lists what is", next = "lm models" }
+timeout = { remedy = "it took too long; try a smaller input or a longer --timeout", next = "" }
+ctx_required = { remedy = "that intent needs a file; add --ctx FILE", next = "" }
+ctx_unreadable = { remedy = "the file could not be read; check the path", next = "" }
+ctx_empty = { remedy = "the file has no text in it; check the path or extract text first", next = "" }
+ctx_binary = { remedy = "the file is binary; extract its text first", next = "" }
+ctx_unsupported = { remedy = "that file type cannot be read directly; convert it to text or csv first", next = "" }
+ctx_too_large = { remedy = "the file is too big; cut it down or use lm gemini --file", next = "lm gemini --file FILE" }
+ctx_truncated = { remedy = "the table is larger than the read limit; narrow it or raise --max-ctx", next = "" }
+format_unreadable = { remedy = "the schema file is missing; check the --format path", next = "" }
+format_invalid = { remedy = "the schema file is not valid JSON", next = "" }
+sheet_missing = { remedy = "that sheet is not in the workbook; list them with --preflight", next = "q --preflight --ctx FILE --json" }
+judge_required = { remedy = "this intent needs a === JUDGE === section with a runnable check in the context", next = "" }
+invalid_args = { remedy = "a flag or argument was wrong; the message says which, and -h lists them", next = "" }
+no_such_entry = { remedy = "there is no such history entry; list yours first", next = "lm timeline" }
+cancelled = { remedy = "it was cancelled before it finished", next = "" }
+mlx_failed = { remedy = "the MLX read failed; run it again, or add -m minicpm-v4.6", next = "" }
+mlx_venv_missing = { remedy = "the project venv is missing; mlx-vlm lives in it", next = "lm doctor" }
+model_error = { remedy = "the vision model failed; run it again, or lm doctor", next = "lm doctor" }
+ocr_missing = { remedy = "install the text reader: npm install -g mac-ocr", next = "npm install -g mac-ocr" }
+ocr_failed = { remedy = "the text reader failed on that image; try again, or read it with the model", next = "" }
+measure_failed = { remedy = "the pixel measurement failed on that image; check it opens normally", next = "" }
+vlm_unavailable ={ remedy = "the model read was skipped; the measured evidence is still complete", next = "" }
+img_unreadable = { remedy = "the image could not be found; check the path", next = "lm read latest" }
+not_an_image = { remedy = "that file is not an image; check the path", next = "" }
+clipboard_empty = { remedy = "copy a screenshot first (Cmd-Ctrl-Shift-4), or read your newest saved one", next = "lm read latest" }
+crop_failed = { remedy = "the crop could not be made; check the image and the window", next = "" }
+capture_failed = { remedy = "the screen capture produced nothing; allow Screen Recording for your terminal", next = "" }
+no_screencapture = { remedy = "screen capture only works on macOS", next = "" }
+rerun_failed = { remedy = "the re-run of that extractor failed; run the diff without --only", next = "" }
+item_missing = { remedy = "an input file or directory was not found; check the path", next = "" }
+items_unreadable = { remedy = "the list of items could not be read; check the path", next = "" }
+no_items = { remedy = "give some files, or a list with --items-from", next = "lm fleet -h" }
+unknown_intent = { remedy = "there is no intent by that name; q intents lists them", next = "q intents" }
+load_failed = { remedy = "the model did not load; check what is installed and free memory", next = "lm status" }
+worker_died = { remedy = "a worker produced nothing; run again, or check the server", next = "lm doctor" }
+gemini_unavailable = { remedy = "gemini is not available; check the key in ~/.gemini/.env", next = "lm doctor" }
+gemini_error = { remedy = "gemini ended without an answer; lm gemini show -1 has the steps", next = "lm gemini show -1" }
+bad_model = { remedy = "that gemini model is not in the list; lm gemini models shows it", next = "lm gemini models" }
+repomix_missing = { remedy = "install the repo packer: npm install -g repomix", next = "npm install -g repomix" }
+repomix_failed = { remedy = "the repo could not be packed; check the directory", next = "" }
+venv_missing = { remedy = "the project venv is missing; see the setup notes", next = "lm doctor" }
+secrets_found = { remedy = "secret-looking text was found; clean those files before indexing", next = "" }
+no_index = { remedy = "nothing is indexed yet; build the index first", next = "lm rag index docs/" }
+search_failed = { remedy = "retrieval failed; check the index with lm rag status", next = "lm rag status" }
+answer_failed = { remedy = "the answer step failed; try again, or check the server", next = "lm doctor" }
+ax_missing = { remedy = "install the accessibility reader: cargo install --git https://github.com/watzon/ax-cli", next = "" }
+ax_failed = { remedy = "the accessibility tree could not be read; check the app name", next = "" }
+img_unreadable_ui = { remedy = "the screenshot could not be found; check the path", next = "" }
+inventory_failed = { remedy = "the UI read failed; try see --ui on the image directly", next = "" }
+judge_failed = { remedy = "the judge call failed; try again, or check the server", next = "lm doctor" }
+judge_incomplete = { remedy = "the judge did not rule on every claim; try again or use fewer claims", next = "" }
+
+# ───────────────────────────── daily jobs ─────────────────────────────
+
+[[job]]
+name = "ask"
+kind = "job"
+aliases = []
+summary = "a quick answer from the small local model"
+usage = 'lm "question"'
+delegate = "q"
+front_label = 'lm "question"'
+front_says = 'answer; an image path, a file or "gemini ..." in it routes itself'
+help_says = "get a quick answer"
+more_label = ""
+note = "Wrong or thin answer? lm help again. A question about something current? lm help web."
+inputs = "a question as text; an image or file path inside it is routed for you"
+output = "plain text answer on stdout; with q --json: {ok, text, model, ms, ...}"
+exit_codes = "0 answered, 2 bad usage, 10 server down, 11 model missing, 13 timeout"
+cost_tier = "small"
+cost_secs = "2-5 (about 5 s on the first call after a pause)"
+leaves_mac = false
+side_effects = "loads the small model, writes logs/q-history.jsonl"
+keywords = ["quick answer", "ask a question", "ask the model", "explain", "how do i", "what does this mean"]
+see_also = ["fast", "again", "cmd"]
+next = "small_answer"
+examples = [
+  { cmd = 'lm "how do I see what is using port 5432"', says = "the answer comes back in a few seconds" },
+  { cmd = "lm fast 1h", says = "the first answer after a pause takes about 5 s; this keeps it instant" },
+  { cmd = 'lm "what text is in ~/Desktop/shot.png"', says = "an image path in the question goes to the image reader" },
+]
+
+[[job]]
+name = "cmd"
+kind = "job"
+aliases = []
+summary = "one shell command, checked before you run it"
+usage = 'lm cmd "task"'
+delegate = "q"
+front_label = 'lm cmd "task"'
+front_says = "one shell command, checked against the tool's own --help"
+help_says = "get one shell command you can trust"
+note = "It checks that the program exists and that each --flag appears in its own --help, then prints a gray line saying what it found. It never runs the command. A flag it cannot find means the model guessed: lm again --web."
+inputs = "a task described in words"
+output = "the command and nothing else on stdout; a gray line on stderr says what was checked"
+exit_codes = "0 produced, 2 bad usage, 10 server down, 13 timeout"
+cost_tier = "small"
+cost_secs = "2-5"
+leaves_mac = false
+side_effects = "loads the small model, writes logs/q-history.jsonl; never runs the command it prints"
+keywords = ["shell command", "terminal command", "command line for", "one-liner", "give me a command", "how do i run"]
+see_also = ["ask", "again"]
+next = "small_answer"
+examples = [
+  { cmd = 'lm cmd "list the 5 largest files in ~/Downloads"', says = "prints the command and nothing else" },
+  { cmd = 'q check "ls -lah --sort=size"', says = "check a command you already have, without running it", keywords = ["check this command"] },
+]
+
+[[job]]
+name = "read"
+kind = "job"
+aliases = ["screenshot", "ui", "ocr", "text"]
+summary = "text or an answer out of an image"
+usage = 'lm read <img|paste|latest> ["q"]'
+delegate = "see"
+front_label = 'lm read <img|paste|latest> ["q"]'
+front_says = "text or an answer from an image (exact text is read first)"
+help_says = "get the text or an answer out of an image or screenshot"
+note = "Exact readers (text, counts) run first; the vision model only adds what they cannot see."
+inputs = "an image path, 'paste' (the clipboard image) or 'latest' (the newest screenshot), plus an optional question"
+output = "plain text; with --json one object: {ok, text, model, ms, evidence}; with --ui --json the parsed element list under .data"
+exit_codes = "0 read, 2 bad usage, 12 image or clipboard empty, 10/11 vision model failed or missing, 13 timeout"
+cost_tier = "vision"
+cost_secs = "1 (--ocr) to 30 (cold vision model)"
+leaves_mac = false
+side_effects = "loads a vision model, reads the clipboard for 'paste', writes logs/see-history.jsonl and outputs/see/"
+keywords = ["text from a screenshot", "read an image", "read the screenshot", "ocr", "what does the picture say", "read latest screenshot"]
+see_also = ["diff", "count", "ui-verify"]
+next = "low_confidence"
+examples = [
+  { cmd = "lm read shot.png", says = "what is in the image" },
+  { cmd = 'lm read shot.png "what is the build id?"', says = "asks for text, IDs and numbers are read exactly first" },
+  { cmd = "lm read paste", says = "the screenshot on your clipboard (Cmd-Ctrl-Shift-4)", keywords = ["clipboard"] },
+  { cmd = "lm read latest", says = "your newest screenshot file", keywords = ["last screenshot", "newest screenshot", "latest screenshot"] },
+  { cmd = "see shot.png --ocr", says = "just the exact text, about a second", keywords = ["exact text", "ocr"] },
+  { cmd = "see shot.png --ui --json", says = "a structured list of the buttons and labels", keywords = ["buttons", "ui elements"] },
+  { cmd = 'lm ui-verify shot.png "Save is disabled"', says = "check one claim about a screenshot", keywords = ["verify a claim"] },
+]
+
+[[job]]
+name = "diff"
+kind = "job"
+aliases = ["compare"]
+summary = "what changed between two images"
+usage = "lm diff A B"
+delegate = "see"
+front_label = "lm diff A B"
+front_says = "what changed between two images, and where"
+help_says = "see what changed between two images"
+note = "The summary is measured from the pixels. A vision model adds its own read when one is free; judging whether the change matters is yours."
+inputs = "two image paths, and an optional focus phrase"
+output = "a three-line plain summary (where, whether text changed, whether colours changed) and a heatmap; --json adds the full evidence pack"
+exit_codes = "0 compared, 2 bad usage, 12 image missing or not an image"
+cost_tier = "no model"
+cost_secs = "1-3 (plus a vision read if memory allows)"
+leaves_mac = false
+side_effects = "writes logs/see-history.jsonl and outputs/see/"
+keywords = ["what changed between two images", "compare two screenshots", "before and after", "difference between images"]
+see_also = ["read", "count"]
+next = ""
+examples = [
+  { cmd = "lm diff before.png after.png", says = "a three-line summary: where, whether text changed, whether colours changed" },
+  { cmd = "see diff a.png b.png --no-read --json", says = "the measured evidence only, no model" },
+]
+
+[[job]]
+name = "doc"
+kind = "job"
+aliases = ["document", "qa"]
+summary = "ask about, or summarize, a file"
+usage = 'lm doc <file> ["q"]'
+delegate = "q"
+front_label = 'lm doc <file> ["q"]'
+front_says = "ask about or summarize a file (says how much of it was read)"
+help_says = "ask about, or summarize, a file"
+note = "It tells you how much of the file it read. A long file is cut at 16,000 characters: raise it with --max-ctx 40000, or use cat file | lm gemini \"...\" (the file leaves this Mac)."
+inputs = "a file (PDF, Word, HTML, text, spreadsheet) and an optional question"
+output = "plain text answer, plus a gray line saying how much of the file was read"
+exit_codes = "0 answered, 2 bad usage, 12 file missing or unreadable, 10/11 server or model, 13 timeout"
+cost_tier = "small"
+cost_secs = "3-15 depending on file size"
+leaves_mac = false
+side_effects = "loads the small model, extracts text locally, writes logs/q-history.jsonl"
+keywords = ["summarize a file", "summarise this document", "ask about a file", "what does this pdf say", "read this report", "tldr of a file"]
+see_also = ["ask", "gemini", "rag"]
+next = "truncated"
+examples = [
+  { cmd = "lm doc report.pdf", says = "a summary (PDF, Word, HTML, text, spreadsheets)" },
+  { cmd = 'lm doc report.pdf "what is the decision?"', says = "an answer grounded in the file" },
+  { cmd = "q --preflight --ctx report.pdf", says = "how big the file is, before asking" },
+]
+
+[[job]]
+name = "again"
+kind = "job"
+aliases = ["retry"]
+summary = "the answer was wrong; ask the same thing on a stronger model"
+usage = "lm again [--big|--code|--web]"
+delegate = "q"
+front_label = "lm again [--big|--web]"
+front_says = "redo your last question on a stronger model (--web leaves this Mac ☁)"
+help_says = "the answer was wrong: try again, stronger"
+note = "Answers are deterministic: asking the same thing twice gives the same answer, so retyping never helps."
+inputs = "none; it takes your last question from this terminal's history"
+output = "a new answer on a stronger lane, in the same shape as q"
+exit_codes = "0 answered, 2 bad usage, 12 no earlier call from this terminal, 10/11/13 as for q"
+cost_tier = "big"
+cost_secs = "10-40 (loads the big model)"
+leaves_mac = false
+side_effects = "loads a bigger model, writes logs/q-history.jsonl; --web sends the question off this Mac"
+keywords = ["redo", "try again", "answer was wrong", "stronger model", "bigger model", "wrong answer", "thin answer"]
+see_also = ["ask", "web"]
+next = "repeat"
+examples = [
+  { cmd = "lm again", says = "your last question, one step stronger (small, then big)", keywords = ["stronger"] },
+  { cmd = "lm again --big", says = "the bigger reasoning model", keywords = ["bigger model", "reasoning"] },
+  { cmd = "lm again --code", says = "the coding model", keywords = ["coding model"] },
+  { cmd = "lm again --web", says = "search the web first (the question leaves this Mac)", cloud = true },
+  { cmd = 'q -c "and sorted by size?"', says = "a follow-up that continues your last exchange", keywords = ["follow up", "continue"] },
+]
+
+[[job]]
+name = "find"
+kind = "job"
+aliases = ["history", "retrieval-history"]
+summary = "search the answers you got before"
+usage = 'lm find "words"'
+front_label = 'lm find "words"'
+front_says = "search your past answers"
+help_says = "find an answer you got before"
+note = "Open one with the handle it prints: q show 3689, see show 1433."
+inputs = "one or more words; all must appear"
+output = "rows like q#3689  10-21 09:12  question  → first line of the answer; yours first, others dimmed"
+exit_codes = "0 searched (even with no match), 2 bad usage"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "reads the history files only"
+keywords = ["find an answer i got before", "search past answers", "search my history", "what did i ask", "old answer"]
+see_also = ["timeline", "last"]
+next = ""
+examples = [
+  { cmd = 'lm find "port 5432"', says = "matching questions and answers across q, see, gemini and imagine, yours first" },
+  { cmd = "lm timeline 15", says = "your last 15 calls, newest last" },
+  { cmd = "lm timeline --all", says = "include agents and hooks (dimmed)" },
+  { cmd = "lm last", says = "your latest call, in full" },
+]
+
+[[job]]
+name = "review"
+kind = "job"
+aliases = []
+summary = "review code, a PR or your uncommitted changes"
+usage = "lm review [PR|files|dir]"
+front_label = "lm review"
+front_says = "review your uncommitted changes (a few minutes, on the code model)"
+help_says = "review code, a PR or your uncommitted changes"
+more_label = "lm review <x>"
+more_says = "review a PR / files / folder / diff (local coder)"
+note = "More flags: review -h"
+inputs = "nothing (uncommitted changes), a PR number, files or a folder"
+output = "a prose review; with --findings a schema-valid list of findings"
+exit_codes = "0 reviewed, 1 failed, 2 bad usage, 3 no structured findings after a retry, 12 input missing"
+cost_tier = "code"
+cost_secs = "120-300 (loads the 23 GB code model)"
+leaves_mac = false
+side_effects = "loads the code model (23 GB), reads git state, writes logs/q-history.jsonl"
+keywords = ["review my changes", "code review", "review a pr", "review uncommitted changes", "check my diff"]
+see_also = ["fleet"]
+next = ""
+examples = [
+  { cmd = "lm review", says = "your uncommitted changes (takes a few minutes; loads the 23 GB code model)" },
+  { cmd = "review 214", says = "a GitHub PR", keywords = ["pr"] },
+]
+
+# ───────────────────────────── keep it handy ─────────────────────────────
+
+[[job]]
+name = "status"
+kind = "job"
+aliases = ["memory"]
+summary = "what is loaded and what is free"
+usage = "lm status [--json]"
+front_label = "lm status"
+front_says = "what is loaded, free memory, when it unloads"
+help_says = "see what is loaded and how much memory is free"
+more_label = "lm status"
+more_says = "server + warm + models at a glance"
+inputs = "none"
+output = "server state, free memory, loaded models with unload times, MLX processes; --json is the machine view other tools read"
+exit_codes = "0 always when it could print"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "none"
+keywords = ["what is using memory", "memory", "what is loaded", "free memory", "is the server up", "what models are running"]
+see_also = ["models", "doctor", "fast"]
+next = ""
+examples = [
+  { cmd = "lm status", says = "server, free memory, loaded models, when they unload" },
+  { cmd = "lm models", says = "every installed model and which tier it is" },
+  { cmd = "lm doctor", says = "a health check of the whole toolkit" },
+]
+
+[[job]]
+name = "fast"
+kind = "job"
+aliases = []
+summary = "keep answers instant"
+usage = "lm fast [1h|off]"
+front_label = "lm fast 1h"
+front_says = "keep answers instant for an hour (lm fast off to free the memory)"
+help_says = "keep answers instant for a while"
+note = "Without it the first answer after a pause takes about 5 s while the model loads. Nothing stays loaded on its own."
+inputs = "a duration such as 1h or 30m, or 'off'"
+output = "a line saying what is loaded and when it unloads"
+exit_codes = "0 done, 2 bad duration, 10 server down, 11 model missing"
+cost_tier = "small"
+cost_secs = "5 (loads the small model once)"
+leaves_mac = false
+side_effects = "loads the small model and holds about 5 GB of memory until the lease ends or you run lm fast off"
+keywords = ["keep the model loaded", "keep answers instant", "warm up the model", "instant answers", "make it faster"]
+see_also = ["status", "warm"]
+next = ""
+examples = [
+  { cmd = "lm fast 1h", says = "q answers in under a second until the time it prints" },
+  { cmd = "lm fast off", says = "free the memory now", keywords = ["unload", "free memory"] },
+  { cmd = "lm status", says = "what is loaded and when it unloads" },
+]
+
+[[job]]
+name = "help"
+kind = "job"
+aliases = []
+summary = "the steps for one job"
+usage = "lm help [job]"
+front_label = "lm help <job>"
+front_says = "the steps for one job: ask, cmd, doc, read, diff, count, again, find, web, fast, failed"
+help_says = "the list of jobs"
+more_label = "lm help <job>"
+more_says = "short route from a job to the right command"
+inputs = "a job name, or nothing for the list"
+output = "a short screen of steps for that job"
+exit_codes = "0 shown, 2 unknown job"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "none"
+keywords = ["help with a job", "how do i use lm", "list the jobs", "what can lm do"]
+see_also = ["how", "more", "examples"]
+next = ""
+examples = [
+  { cmd = "lm help", says = "the list of jobs" },
+  { cmd = "lm help read", says = "the steps for reading an image" },
+  { cmd = "lm --capabilities", says = "the full menu, for an agent", keywords = ["menu", "capabilities"] },
+]
+
+[[job]]
+name = "more"
+kind = "job"
+aliases = []
+summary = "every command, including the rarely used ones"
+usage = "lm more"
+front_label = "lm more"
+front_says = "everything else: gemini ☁, fleet, rag, index, imagine, probe, bench, ui-verify"
+help_says = "every command, including the rarely used ones"
+inputs = "none"
+output = "the full command list with a few examples"
+exit_codes = "0 shown"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "none"
+keywords = ["every command", "all commands", "the full list"]
+see_also = ["help", "examples"]
+next = ""
+examples = [
+  { cmd = "lm more", says = "the full command list" },
+]
+
+[[job]]
+name = "how"
+kind = "job"
+aliases = []
+summary = "find the command for what you want, without running it"
+usage = 'lm how "what I want" [--go] [--json]'
+front_label = 'lm how "what I want"'
+front_says = "find the command for it, without running anything (--go runs it)"
+more_label = 'lm how "..."'
+more_says = "say what you want, get the command (--go runs it)"
+help_says = "say what you want, get the command"
+note = "Matching is by words first and costs nothing. Only when no job matches well does it ask the small model, with the registry as context. It never runs anything without --go."
+inputs = "what you want, in your own words"
+output = "the command, one line on why, up to two alternatives; --json: {command, job, why, alternatives, matched_by}"
+exit_codes = "0 found, 2 bad usage, 12 nothing matched (with --no-model), 10/11 model failed"
+cost_tier = "no model"
+cost_secs = "under 1 (about 5 when it falls back to the small model)"
+leaves_mac = false
+side_effects = "none unless --go; the model fallback loads the small model and writes logs/q-history.jsonl"
+keywords = ["which command", "what command", "find the command", "which lm command"]
+see_also = ["help", "more"]
+next = ""
+examples = [
+  { cmd = 'lm how "text from my last screenshot"', says = "prints the command, runs nothing" },
+  { cmd = 'lm how "what is using memory" --go', says = "prints it, then runs it" },
+  { cmd = 'lm how "redo that on a bigger model" --json', says = "the answer as JSON for a script" },
+]
+
+[[job]]
+name = "count"
+kind = "topic"
+aliases = []
+summary = "count things in an image by measuring pixels"
+usage = "see count <img> [--color C]"
+help_says = "count things in an image"
+note = 'Asking "how many" through lm read runs this first.'
+inputs = "an image, and optionally a colour"
+output = "an exact count (and positions with --json); says ambiguous rather than guess"
+exit_codes = "0 counted, 2 bad usage, 12 image missing"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "writes logs/see-history.jsonl"
+keywords = ["count the objects", "how many things in the image", "count the dots", "how many squares"]
+see_also = ["read", "diff"]
+next = ""
+examples = [
+  { cmd = "see count dots.png", says = "how many objects (exact, instant, no model)" },
+  { cmd = "see count squares.png --color blue", says = "only the blue ones" },
+  { cmd = "see odd grid.png", says = "the one item that differs among repeated items", keywords = ["odd one out", "outlier"] },
+]
+
+[[job]]
+name = "web"
+kind = "topic"
+aliases = ["current"]
+summary = "something current: versions, news, docs"
+usage = 'q --web "question"'
+help_says = "ask about something current"
+note = "Both send your question off this Mac. The small local model cannot know what is current."
+inputs = "a question about something current"
+output = "an answer built from web results, with citations"
+exit_codes = "0 answered, 2 bad usage, 10 network or backend failed, 13 timeout"
+cost_tier = "cloud"
+cost_secs = "5-30"
+leaves_mac = true
+side_effects = "sends your question to a web search (and to Gemini for research); writes history"
+keywords = ["search the web", "something current", "latest version", "look it up online", "news"]
+see_also = ["gemini", "again"]
+next = ""
+examples = [
+  { cmd = 'q --web "current node LTS version?"', says = "searches the web, answers from the results with citations", cloud = true },
+  { cmd = 'lm gemini research "state of X"', says = "a slower, deeper lookup (Gemini)", cloud = true },
+]
+
+[[job]]
+name = "failed"
+kind = "topic"
+aliases = ["errors"]
+summary = "work out why a call failed"
+usage = "lm timeline 10 --errors"
+help_says = "work out why a call failed"
+note = "A stopped server restarts on the next call, so retrying is usually enough."
+inputs = "none"
+output = "failed calls, each with its reason and what to do"
+exit_codes = "0 listed"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "none"
+keywords = ["why did it fail", "a call failed", "show errors", "what went wrong", "error"]
+see_also = ["timeline", "last", "doctor"]
+next = ""
+examples = [
+  { cmd = "lm timeline 10 --errors", says = "your failed calls, each with its reason and what to do" },
+  { cmd = "lm last", says = "the latest call in full, error included" },
+  { cmd = "lm doctor", says = "checks the server, models and PATH" },
+]
+
+[[job]]
+name = "json"
+kind = "topic"
+aliases = ["machine"]
+summary = "an answer a script can read"
+usage = "q --json ..."
+help_says = "an answer a script can read"
+inputs = "any q prompt, optionally a --format schema"
+output = "one JSON object: text, model and timing; with --format the parsed answer under .data"
+exit_codes = "0 ok, otherwise {ok:false, code, message, remedy, next} with the exit code from the table"
+cost_tier = "small"
+cost_secs = "2-5"
+leaves_mac = false
+side_effects = "loads the small model, writes history"
+keywords = ["machine readable", "json output", "answer for a script", "structured answer"]
+see_also = ["table", "q"]
+next = ""
+examples = [
+  { cmd = 'q --json "is 91 a prime number? answer yes or no"', says = "one JSON object with text, model and timing" },
+  { cmd = 'q --json --format schema.json "classify: ..."', says = "the answer follows your schema, parsed under .data" },
+]
+
+[[job]]
+name = "table"
+kind = "topic"
+aliases = ["describe-data"]
+summary = "exact rows, missing values, and numeric ranges"
+usage = "q describe-data --ctx data.csv --json"
+help_says = "exact rows, missing values, and numeric ranges"
+inputs = "a CSV, TSV, JSON or XLSX table"
+output = "a fixed profile (rows, columns, missing values, ranges) computed without a model"
+exit_codes = "0 profiled, 12 file unreadable, 12 table larger than the read limit"
+cost_tier = "no model"
+cost_secs = "under 2"
+leaves_mac = false
+side_effects = "writes logs/q-history.jsonl"
+keywords = ["profile a table", "csv columns and missing values", "spreadsheet statistics", "describe the data"]
+see_also = ["doc", "json"]
+next = ""
+examples = [
+  { cmd = "q describe-data --ctx data.csv --json", says = "profile facts without model arithmetic" },
+  { cmd = "q --preflight --ctx data.xlsx --json", says = "inspect workbook sheets first", section = "XLSX" },
+  { cmd = "q describe-data --ctx data.xlsx --sheet Summary --json", says = "name a sheet when several exist", section = "XLSX" },
+]
+
+# ───────────────────────────── the rest (lm more) ─────────────────────────────
+
+[[job]]
+name = "gemini"
+kind = "job"
+aliases = ["research"]
+summary = "the cloud lane: huge documents and web research"
+usage = 'lm gemini "..."'
+more_label = 'lm gemini "..."'
+more_says = "the gemini lane — huge-context ingestion, ideation (wrapper-only)"
+help_says = "the cloud lane: huge documents and web research"
+note = "Gemini is an external service: the text you send leaves this Mac. Sample-check what it says."
+inputs = "a prompt, optionally a file, piped stdin or a whole repo"
+output = "the answer on stdout; --json {ok, text, ...}; show N opens a past call"
+exit_codes = "0 answered, 2 bad usage, 10 call failed, 11 gemini unavailable, 12 input missing, 13 timeout"
+cost_tier = "cloud"
+cost_secs = "10-120"
+leaves_mac = true
+side_effects = "sends your text and files to Gemini; writes logs/gem-history.jsonl"
+keywords = ["gemini", "huge document", "very long file", "whole repo", "ingest a repo", "research a topic"]
+see_also = ["web", "doc"]
+next = ""
+examples = [
+  { cmd = 'lm gemini --file big.md "summarize the risks"', says = "a file too big for the local model", cloud = true },
+  { cmd = 'lm gemini research "state of X"', says = "web lookup, with null where it is unsure", cloud = true },
+  { cmd = "lm gemini ingest-repo .", says = 'load a whole repo, then lm gemini ask "..."', cloud = true },
+]
+
+[[job]]
+name = "fleet"
+kind = "job"
+aliases = ["batch"]
+summary = "ask one question of many independent files"
+usage = "lm fleet <intent> [--prompt P] files..."
+more_label = "lm fleet <intent> ..."
+more_says = "fan one intent across N files (envelope gate; optional content judge)"
+help_says = "ask one question of many independent files"
+note = "The default check only confirms each answer is non-empty; add a task-specific --judge."
+inputs = "an intent and a list of files (or --items-from a list)"
+output = "a run directory with one answer per file and a pass/fail summary"
+exit_codes = "0 ran, 2 bad usage, 11 server or model, 12 input missing"
+cost_tier = "small"
+cost_secs = "depends on file count; -j sets the parallelism"
+leaves_mac = false
+side_effects = "loads a model for the whole run, writes outputs/fleet/ and logs/fleet-history.jsonl"
+keywords = ["many files at once", "batch of files", "run on every file", "fan out across files"]
+see_also = ["review", "doc"]
+next = ""
+examples = [
+  { cmd = 'lm fleet qa --prompt "who owns this?" docs/*.md', says = "fan out across files" },
+  { cmd = "lm fleet sample <run-dir>", says = "look at a sample of what it answered" },
+]
+
+[[job]]
+name = "rag"
+kind = "job"
+aliases = ["retrieval"]
+summary = "search exact text first, then by meaning"
+usage = "lm rag index|search|ask ..."
+more_label = "lm rag index|search"
+more_says = "local vector retrieval: index docs, search by meaning"
+help_says = "search exact text first, then by meaning"
+inputs = "markdown files or folders to index, then a query"
+output = "the best-matching passages with their sources"
+exit_codes = "0 ok, 2 bad usage, 12 nothing indexed or file missing, 10 retrieval failed"
+cost_tier = "small"
+cost_secs = "indexing: minutes for a big folder; search: under 2"
+leaves_mac = false
+side_effects = "loads the embedding model, writes a local index database"
+keywords = ["search by meaning", "semantic search", "index my docs", "vector search"]
+see_also = ["doc", "index"]
+next = ""
+examples = [
+  { cmd = 'rg -n "term" docs/', says = "find exact names and paths" },
+  { cmd = "lm rag index docs/", says = "build a local search-by-meaning index" },
+  { cmd = 'lm rag search "concept"', says = "find related passages" },
+]
+
+[[job]]
+name = "index"
+kind = "job"
+aliases = []
+summary = "repo symbol map: build once, ask where a name is defined"
+usage = "lm index [find X]"
+more_label = "lm index [find X]"
+more_says = 'repo symbol map — build once, "where is X" instantly'
+help_says = "where is a function or class defined"
+inputs = "a repo, then a symbol name"
+output = "file:line of each definition"
+exit_codes = "0 ok, 2 bad usage"
+cost_tier = "no model"
+cost_secs = "under 1 after the first build"
+leaves_mac = false
+side_effects = "writes an index file in the repo"
+keywords = ["where is this function defined", "symbol map", "find a symbol in the repo", "where is the class"]
+see_also = ["rag"]
+next = ""
+examples = [
+  { cmd = "lm index find fleet_worker", says = "where is X, no model call" },
+]
+
+[[job]]
+name = "imagine"
+kind = "job"
+aliases = []
+summary = "draw an image locally"
+usage = 'imagine "prompt"'
+more_label = 'lm imagine "..."'
+more_says = "local image generation (Flux/Qwen on the GPU)"
+help_says = "draw an image locally"
+inputs = "a prompt; refine takes a past generation number"
+output = "an image file under outputs/imagine/"
+exit_codes = "0 drawn, 1 generation failed, 2 bad usage, 12 model half-downloaded or missing"
+cost_tier = "mlx"
+cost_secs = "60-120 with the default model"
+leaves_mac = false
+side_effects = "loads a large image model onto the GPU, writes outputs/imagine/ and its history"
+keywords = ["draw an image", "generate a picture", "make an image", "image generation"]
+see_also = []
+next = ""
+examples = [
+  { cmd = 'imagine "a cozy reading nook"', says = "about 1-2 minutes with the default model, free, offline" },
+  { cmd = 'imagine refine 12 "warmer light"', says = "steer a past image" },
+]
+
+[[job]]
+name = "probe"
+kind = "job"
+aliases = []
+summary = "judge whether a local model is trustworthy"
+usage = "lm probe <model>"
+more_label = "lm probe <model>"
+more_says = "judge if a local model is trustworthy — reliability/judgment eval"
+help_says = "judge whether a local model is trustworthy"
+inputs = "a model name"
+output = "a reliability and judgment report"
+exit_codes = "0 ran, 1 failed, 2 bad usage"
+cost_tier = "big"
+cost_secs = "minutes"
+leaves_mac = false
+side_effects = "loads the model under test, writes probe reports"
+keywords = ["is this model trustworthy", "evaluate a model", "test a local model"]
+see_also = ["bench", "models"]
+next = ""
+examples = [
+  { cmd = "lm probe gemma4:26b", says = "run the reliability eval on one model" },
+]
+
+[[job]]
+name = "bench"
+kind = "job"
+aliases = []
+summary = "run a fixed behavior and latency fixture set"
+usage = "lm bench <set>"
+more_label = "lm bench <set>"
+more_says = "run a fixed behavior and latency fixture set"
+help_says = "run a fixed behavior and latency fixture set"
+inputs = "a fixture set name such as quick"
+output = "correctness, latency and disk figures"
+exit_codes = "0 ran, 2 bad usage"
+cost_tier = "small"
+cost_secs = "minutes"
+leaves_mac = false
+side_effects = "loads models, writes benchmark output"
+keywords = ["benchmark the models", "measure latency", "run the bench"]
+see_also = ["probe", "doctor"]
+next = ""
+examples = [
+  { cmd = "lm bench quick", says = "fixed correctness, latency, disk workload" },
+]
+
+[[job]]
+name = "ui-verify"
+kind = "job"
+aliases = []
+summary = "check claims about a screenshot against a UI inventory"
+usage = 'lm ui-verify <img> "claim"'
+more_label = "lm ui-verify <img> ..."
+more_says = "check enumerable UI claims against a screenshot (local verify gate)"
+help_says = "check claims about a screenshot"
+inputs = "a screenshot (or --app Name) and one or more claims in words"
+output = "a pass, fail or unsure verdict for each claim"
+exit_codes = "0 all passed, 1 a claim did not pass, 2 bad usage, 10 judge failed, 12 image missing"
+cost_tier = "vision"
+cost_secs = "20-60"
+leaves_mac = false
+side_effects = "loads the vision and small models, reads the accessibility tree for --app"
+keywords = ["verify the ui", "is the button disabled", "check a ui claim", "does the screenshot show"]
+see_also = ["read"]
+next = ""
+examples = [
+  { cmd = 'lm ui-verify shot.png "the CTA is disabled"', says = "strict pass/fail/unsure gate" },
+  { cmd = 'lm ui-verify --app Finder "there is a Trash item"', says = "judge the live accessibility tree" },
+]
+
+[[job]]
+name = "opencode"
+kind = "job"
+aliases = []
+summary = "opencode on the local code model, leased for the session"
+usage = "lm opencode [args]"
+more_label = "lm opencode [args]"
+more_says = "opencode on the local code model — auto pin/unpin around the session"
+help_says = "opencode on the local code model"
+inputs = "whatever opencode takes"
+output = "the opencode session"
+exit_codes = "the exit code of opencode; 12 when opencode is not installed"
+cost_tier = "code"
+cost_secs = "30 to load; then interactive"
+leaves_mac = false
+side_effects = "holds the code model (23 GB) for the session, up to 4h, released on exit; writes logs/opencode-history.jsonl"
+keywords = ["coding agent on the local model", "run opencode", "local coding session"]
+see_also = ["review", "fast"]
+next = ""
+examples = [
+  { cmd = "lm opencode", says = "start opencode with the code model loaded, released when you exit" },
+]
+
+[[job]]
+name = "timeline"
+kind = "job"
+aliases = []
+summary = "your recent calls, newest last"
+usage = "lm timeline [N] [--errors] [--tool T] [--all] [--json]"
+more_label = "lm timeline [N]"
+more_says = "merged q/imagine/see/fleet/gemini history (--errors, --tool T, --json)"
+help_says = "your recent calls, newest last"
+note = "Each row starts with a handle like q#3689: open it with q show 3689."
+inputs = "optionally how many rows, a tool, --errors"
+output = "rows like q#3689  10-21 09:12  intent  question  → answer; --json adds mine, answer, code"
+exit_codes = "0 listed, 2 bad usage"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "reads the history files only"
+keywords = ["my recent calls", "what did i run recently", "history of calls", "recent activity"]
+see_also = ["last", "find", "failed"]
+next = ""
+examples = [
+  { cmd = "lm timeline", says = "your last 20 calls across q, see, imagine, fleet and gemini" },
+  { cmd = "lm timeline --errors", says = "only failed calls, each with its reason and what to do" },
+  { cmd = "lm timeline --all", says = "also agents, hooks and other terminals (dimmed)" },
+]
+
+[[job]]
+name = "last"
+kind = "job"
+aliases = []
+summary = "your latest call, in full"
+usage = "lm last [tool] [--all]"
+more_label = "lm last [tool]"
+more_says = "open the newest history entry in full (optionally of one tool)"
+help_says = "your latest call, in full"
+inputs = "optionally a tool name"
+output = "the newest history entry of yours, in full"
+exit_codes = "0 shown, 12 none of your calls from this terminal"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "reads the history files only"
+keywords = ["open the last call in full", "show my latest call", "last answer in full"]
+see_also = ["timeline", "find"]
+next = ""
+examples = [
+  { cmd = "lm last", says = "your newest call, in full" },
+  { cmd = "lm last gemini", says = "the newest gemini call, in full" },
+]
+
+[[job]]
+name = "models"
+kind = "job"
+aliases = []
+summary = "installed models and which tier each is"
+usage = "lm models [--json]"
+more_label = "lm models"
+more_says = "list usable models and tiers (● resident; --json)"
+help_says = "installed models and which tier each is"
+inputs = "none"
+output = "each installed model, whether it is loaded, and the tier it fills; --json adds the gemini list"
+exit_codes = "0 listed, 10 server down"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "none"
+keywords = ["list the models", "which models are installed", "what models do i have", "model tiers"]
+see_also = ["status", "doctor"]
+next = ""
+examples = [
+  { cmd = "lm models", says = "installed models, which are loaded, and which tier each fills" },
+  { cmd = "lm models --json", says = "the same as JSON" },
+]
+
+[[job]]
+name = "doctor"
+kind = "job"
+aliases = []
+summary = "health check of the whole toolkit"
+usage = "lm doctor [--json]"
+more_label = "lm doctor"
+more_says = "smoke-check the toolkit (deps, tiers, vision, venv, PATH; --json)"
+help_says = "health check of the whole toolkit"
+inputs = "none"
+output = "one pass or fail line per dependency; --json {ok, failed, checks}"
+exit_codes = "0 all passed, 1 a check failed"
+cost_tier = "no model"
+cost_secs = "1-3"
+leaves_mac = false
+side_effects = "none"
+keywords = ["health check", "is everything working", "something is broken", "check the toolkit"]
+see_also = ["status", "failed"]
+next = ""
+examples = [
+  { cmd = "lm doctor", says = "one pass or fail line per dependency; exits 1 if any fail" },
+  { cmd = "lm doctor --json", says = "the same as JSON" },
+]
+
+[[job]]
+name = "examples"
+kind = "job"
+aliases = []
+summary = "a showcase of everything, grouped by job"
+usage = "lm examples"
+more_label = "lm examples"
+more_says = "colored, comprehensive showcase of the whole suite"
+help_says = "a showcase of everything, grouped by job"
+inputs = "none"
+output = "real commands you can paste, grouped by job"
+exit_codes = "0 shown"
+cost_tier = "no model"
+cost_secs = "under 1"
+leaves_mac = false
+side_effects = "none"
+keywords = ["show me examples", "examples of everything", "a showcase"]
+see_also = ["help", "more"]
+next = ""
+examples = [
+  { cmd = "lm examples", says = "real commands you can paste, grouped by job" },
+]
+
+# ───────────────────────────── the tools behind the jobs ─────────────────────────────
+
+[[job]]
+name = "q"
+kind = "tool"
+aliases = []
+summary = "quick local LLM companion: answers, shell commands, commit messages, file Q&A"
+usage = 'q [intent] "<prompt>" [--big|--code|--web] [--ctx FILE] [--json]'
+more_label = 'lm q "..."'
+more_says = "quick local LLM — answers, macOS cmds, titles, file Q&A; size tiers"
+help_says = "the quick-answer tool behind lm ask, lm cmd and lm doc"
+inputs = "a prompt, optional intent, optional document (--ctx FILE or stdin)"
+output = "plain text; --json one object; --stream-json NDJSON; --format SCHEMA adds parsed .data"
+exit_codes = "0 ok, 2 bad usage, 10 server down, 11 model missing, 12 input unreadable, 13 timeout, 127 tool missing, 130 cancelled"
+cost_tier = "small"
+cost_secs = "2-5 small, 10-40 big"
+leaves_mac = false
+side_effects = "loads a model, writes logs/q-history.jsonl; --web sends the question off this Mac"
+keywords = ["q tool", "local llm"]
+see_also = ["ask", "cmd", "doc", "json"]
+next = "small_answer"
+examples = [
+  { cmd = 'q "how do I check disk usage"', says = "terse answer" },
+  { cmd = 'q cmd "kill everything on port 3001"', says = "one macOS command, checked against its --help" },
+  { cmd = "git diff | q commit", says = "commit message from the diff" },
+  { cmd = "q summarize --file report.pdf", says = "PDF, Word and the like extracted locally" },
+  { cmd = 'q --big "reason through this tradeoff"', says = "the heavier model, on demand" },
+  { cmd = "q intents", says = "list the available intents" },
+  { cmd = "q show -1", says = "your latest call, in full" },
+]
+
+[[job]]
+name = "see"
+kind = "tool"
+aliases = []
+summary = "read an image into text with a local vision model (the image never leaves this Mac)"
+usage = 'see <image|paste|latest> ["question"] [--ocr|--ui] [--json]'
+more_label = "lm see <img>"
+more_says = "read an image/screenshot into text (local VLM)"
+help_says = "the image tool behind lm read and lm diff"
+inputs = "an image path, paste, latest, or a subcommand (count, odd, diff, more, history, show)"
+output = "plain text; --json one object; --ui --json adds the parsed element list under .data"
+exit_codes = "0 ok, 2 bad usage, 10/11 model failed or missing, 12 image missing, 13 timeout"
+cost_tier = "vision"
+cost_secs = "1 (--ocr) to 30"
+leaves_mac = false
+side_effects = "loads a vision model, writes logs/see-history.jsonl and outputs/see/"
+keywords = ["see tool", "vision model"]
+see_also = ["read", "diff", "count"]
+next = "low_confidence"
+examples = [
+  { cmd = 'see ~/Desktop/shot.png "what is the build id?"', says = "exact text is read first, then the model" },
+  { cmd = 'see paste "what does the error say?"', says = "straight from the clipboard" },
+  { cmd = "see latest", says = "your newest screenshot" },
+  { cmd = "see shot.png --ocr", says = "the exact text, no model, about a second" },
+  { cmd = "see dashboard.png --ui", says = "a sectioned inventory of a website or app UI" },
+  { cmd = "see count squares.png --color red", says = "only the red objects" },
+  { cmd = "see diff a.png b.png --no-read --json", says = "the measured evidence only, no model" },
+]
+
+[[job]]
+name = "warm"
+kind = "tool"
+aliases = []
+summary = "keep a model loaded so q answers instantly, and say when it unloads"
+usage = "warm on|off|status [tier|model] [time]"
+more_label = "lm warm on|off"
+more_says = "warm-model toggle (snappy on / zero-idle off)"
+help_says = "the residency tool behind lm fast"
+inputs = "on, off, status or restart; a tier or model; a duration such as 1h30m"
+output = "what is loaded and when it unloads; status --json is the machine view"
+exit_codes = "0 ok, 2 bad usage, 10 server unreachable, 11 model not available"
+cost_tier = "small"
+cost_secs = "5 (loads the model once)"
+leaves_mac = false
+side_effects = "loads a model and holds its memory until the lease ends or warm off"
+keywords = ["warm tool", "model lease"]
+see_also = ["fast", "status"]
+next = ""
+examples = [
+  { cmd = "warm on 1h", says = "keep the small model loaded for an hour" },
+  { cmd = "warm on code 4h", says = "keep the coding model loaded for a long session" },
+  { cmd = "warm status", says = "what is loaded and when it unloads" },
+  { cmd = "warm status --json", says = "the machine view: what is loaded and when each model expires" },
+  { cmd = "warm off", says = "unload the small model and give the memory back" },
+  { cmd = "warm off all", says = "back to zero memory" },
+]

@@ -16,224 +16,45 @@ source "$BIN/_lib.sh"
 wants_all "$@" && HELP_ALL=true
 lm_identify
 
-# The default screen: jobs, not tools. Each line is a thin alias over an existing tool.
-front_door() {
-  printf '%s%slm%s %s— local models on this Mac (nothing leaves the machine unless marked ☁)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
-  printf '\n%sJOBS%s\n' "$Y" "$Rs"
-  _cmd 'lm "question"'               'answer; an image path, a file or "gemini ..." in it routes itself'
-  _cmd 'lm cmd "task"'               'one shell command, checked against the tool'"'"'s own --help'
-  _cmd 'lm read <img|paste|latest> ["q"]' 'text or an answer from an image (exact text is read first)'
-  _cmd 'lm diff A B'                 'what changed between two images, and where'
-  _cmd 'lm doc <file> ["q"]'         'ask about or summarize a file (says how much of it was read)'
-  _cmd 'lm again [--big|--web]'      'redo your last question on a stronger model (--web leaves this Mac ☁)'
-  _cmd 'lm find "words"'             'search your past answers'
-  _cmd 'lm review'                   'review your uncommitted changes (a few minutes, on the code model)'
-  printf '\n%sKEEP IT HANDY%s\n' "$Y" "$Rs"
-  _cmd 'lm status'                   'what is loaded, free memory, when it unloads'
-  _cmd 'lm fast 1h'                  'keep answers instant for an hour (lm fast off to free the memory)'
-  _cmd 'lm help <job>'               'the steps for one job: ask, cmd, doc, read, diff, count, again, find, web, fast, failed'
-  _cmd 'lm more'                     "everything else: gemini ☁, fleet, rag, index, imagine, probe, bench, ui-verify"
-  printf '\n  %s☁ marks a call that leaves this Mac. Every command takes -h.%s\n' "$Dm" "$Rs"
-}
-
-overview() {
-  printf '%s%slm%s %s— local-model toolkit with an optional connected Gemini lane%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
-  printf '\n%sCOMMANDS%s\n' "$Y" "$Rs"
-  printf '  %s%-22s%s %squick local LLM — answers, macOS cmds, titles, file Q&A; size tiers%s\n' "$C" 'lm q "..."' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %slocal image generation (Flux/Qwen on the GPU)%s\n' "$C" 'lm imagine "..."' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %sread an image/screenshot into text (local VLM)%s\n' "$C" 'lm see <img>' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %sreview a PR / files / folder / diff (local coder)%s\n' "$C" 'lm review <x>' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %sjudge if a local model is trustworthy — reliability/judgment eval%s\n' "$C" 'lm probe <model>' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %sfan one intent across N files (envelope gate; optional content judge)%s\n' "$C" 'lm fleet <intent> ...' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %sopencode on the local code model — auto pin/unpin around the session%s\n' "$C" 'lm opencode [args]' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %srepo symbol map — build once, "where is X" instantly%s\n' "$C" 'lm index [find X]' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %sthe gemini lane — huge-context ingestion, ideation (wrapper-only)%s\n' "$C" 'lm gemini "..."' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %scheck enumerable UI claims against a screenshot (local verify gate)%s\n' "$C" 'lm ui-verify <img> ...' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %slocal vector retrieval: index docs, search by meaning%s\n' "$C" 'lm rag index|search' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %swarm-model toggle (snappy on / zero-idle off)%s\n' "$C" 'lm warm on|off' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %sserver + warm + models at a glance%s\n' "$C" 'lm status' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %slist usable models and tiers (● resident; --json)%s\n' "$C" 'lm models' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %ssmoke-check the toolkit (deps, tiers, vision, venv, PATH; --json)%s\n' "$C" 'lm doctor' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %smerged q/imagine/see/fleet/gemini history (--errors, --tool T, --json)%s\n' "$C" 'lm timeline [N]' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %sopen the newest history entry in full (optionally of one tool)%s\n' "$C" 'lm last [tool]' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %scolored, comprehensive showcase of the whole suite%s\n' "$C" 'lm examples' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %sshort route from a job to the right command%s\n' "$C" 'lm help <job>' "$Rs" "$Dm" "$Rs"
-  printf '  %s%-22s%s %srun a fixed behavior and latency fixture set%s\n' "$C" 'lm bench <set>' "$Rs" "$Dm" "$Rs"
-  printf '\n%sEXAMPLES%s\n' "$Y" "$Rs"
-  printf '  %s$%s lm q cmd "free up port 3001"            %s# one macOS command%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s lm q summarize --file report.pdf        %s# read a local file (no cloud)%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s lm q --big "reason through this"         %s# heavier on-demand model%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s git diff | lm q commit                   %s# commit message from the diff%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s lm imagine --enhance "a cozy reading nook"\n' "$Dm" "$Rs"
-  printf '  %s$%s lm imagine refine 12 "warmer light"      %s# iterate on generation 12%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s lm models   ·   lm status   ·   lm doctor %s# what is installed / running / healthy%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '  %s$%s lm warm on                                %s# pin the small model — q is then sub-second%s\n' "$Dm" "$Rs" "$Dm" "$Rs"
-  printf '\n%sMORE%s\n' "$Y" "$Rs"
-  printf '  per-command help (every flag + examples):  %slm help <verb>%s, or %s<verb> -h%s for q, see, imagine, review, warm, gemini, fleet\n' "$C" "$Rs" "$C" "$Rs"
-  printf '  the full menu with examples:  %sglow ~/Code/local-models/docs/CAPABILITIES.md%s\n' "$C" "$Rs"
-  printf '  %sdocs: ~/Code/local-models/docs/  (STATE · CAPABILITIES · q-spec · 03-tool-orchestration-decision · research)%s\n' "$Dm" "$Rs"
-}
-
+# The screens below are generated from lib/verbs.toml, the one registry of jobs. Colour
+# follows the palette in _lib.sh: --color is passed only when this stdout is a terminal.
+VERBS_COLOR=(); [ -z "$C" ] || VERBS_COLOR=(--color)
+front_door() { suggest_next; lm_verbs screen front ${VERBS_COLOR[@]+"${VERBS_COLOR[@]}"}; }
+overview()   { lm_verbs screen more ${VERBS_COLOR[@]+"${VERBS_COLOR[@]}"}; }
 help_job() {
-  help_title() { printf '%s%slm help %s%s %s— %s%s\n' "$Bd" "$C" "$1" "$Rs" "$Dm" "$2" "$Rs"; }
-  help_section() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
-  help_example() { _help_row "$C" 44 "$1" "$2"; }
-  help_note() { printf '\n'; _note "$1"; }
   case "${1:-}" in
-    "")
-      help_title '<job>' 'say what you want to do, get the commands'
-      help_section 'JOBS'
-      help_example 'lm help ask'     'get a quick answer'
-      help_example 'lm help cmd'     'get one shell command you can trust'
-      help_example 'lm help doc'     'ask about, or summarize, a file'
-      help_example 'lm help read'    'get the text or an answer out of an image or screenshot'
-      help_example 'lm help diff'    'see what changed between two images'
-      help_example 'lm help count'   'count things in an image'
-      help_example 'lm help again'   'the answer was wrong: try again, stronger'
-      help_example 'lm help find'    'find an answer you got before'
-      help_example 'lm help web'     'ask about something current'
-      help_example 'lm help fast'    'keep answers instant for a while'
-      help_example 'lm help status'  'see what is loaded and how much memory is free'
-      help_example 'lm help failed'  'work out why a call failed'
-      help_note 'Also: lm help json | table | gemini | review | imagine | batch | retrieval. Tool help: lm help q|see|imagine|review|warm|probe|ui-verify|index|bench. Everything with examples: lm examples' ;;
-    ask)
-      help_title 'ask' 'a quick answer from the small local model'
-      help_section 'START'
-      help_example 'lm "how do I see what is using port 5432"' 'the answer comes back in a few seconds'
-      help_example 'lm fast 1h'                  'the first answer after a pause takes about 5 s; this keeps it instant'
-      help_example 'lm "what text is in ~/Desktop/shot.png"' 'an image path in the question goes to the image reader'
-      help_note 'Wrong or thin answer? lm help again. A question about something current? lm help web.' ;;
-    cmd)
-      help_title 'cmd' 'one shell command, checked before you run it'
-      help_section 'START'
-      help_example 'lm cmd "list the 5 largest files in ~/Downloads"' 'prints the command and nothing else'
-      help_note 'It checks that the program exists and that each --flag appears in its own --help, then prints a gray line saying what it found. It never runs the command. A flag it cannot find means the model guessed: lm again --web.' ;;
-    doc|document|qa)
-      help_title 'doc' 'ask about, or summarize, a file'
-      help_section 'START'
-      help_example 'lm doc report.pdf'                    'a summary (PDF, Word, HTML, text, spreadsheets)'
-      help_example 'lm doc report.pdf "what is the decision?"' 'an answer grounded in the file'
-      help_example 'q --preflight --ctx report.pdf'       'how big the file is, before asking'
-      help_note 'It tells you how much of the file it read. A long file is cut at 16,000 characters: raise it with --max-ctx 40000, or use cat file | lm gemini "..." (the file leaves this Mac).' ;;
-    read|screenshot|ui|ocr|text)
-      help_title 'read' 'text or an answer out of an image'
-      help_section 'START'
-      help_example 'lm read shot.png'                   'what is in the image'
-      help_example 'lm read shot.png "what is the build id?"' 'asks for text, IDs and numbers are read exactly first'
-      help_example 'lm read paste'                      'the screenshot on your clipboard (Cmd-Ctrl-Shift-4)'
-      help_example 'lm read latest'                     'your newest screenshot file'
-      help_example 'see shot.png --ocr'                 'just the exact text, about a second'
-      help_example 'see shot.png --ui --json'           'a structured list of the buttons and labels'
-      help_example 'lm ui-verify shot.png "Save is disabled"' 'check one claim about a screenshot'
-      help_note 'Exact readers (text, counts) run first; the vision model only adds what they cannot see.' ;;
-    diff|compare)
-      help_title 'diff' 'what changed between two images'
-      help_section 'START'
-      help_example 'lm diff before.png after.png'       'a three-line summary: where, whether text changed, whether colours changed'
-      help_example 'see diff a.png b.png --no-read --json' 'the measured evidence only, no model'
-      help_note 'The summary is measured from the pixels. A vision model adds its own read when one is free; judging whether the change matters is yours.' ;;
-    count)
-      help_title 'count' 'count things in an image by measuring pixels'
-      help_section 'START'
-      help_example 'see count dots.png'                 'how many objects (exact, instant, no model)'
-      help_example 'see count squares.png --color blue'  'only the blue ones'
-      help_example 'see odd grid.png'                   'the one item that differs among repeated items'
-      help_note 'Asking "how many" through lm read runs this first.' ;;
-    again|retry)
-      help_title 'again' 'the answer was wrong; ask the same thing on a stronger model'
-      help_section 'START'
-      help_example 'lm again'               'your last question, one step stronger (small, then big)'
-      help_example 'lm again --big'         'the bigger reasoning model'
-      help_example 'lm again --code'        'the coding model'
-      help_example 'lm again --web'         'search the web first (the question leaves this Mac)'
-      help_example 'q -c "and sorted by size?"' 'a follow-up that continues your last exchange'
-      help_note 'Answers are deterministic: asking the same thing twice gives the same answer, so retyping never helps.' ;;
-    find|history|retrieval-history)
-      help_title 'find' 'search the answers you got before'
-      help_section 'START'
-      help_example 'lm find "port 5432"'    'matching questions and answers across q, see, gemini and imagine, yours first'
-      help_example 'lm timeline 15'         'your last 15 calls, newest last'
-      help_example 'lm timeline --all'      'include agents and hooks (dimmed)'
-      help_example 'lm last'                'your latest call, in full'
-      help_note 'Open one with the handle it prints: q show 3689, see show 1433.' ;;
-    web|current)
-      help_title 'web' 'something current: versions, news, docs'
-      help_section 'START'
-      help_example 'q --web "current node LTS version?"' 'searches the web, answers from the results with citations'
-      help_example 'lm gemini research "state of X"'     'a slower, deeper lookup (Gemini)'
-      help_note 'Both send your question off this Mac. The small local model cannot know what is current.' ;;
-    fast)
-      help_title 'fast' 'keep answers instant'
-      help_section 'START'
-      help_example 'lm fast 1h'     'q answers in under a second until the time it prints'
-      help_example 'lm fast off'    'free the memory now'
-      help_example 'lm status'      'what is loaded and when it unloads'
-      help_note 'Without it the first answer after a pause takes about 5 s while the model loads. Nothing stays loaded on its own.' ;;
-    status|memory)
-      help_title 'status' 'what is loaded and what is free'
-      help_section 'START'
-      help_example 'lm status'    'server, free memory, loaded models, when they unload'
-      help_example 'lm models'    'every installed model and which tier it is'
-      help_example 'lm doctor'    'a health check of the whole toolkit' ;;
-    failed|errors)
-      help_title 'failed' 'work out why a call failed'
-      help_section 'START'
-      help_example 'lm timeline 10 --errors'   'your failed calls, each with its reason and what to do'
-      help_example 'lm last'                   'the latest call in full, error included'
-      help_example 'lm doctor'                 'checks the server, models and PATH'
-      help_note 'A stopped server restarts on the next call, so retrying is usually enough.' ;;
-    json|machine)
-      help_title 'json' 'an answer a script can read'
-      help_section 'START'
-      help_example 'q --json "is 91 a prime number? answer yes or no"' 'one JSON object with text, model and timing'
-      help_example 'q --json --format schema.json "classify: ..."'   'the answer follows your schema, parsed under .data' ;;
-    table|describe-data)
-      help_title 'table' 'exact rows, missing values, and numeric ranges'
-      help_section 'START'
-      help_example 'q describe-data --ctx data.csv --json' 'profile facts without model arithmetic'
-      help_section 'XLSX'
-      help_example 'q --preflight --ctx data.xlsx --json' 'inspect workbook sheets first'
-      help_example 'q describe-data --ctx data.xlsx --sheet Summary --json' 'name a sheet when several exist' ;;
-    batch|fleet)
-      help_title 'batch' 'ask one question of many independent files'
-      help_section 'START'
-      help_example 'lm fleet qa --prompt "who owns this?" docs/*.md' 'fan out across files'
-      help_example 'lm fleet sample <run-dir>' 'look at a sample of what it answered'
-      help_note 'The default check only confirms each answer is non-empty; add a task-specific --judge.' ;;
-    retrieval|rag)
-      help_title 'retrieval' 'search exact text first, then by meaning'
-      help_section 'START'
-      help_example 'rg -n "term" docs/' 'find exact names and paths'
-      help_example 'lm rag index docs/' 'build a local search-by-meaning index'
-      help_example 'lm rag search "concept"' 'find related passages' ;;
-    research|gemini)
-      help_title 'gemini' 'the cloud lane: huge documents and web research'
-      help_section 'START'
-      help_example 'lm gemini --file big.md "summarize the risks"' 'a file too big for the local model'
-      help_example 'lm gemini research "state of X"'  'web lookup, with null where it is unsure'
-      help_example 'lm gemini ingest-repo .'  'load a whole repo, then lm gemini ask "..."'
-      help_note 'Gemini is an external service: the text you send leaves this Mac. Sample-check what it says.' ;;
-    review)
-      help_title 'review' 'review code, a PR or your uncommitted changes'
-      help_section 'START'
-      help_example 'lm review'   'your uncommitted changes (takes a few minutes; loads the 23 GB code model)'
-      help_example 'review 214'  'a GitHub PR'
-      help_note 'More flags: review -h' ;;
-    imagine)
-      help_title 'imagine' 'draw an image locally'
-      help_section 'START'
-      help_example 'imagine "a cozy reading nook"' 'about 1-2 minutes with the default model, free, offline'
-      help_example 'imagine refine 12 "warmer light"' 'steer a past image' ;;
     # A tool name routes to that tool's own help, so `lm help see` works like `see -h`.
     q|see|warm|probe) exec "$BIN/$1" -h ;;
     ui-verify) exec "$DIR/lib/ui-verify" -h ;;
     index)     exec "$DIR/lib/repo-index" -h ;;
     bench)     exec python3 "$DIR/scripts/bench.py" -h ;;
-    opencode)  printf 'lm opencode [args]: run opencode on the local code tier; the model is leased for the session and released on exit\n' ;;
-    *) local g; g="$(did_you_mean "$1" ask cmd doc read diff count again find web fast status failed json table batch retrieval research gemini review imagine q see warm probe fleet rag index ui-verify bench opencode)"
-       printf "lm help: unknown job '%s'%s\n  jobs: ask cmd doc read diff count again find web fast status failed json\n  more: table batch retrieval gemini review imagine\n  tools: q see imagine review warm probe fleet gemini rag index ui-verify bench opencode\n" \
-         "$1" "${g:+ (did you mean '$g'?)}" >&2; return 2 ;;
   esac
+  lm_verbs screen help "${1:-}" ${VERBS_COLOR[@]+"${VERBS_COLOR[@]}"}
+}
+
+# One gray line above the bare screen when the next step is probably obvious: an image on
+# the clipboard, or a screenshot from the last ten minutes. Terminal only, capped well under
+# 150 ms, and it never fails the screen. LM_HINTS=0 turns it off.
+suggest_next() {
+  [ -t 1 ] || return 0
+  [ "${LM_HINTS:-1}" != 0 ] || return 0
+  local tmp pid i dir shot
+  tmp="$(mktemp "${TMPDIR:-/tmp}/lm-clip.XXXXXX" 2>/dev/null)" || return 0
+  { osascript -e 'clipboard info' >"$tmp" 2>/dev/null & pid=$!; } 2>/dev/null
+  dir="${SEE_SCREENSHOT_DIR:-$(defaults read com.apple.screencapture location 2>/dev/null || true)}"
+  [ -n "$dir" ] || dir="$HOME/Desktop"
+  dir="$(expand_tilde "$dir")"
+  shot="$(find "$dir" -maxdepth 1 -name '*.png' -mmin -10 -print -quit 2>/dev/null || true)"
+  for i in 1 2 3 4 5 6; do kill -0 "$pid" 2>/dev/null || break; sleep 0.02; done
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  if grep -q -e 'PNGf' -e 'TIFF' "$tmp" 2>/dev/null; then
+    printf '%ssuggest: an image is on your clipboard, lm read paste%s\n' "$Dm" "$Rs"
+  elif [ -n "$shot" ]; then
+    printf '%ssuggest: you took a screenshot a moment ago, lm read latest%s\n' "$Dm" "$Rs"
+  fi
+  rm -f "$tmp"
+  return 0
 }
 
 # lm examples — a colored, comprehensive showcase of the suite, grouped by task.
@@ -743,6 +564,8 @@ verb_help() {
     again) d='redo your last question on a stronger model' ;;
     fast) d='keep answers instant for a while' ;;
     more) d='every command, including the rarely used ones' ;;
+    how) d='find the command for what you want, without running it' ;;
+    capabilities) d='the full menu of jobs, for a person or an agent' ;;
   esac
   printf '%s%slm %s%s %s— %s%s\n' "$Bd" "$C" "$v" "$Rs" "$Dm" "$d" "$Rs"
   _sec USAGE
@@ -801,6 +624,15 @@ verb_help() {
       _cmd 'lm fast off'            'unload it now and free the memory' ;;
     more)
       _cmd 'lm more'                'the full command list' ;;
+    how)
+      _cmd 'lm how "what I want"'   'the command for it, one line on why, up to two alternatives; nothing is run'
+      _cmd 'lm how "..." --go'      'print the command, then run it'
+      _cmd 'lm how "..." --json'    '{command, job, why, alternatives, matched_by}'
+      _note 'Matching is by words first and costs nothing. Only when no job matches well does it ask the small model. It never picks a command that leaves this Mac unless your words ask for the web or gemini.' ;;
+    capabilities)
+      _cmd 'lm --capabilities'      'every job with what it takes, what it prints, its cost and side effects'
+      _cmd 'lm --capabilities --json' 'the same for a script or an agent: {version, jobs, conventions}'
+      _cmd 'lm --capabilities <job>' 'one job in full (add --json for the machine form)' ;;
   esac
 }
 
@@ -812,6 +644,11 @@ case "$verb" in
   '')        front_door ;;
   -h|--help) front_door ;;
   more)      shift; if wants_help "$@"; then verb_help more; else overview; fi ;;
+  how)       shift; if wants_help "$@"; then verb_help how; exit 0; fi
+             lm_verbs how "$@" ${VERBS_COLOR[@]+"${VERBS_COLOR[@]}"} || exit $? ;;
+  --capabilities|capabilities)
+             shift; if wants_help "$@"; then verb_help capabilities; exit 0; fi
+             lm_verbs screen capabilities "$@" ${VERBS_COLOR[@]+"${VERBS_COLOR[@]}"} || exit $? ;;
   help)      shift; if wants_help "$@"; then verb_help help; else help_job "${1:-}"; fi ;;
   ask)       shift; if wants_help "$@" || [ $# -eq 0 ]; then verb_help ask; [ $# -gt 0 ] || exit 2; exit 0; fi; ask_q "$@" ;;
   cmd)       shift; if wants_help "$@" || [ $# -eq 0 ]; then verb_help cmd; [ $# -gt 0 ] || exit 2; exit 0; fi; exec "$BIN/q" cmd "$@" ;;
@@ -872,6 +709,6 @@ case "$verb" in
   --version|-V|version) echo "lm ${LM_VERSION:-unknown}" ;;
   *) # Several words, or one with spaces, is a question typed straight after lm.
      if [ $# -gt 1 ] || [[ "$verb" == *" "* ]]; then ask_q "$@"; fi
-     g="$(did_you_mean "$verb" more help ask cmd read diff doc again find fast q imagine see review probe fleet index gemini ui-verify rag bench opencode warm status models doctor timeline last examples version)"
+     g="$(did_you_mean "$verb" more how help ask cmd read diff doc again find fast q imagine see review probe fleet index gemini ui-verify rag bench opencode warm status models doctor timeline last examples version)"
      echo "lm: unknown verb '$verb'${g:+ (did you mean '$g'?)}; run lm for the jobs, or lm \"your question\" to ask" >&2; exit 2 ;;
 esac

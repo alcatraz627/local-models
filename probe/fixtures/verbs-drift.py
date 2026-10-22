@@ -282,6 +282,8 @@ check("lm piped: no escape codes", "\033" not in out)
 
 fails = [c for c in CHECKS if not c[1]]
 for name, ok, detail in CHECKS:
+    if ok and "-v" not in sys.argv:
+        continue
     print(("PASS " if ok else "FAIL ") + name + ("" if ok or not detail else f"  [{detail}]"))
 print(f"{len(CHECKS) - len(fails)}/{len(CHECKS)} checks passed")
 sys.exit(1 if fails else 0)
