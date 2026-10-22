@@ -64,7 +64,7 @@ if W=$(./lib/websearch "ollama github" -n 2 --json 2>/dev/null) && [ "$(printf '
 else skip "websearch unreachable (offline or DDG layout change — check by hand if online)"; fi
 
 echo "── fleet: fan-out + envelope gate + lease + run history ──"
-if ./bin/lm fleet summarize intents/ask.toml -m qwen2.5-coder:3b >/dev/null 2>&1; then
+if ./bin/lm fleet summarize intents/ask.toml -m sweep >/dev/null 2>&1; then
   ok "lm fleet 1-item run (envelope passed)"
   T=$(tail -1 logs/fleet-history.jsonl | jq -r .pass 2>/dev/null)
   [ "$T" = "1" ] && ok "fleet-history run line" || bad "fleet-history missing/odd"
