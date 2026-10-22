@@ -106,10 +106,15 @@ jsonl_history() { # LOG N LINE_JQ
 lm_identify() { # sets LM_TTY and LM_SESSION once per process
   [ -n "${_LM_IDENTIFIED:-}" ] && return 0
   _LM_IDENTIFIED=1
-  local t; t="$(ps -o tty= -p "$$" 2>/dev/null)"; t="${t//[[:space:]]/}"
-  case "$t" in ''|'?'|'??') t="" ;; esac
-  LM_TTY="$t"
-  LM_SESSION="${TERM_SESSION_ID:-${ITERM_SESSION_ID:-${WEZTERM_PANE:-${KITTY_WINDOW_ID:-${TMUX_PANE:-}}}}}"
+  LM_TTY=""; LM_SESSION=""
+  # A process with no terminal on stdin or stderr (an agent, a hook, cron) has no identity, even when it
+  # inherited the owner's terminal-session variables; otherwise it would count as "mine".
+  if [ -t 0 ] || [ -t 2 ]; then
+    local t; t="$(ps -o tty= -p "$$" 2>/dev/null)"; t="${t//[[:space:]]/}"
+    case "$t" in ''|'?'|'??') t="" ;; esac
+    LM_TTY="$t"
+    LM_SESSION="${TERM_SESSION_ID:-${ITERM_SESSION_ID:-${WEZTERM_PANE:-${KITTY_WINDOW_ID:-${TMUX_PANE:-}}}}}"
+  fi
   export LM_TTY LM_SESSION
 }
 # jq fragment for a history row's identity: use with --arg tty "$LM_TTY" --arg sess "$LM_SESSION".
@@ -146,7 +151,9 @@ mine_line() { # LOG K
   printf '%s' "$hits" | head -n 1
 }
 # Which rows a -1 / latest lookup may land on: mine (default) or all. LM_ALL=1 or --all in the tool flips it.
-LM_ENTRY_SCOPE=mine; [ -n "${LM_ALL:-}" ] && LM_ENTRY_SCOPE=all
+# LM_ALL counts as on for 1, yes or true; 0, empty or anything else is off.
+lm_all_on() { case "$(printf '%s' "${LM_ALL:-}" | tr 'A-Z' 'a-z')" in 1|yes|true) return 0 ;; esac; return 1; }
+LM_ENTRY_SCOPE=mine; ! lm_all_on || LM_ENTRY_SCOPE=all
 
 jsonl_entry() { # LOG N ENTRY_JQ ($i bound to N in jq). N>0 = stable line no; N<0 counts from the end (-1 = latest)
   local log="$1" i="$2" fmt="$3"
@@ -156,8 +163,20 @@ jsonl_entry() { # LOG N ENTRY_JQ ($i bound to N in jq). N>0 = stable line no; N<
   if [[ "$i" =~ ^-[0-9]+$ ]]; then
     if [ "$LM_ENTRY_SCOPE" = mine ]; then
       # -1 means YOUR latest call from this terminal, not the newest row anyone wrote.
-      i="$(mine_line "$log" "${i#-}")" || i=""
-      [ -n "$i" ] || { echo "none of your calls from this terminal are in this history yet (--all, or a number from 'history', reaches the rest)" >&2; return 12; }
+      local want="${i#-}" have=0
+      lm_identify
+      i="$(mine_line "$log" "$want")" || i=""
+      if [ -z "$i" ]; then
+        if [ -n "$LM_TTY$LM_SESSION" ]; then
+          have="$(rg -c -e "\"tty\": ?\"$LM_TTY\"" ${LM_SESSION:+-e "\"session\": ?\"$LM_SESSION\""} "$log" 2>/dev/null)" || have=0
+        fi
+        if [ "${have:-0}" -gt 0 ]; then
+          echo "you asked for your call number $want back, but only $have of your calls from this terminal are in this history (--all reaches the rest)" >&2
+        else
+          echo "none of your calls from this terminal are in this history yet (--all, or a number from 'history', reaches the rest)" >&2
+        fi
+        return 12
+      fi
     else
       i=$(( total + i + 1 ))   # -1 -> latest, -2 -> second-latest
     fi

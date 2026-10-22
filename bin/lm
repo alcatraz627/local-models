@@ -571,7 +571,7 @@ JQ_ROW='def row($ln; $kind; $err; $text):
 #   lm timeline [N] [--errors] [--tool q|see|imagine|fleet|gemini] [--all] [--json]
 lm_timeline() {
   local n=20 errors=false json=false tool="" all=false
-  [ -n "${LM_ALL:-}" ] && all=true
+  lm_all_on && all=true
   while [ $# -gt 0 ]; do
     case "$1" in
       --errors) errors=true; shift ;;
@@ -628,13 +628,15 @@ lm_timeline() {
                         else (.resp | first_line | .[0:60]) end)}
           | del(.resp))')"
   [ -n "$rows" ] || rows='[]'
-  if $json; then printf '%s\n' "$rows"; return; fi
-  if [ "$(printf '%s' "$rows" | jq 'length')" -eq 0 ]; then
+  local empty=false; [ "$(printf '%s' "$rows" | jq 'length')" -eq 0 ] && empty=true
+  if $empty && [ -z "${LM_TIMELINE_QUIET:-}" ]; then
+    # JSON callers get the same one-line reason on stderr, so [] is not mistaken for "no history"
     if $all; then echo "no history yet" >&2
     elif $have_id; then echo "none of your calls from this terminal yet. lm timeline --all shows agents and hooks too." >&2
     else echo "this call has no terminal, so none of the history is 'yours'. lm timeline --all shows everything." >&2; fi
-    return 0
   fi
+  if $json; then printf '%s\n' "$rows"; return; fi
+  ! $empty || return 0
   printf '%s' "$rows" | jq -r --arg dim "$Dm" --arg rs "$Rs" '.[] |
     def pad($w): (. + "              ")[0:$w];
     (if .mine then "" else $dim end) as $d | (if .mine then "" else $rs end) as $r
@@ -653,7 +655,7 @@ lm_last() {
       *) tool="$1"; shift ;;
     esac
   done
-  if [ -n "$tool" ]; then row="$(lm_timeline 1 --tool "$tool" --json ${args[@]+"${args[@]}"})"; else row="$(lm_timeline 1 --json ${args[@]+"${args[@]}"})"; fi
+  if [ -n "$tool" ]; then row="$(LM_TIMELINE_QUIET=1 lm_timeline 1 --tool "$tool" --json ${args[@]+"${args[@]}"})"; else row="$(LM_TIMELINE_QUIET=1 lm_timeline 1 --json ${args[@]+"${args[@]}"})"; fi
   tool="$(printf '%s' "$row" | jq -r '.[0].tool // empty')"; n="$(printf '%s' "$row" | jq -r '.[0].n // empty')"
   if [ -z "$tool" ]; then
     echo "lm last: none of your calls from this terminal yet (lm last --all takes the newest from anyone)" >&2; exit 12
@@ -685,10 +687,16 @@ lm_find() {
   [ "${#all_terms[@]}" -gt 0 ] || { verb_help find >&2; exit 2; }
   [[ "$limit" =~ ^[1-9][0-9]*$ ]] || usage_fail "lm find" "-n needs a number, got '$limit'"
   lm_identify
-  local words="${all_terms[*]}" first="${all_terms[0]}"
+  local words="${all_terms[*]}" first="${all_terms[0]}" pre
+  [ -n "${words//[[:space:]]/}" ] || usage_fail "lm find" "give at least one word to look for"
+  # The log holds JSON: quotes and backslashes are escaped there, and older rows escape non-ASCII too.
+  # A first word that would not match as typed skips the quick text filter (the newest 4000 rows are still read).
+  pre="$first"
+  case "$first" in *'"'*|*'\'*) pre="" ;; esac
+  [ -z "$(printf '%s' "$first" | LC_ALL=C tr -d '\000-\177')" ] || pre=""
   find_src() { # TOOL FILE JQ_BODY  (a row object with prompt/response in scope)
     [ -f "$2" ] || return 0
-    rg -n -i -F -e "$first" "$2" 2>/dev/null | tail -n 4000 \
+    rg -n -i -F -e "$pre" "$2" 2>/dev/null | tail -n 4000 \
       | jq -cR --arg tool "$1" "$JQ_HIST index(\":\") as \$i | (.[0:\$i] | tonumber) as \$ln | (.[\$i+1:] | fromjson?) | select(. != null) | $3" || true
   }
   # Each source yields {ts, tool, n, tty, session, ask, ans, hay}: ask = the question as typed.
@@ -719,6 +727,7 @@ lm_find() {
 verb_help() {
   local v="$1" d=""
   case "$v" in
+    ask) d='a quick answer from the small local model' ;;
     timeline) d='your recent calls, newest last' ;;
     last) d='your latest call, in full' ;;
     find) d='search the answers you got before' ;;
@@ -738,6 +747,9 @@ verb_help() {
   printf '%s%slm %s%s %s— %s%s\n' "$Bd" "$C" "$v" "$Rs" "$Dm" "$d" "$Rs"
   _sec USAGE
   case "$v" in
+    ask)
+      _cmd 'lm ask "question"'      'a quick answer from the small local model (plain lm "question" does the same)'
+      _note 'An image or file path inside the question is routed for you. More options: q -h' ;;
     timeline)
       _cmd 'lm timeline [N]'        'your last N calls (default 20) across q, see, imagine, fleet and gemini'
       _cmd 'lm timeline --errors'   'only failed calls, each with its reason and what to do'
@@ -801,7 +813,7 @@ case "$verb" in
   -h|--help) front_door ;;
   more)      shift; if wants_help "$@"; then verb_help more; else overview; fi ;;
   help)      shift; if wants_help "$@"; then verb_help help; else help_job "${1:-}"; fi ;;
-  ask)       shift; [ $# -gt 0 ] || { verb_help cmd >&2; exit 2; }; ask_q "$@" ;;
+  ask)       shift; if wants_help "$@" || [ $# -eq 0 ]; then verb_help ask; [ $# -gt 0 ] || exit 2; exit 0; fi; ask_q "$@" ;;
   cmd)       shift; if wants_help "$@" || [ $# -eq 0 ]; then verb_help cmd; [ $# -gt 0 ] || exit 2; exit 0; fi; exec "$BIN/q" cmd "$@" ;;
   read)      shift; if wants_help "$@" || [ $# -eq 0 ]; then verb_help read; [ $# -gt 0 ] || exit 2; exit 0; fi; exec "$BIN/see" "$@" ;;
   diff)      shift; if wants_help "$@" || [ $# -lt 2 ]; then verb_help diff; [ $# -gt 0 ] || exit 2; wants_help "$@" && exit 0; exit 2; fi; exec "$BIN/see" diff "$@" ;;

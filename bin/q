@@ -47,7 +47,7 @@ show_help() {
   _cmd 'q <intent> "<prompt>"'  'ask | cmd | commit | summarize | qa | title | review ... (q intents lists them all)'
   _cmd 'q again [--big|--code|--web]' 'the last answer was wrong: ask it again on a stronger lane (no flag: one step up; --dry-run shows the plan). q --again always works, even in a pipe'
   _cmd 'q -c [N] "<prompt>"'    'follow up on your last exchange (or entry N)'
-  _cmd 'q history, show N'      'recent queries, numbered; show -1 is your latest call (--all: anyone, not just you)'
+  _cmd 'q history, show N'      'your recent queries, numbered; show -1 is your latest call (--all: anyone, not just you)'
   _sec EXAMPLES
   _ex 'q "how do I check disk usage"'        '# terse answer'
   _ex 'q cmd "kill everything on port 3001"' '# one macOS command, checked against its --help'
@@ -98,10 +98,35 @@ show_help() {
 }
 
 LOG="$DIR/logs/q-history.jsonl"
+HIST_FMT="$JQ_LOCAL_TS"'"\(.ts | lts)  \(.intent)\(if .error then " ✗" else "" end)  \(.model // "?")  \(.ms)ms  \((.prompt | gsub("\\s+"; " "))[0:50])"'
+# Your newest N history rows (this terminal and session), numbered by their line in the log so
+# `q show N` still works; with --all (or LM_ALL=1) every caller's rows, like `lm timeline`.
+mine_history() { # N JSON(true|false)
+  local n="$1" json="$2" nums k
+  [[ "$n" =~ ^[0-9]+$ ]] || n=15
+  [ -f "$LOG" ] || { if $json; then echo '[]'; else echo "no history yet ($LOG)"; fi; return 0; }
+  lm_identify
+  if [ -z "$LM_TTY$LM_SESSION" ]; then
+    echo "q history: this call has no terminal, so none of the history is 'yours'. q history --all shows everything." >&2
+    if $json; then echo '[]'; fi
+    return 0
+  fi
+  nums="$(rg -n -e "\"tty\": ?\"$LM_TTY\"" ${LM_SESSION:+-e "\"session\": ?\"$LM_SESSION\""} "$LOG" 2>/dev/null | tail -n "$n" | sed 's/:.*//')" || true
+  if [ -z "$nums" ]; then
+    echo "q history: none of your calls from this terminal yet. q history --all shows everything." >&2
+    if $json; then echo '[]'; fi
+    return 0
+  fi
+  for k in $nums; do
+    if $json; then sed -n "${k}p" "$LOG" | jq -c --argjson n "$k" '. + {n: $n}'
+    else printf '%4d  ' "$k"; sed -n "${k}p" "$LOG" | jq -rR "(fromjson? | $HIST_FMT) // \"(unreadable history line)\""; fi
+  done
+}
 show_history() {
   # gsub flattens multiline prompts (piped diffs) to ONE display line each, so
   # displayed numbers stay equal to JSONL line numbers — the show/-c contract.
-  jsonl_history "$LOG" "${1:-15}" "$JQ_LOCAL_TS"'"\(.ts | lts)  \(.intent)\(if .error then " ✗" else "" end)  \(.model // "?")  \(.ms)ms  \((.prompt | gsub("\\s+"; " "))[0:50])"'
+  if [ "$LM_ENTRY_SCOPE" = mine ]; then mine_history "${1:-15}" false
+  else jsonl_history "$LOG" "${1:-15}" "$HIST_FMT"; fi
   echo "  → q show N   for the full prompt + response of entry N"
 }
 show_entry() {
@@ -191,9 +216,12 @@ case "${1:-}" in
   -h|--help|help)        show_help; exit 0 ;;
   history)               shift
                          HIST_JSON=false; HIST_N=15
-                         for harg in "$@"; do case "$harg" in --json) HIST_JSON=true ;; *) HIST_N="$harg" ;; esac; done
-                         if $HIST_JSON; then jsonl_history_json "$LOG" "$HIST_N"; exit 0; fi
-                         show_history "${1:-15}"; exit 0 ;;
+                         for harg in "$@"; do case "$harg" in --json) HIST_JSON=true ;; --all) LM_ENTRY_SCOPE=all ;; *) HIST_N="$harg" ;; esac; done
+                         if $HIST_JSON; then
+                           if [ "$LM_ENTRY_SCOPE" = mine ]; then mine_history "$HIST_N" true; else jsonl_history_json "$LOG" "$HIST_N"; fi
+                           exit 0
+                         fi
+                         show_history "$HIST_N"; exit 0 ;;
   show)                  shift
                          SHOW_N=""
                          for sarg in "$@"; do case "$sarg" in --all) LM_ENTRY_SCOPE=all ;; *) SHOW_N="$sarg" ;; esac; done
