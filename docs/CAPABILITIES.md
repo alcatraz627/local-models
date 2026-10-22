@@ -9,6 +9,36 @@ All commands are on PATH (`q`, `see`, `review`, `imagine`, `warm`, `lm …`) and
 
 ---
 
+## 0 · The front door: `lm` by job
+
+Bare `lm` lists jobs, not tools. Each job is a thin alias over the tools below, so everything
+after this section still works as written. `lm more` shows the old full overview.
+
+```bash
+lm "question"                  # answer; an image path, a file or "gemini ..." in it routes itself
+lm cmd "free up port 3001"     # one shell command, checked against the tool's own --help
+lm read shot.png "the order id"  # exact text first (OCR), then a model picks the field
+lm read paste · lm read latest # the clipboard image, or the newest screenshot
+lm diff a.png b.png            # what changed and where, in three plain lines plus a heatmap
+lm doc report.md "who signs?"  # ask about a file; says how much of it was read
+lm again [--big|--code|--web]  # redo your last question one step up (--web leaves this Mac)
+lm find "port"                 # search your past questions and answers, yours first
+lm fast 1h · lm fast off       # keep q instant for an hour, or free the memory now
+lm help <job>                  # the steps for one job: ask cmd doc read diff count again find web fast failed
+```
+
+On a terminal, a bare `q "..."` routes itself. An image path goes to `see`, a file path
+becomes `--ctx`, and a near-miss intent name is called out. Every scripted form (flags,
+`--json`, no tty) behaves as before. `--route` forces routing and `--no-route` stops it.
+`q check "<cmd>"` checks a command's binary and long flags against its man page and `--help`
+without running it.
+
+History is per terminal. `lm timeline`, `lm last`, `q -c`, `q show -1`, `see more` and
+`see open -1` default to calls from your terminal. A caller with no terminal (an agent, hook
+or cron job) has no "mine" and must pass `--all` or set `LM_ALL=1` to see the newest row.
+
+---
+
 ## 1 · Ask & answer — `q`
 
 The quick local LLM. Deterministic (temp 0), thinking off, sub-second when the warm companion
@@ -268,6 +298,7 @@ The no-idle policy (server `KEEP_ALIVE=0`) means models load per call unless pin
 
 ```bash
 warm on                        # lease the small companion for 2h, so q goes sub-second
+warm on 1h                     # the small companion for an hour (same as lm fast 1h)
 warm on small forever          # pin it until warm off (nothing stays warm by default)
 warm off                       # back to zero idle RAM
 warm on code                   # LEASE the code tier — bounded 60m, self-heals if forgotten
@@ -278,12 +309,12 @@ warm status [--json]           # what's resident + how long it stays
 ```
 
 Automation: `lm fleet` and `lm opencode` lease automatically and release on exit. Scheduled:
-weekday 09:30 companion warm-up, daily 19:00 `warm off all` shutdown backstop (gcc-schedule,
-calendar-visible). After 3 cold loads of the same big model in 5 minutes, `q` prints a one-line
+only the daily 19:00 `warm off all` backstop (gcc-schedule); there is no morning warm-up. After 3 cold loads of the same big model in 5 minutes, `q` prints a one-line
 lease suggestion (never auto-pins — residency is yours).
 
 ```bash
-lm status                      # server, resident (size, time left, tier), on-disk with tier labels
+lm status                      # server, free memory, resident (size, time left, tier), running MLX
+                               #   processes, on-disk with tier labels
 lm status --json               # <150ms machine probe: warm/latency_class/models
 lm models                      # ● resident, tier labels (small big code sweep vision), sizes
 lm doctor [--json]             # smoke check: deps (jq yq ollama), every tier + vision + embed model on disk,
@@ -364,7 +395,10 @@ lm timeline 30                 # one merged timeline: q, imagine, see, fleet, ge
                                #   each row leads with tool#N (q#3542) so it points at `<tool> show N`
 lm timeline --errors           # only failures; scans the newest 5000 entries of each log
 lm timeline --tool see --json  # one tool, as JSON rows {ts, time, tool, n, kind, err, text}
+lm timeline --all              # every caller, not just this terminal (or LM_ALL=1); error rows
+                               #   print the failure code and what to do about it
 lm last [tool]                 # the newest entry in full (opens it with that tool's show)
+lm find "words"                # past questions and answers containing all the words
 q history · see history · review history · imagine history · lm gemini history   # per-tool, numbered, local time
 q history 20 --json            # the same rows as JSON, each with its entry number n (feeds `q show n`)
 q show -1 | glow -             # any past answer, rendered

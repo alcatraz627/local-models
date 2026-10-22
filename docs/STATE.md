@@ -95,6 +95,15 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 
 ## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
 
+- **2026-10-22 · lm usability wave:** an audit of the CLI as a person uses it (17 findings,
+  `.claude/output/20261022-lm-usability/audit.md`) built on the `lm-usability` branch: `lm`
+  now opens on jobs (`lm "q"`, cmd, read, diff, doc, again, find, fast) with `lm more` for the
+  rest; bare `q` routes on a terminal; `q check` and `lib/cmdcheck.py` check command answers
+  against the tool's own help; `q again` and a repeat hint; `see paste` / `see latest`; `see`
+  text mode reads exact text and counts before asking a model; history rows carry `tty` and
+  `session` and the history views default to this terminal (`--all` / `LM_ALL=1` for
+  everyone). Build notes: `.claude/output/20261022-lm-usability/build-summary.md`.
+
 - **2026-10-22 · vision comparison + lm CLI review wave:** a 42-case vision harness
   (`probe/vision/`, deterministic truths, meaning-based scorers, script baselines, selftest
   in verify.sh) run over 7 vision models, plus a 14-case text comparison (`probe/textcmp/`).
@@ -224,12 +233,13 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 ### Next round (queued 2026-10-22)
 
 - **Plain `see` default: DONE 2026-10-22** (owner approved). Qwen3-VL-8B on MLX, minicpm-v4.6 as the automatic fallback (`READ_DEFAULT_MLX` in config.sh).
-- **Odd-one-out and counting lane for `see`:** the vision run confirms it. Script baselines hit every seed on many-small-dots counting, odd colour out, and changed-cell location (C02, O03, D07), and most models missed them. The Affinity column-profile prototype is in `.claude/output/20261021-argon-candidates/report.md`.
-- **Qwen3.6-27B (MLX, 16 GB):** not run, because Hugging Face downloads stalled at about 170 KB/s. Pull it again on a good connection and run `probe/vision/run.py` on it.
+- **Odd-one-out and counting lane for `see`: DONE 2026-10-22.** `see count` and `see odd` (`lib/measure.py`, model-free), checked by `probe/fixtures/measure-check.py` in verify.sh.
+- **Qwen3.6-27B (MLX, 16 GB): DONE 2026-10-22.** Run recorded in `probe/vision/REPORT.md` and pruned from disk.
+- **lm usability leftovers:** `--format` still wants a schema file (no inline shorthand); `q history <word>` ignores its argument (use `lm find`); the `--diy` narration still labels an image read `intent=describe-data`; `q again --big|--code` and a real MLX `see diff` judge are wired but were not run live.
 - **Older candidate suite** (`probe/candidates/`): stages 1 to 3 still need runners (granite-docling, image tools, MiniCPM5-2B). The vision harness supersedes its stage 0 and stage 1 reads.
 - **Codex is out of quota until 2026-11-20.** Builds go to sonnet seats until then. Argon stays the ideation and review seat.
 - **Outside-model track record:** `docs/model-notes.md`. Add a row after every Argon, Codex or Gemini run.
-- **Pre-existing verify.sh failures (3):** the guard-model-tier block path, warm-morning missing, warm-evening-off not loaded.
+- **Pre-existing verify.sh failures (2, as of 2026-10-22):** the guard-model-tier block path (a gcc hook, outside this repo), and the `com.alcatraz.local-models-ollama` launchd job reporting exit 1 ("address already in use" after an idle shutdown, a restart race in `lm-serve`). Run from a worktree, `lm doctor` also fails its PATH checks because the wrappers point at the main checkout; that one is expected.
 
 - **Speech and retrieval:** the September trials in `docs/20260926-lm-implementation-trials.md`
   establish feasibility, not adoption. Record 20 owner-spoken Mac clips and a held-out
