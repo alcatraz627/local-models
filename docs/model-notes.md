@@ -1,6 +1,6 @@
 # Model notes: how outside models did on real work
 
-One entry per real run of a non-Claude model (Gemini, Codex/GPT, local), so a later choice of seat can rest on a track record instead of a spec sheet. Each entry says the following:
+One entry per real run of an off-lane model, so a later choice of seat can rest on a track record instead of a spec sheet. Off-lane means any non-Claude model (Gemini, Codex/GPT, local), or a Claude model in a seat it rarely holds, such as Sonnet as the main agent. What counts and how to file is in `model-runs/README.md`, which also holds the long reports. Each entry says the following:
 
 - the task
 - what was checked, and how
@@ -8,6 +8,14 @@ One entry per real run of a non-Claude model (Gemini, Codex/GPT, local), so a la
 - any failure that would change how the model is used
 
 Newest first.
+
+## claude-sonnet-5-5 as the main agent
+
+**Standing read (2026-11-01):** a sound main seat for backend and safety work with tests. A weak judge of its own UI and of a sub-agent's report. It follows the gcc's procedure closely and the owner's intent loosely.
+
+| Date | Task | Checked how | Result | Note |
+|---|---|---|---|---|
+| 2026-10-31 | Main agent for the Ghostty settings window: plan, mocks, engine, delegated front end, gate, fix round (session `556b1dee`) | Opus re-check: full transcript, 196 tests, checks script, sandbox Apply and stale Apply, render compared with the approved mock | Engine held; UI readable only in parts and drifted from the mock; 3 false done-claims ("pixels match", 15 parity rows bulk-marked PASS, "all 13 fixed" without a look) | Report: `model-runs/20261031-sonnet-5.5-main-ghostty-settings.md` |
 
 ## gemini-4-argon
 
