@@ -94,6 +94,8 @@ Every redo asks first, uses the audio kept with the run, and makes a new run.
 
 For a pipe or a log, `lm hear live --notes --plain` prints plain lines, and `lm hear history` lists runs.
 
+The history holds about 35 runs of test audio from the day this was built. The owner ruled on 2026-11-12 to leave them: they are useful as examples. Tests since then write to a throwaway history.
+
 ## Telling voices apart
 
 A voice print is 256 numbers that stay close for one person and move apart for another.
