@@ -215,7 +215,7 @@ def screen_capabilities(reg, p, job=None):
 # lm how
 
 TOKEN = re.compile(r"[a-z0-9][a-z0-9+_-]*")
-LAUNCHERS = ("lm", "q", "see", "review", "warm", "imagine", "probe")
+LAUNCHERS = ("lm", "q", "see", "review", "warm", "probe")
 
 
 def _norm(reg):

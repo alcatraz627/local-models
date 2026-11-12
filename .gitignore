@@ -1,6 +1,7 @@
 .venv/
 outputs/
 logs/
+probe/hear/fixtures/
 .DS_Store
 _*.claude.md
 .claude/*

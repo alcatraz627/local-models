@@ -112,7 +112,7 @@ lm gemini ingest-repo . && lm gemini ask "list retry handlers with file paths"  
 | Document | What's in it |
 |---|---|
 | [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) | the full menu — every ability, grouped, with examples |
-| [`docs/STATE.md`](docs/STATE.md) | architecture and dated implementation ledger; check live status before relying on it |
+| [`docs/STATE.md`](docs/STATE.md) | what is true now; the dated history is in docs/LEDGER.md |
 | [`docs/q-spec.md`](docs/q-spec.md) | the `q` contract: intents, envelope, constrained decoding |
 | [`docs/03-tool-orchestration-decision.md`](docs/03-tool-orchestration-decision.md) | why the command owns file and tool access |
 | [`docs/04-ollama-vs-llamacpp-decision.md`](docs/04-ollama-vs-llamacpp-decision.md) / [`docs/05-perf-levers-and-usage-audit.md`](docs/05-perf-levers-and-usage-audit.md) | dated runtime choice and measurements |

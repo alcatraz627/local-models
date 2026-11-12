@@ -1,6 +1,6 @@
 # NEXT SESSION — pointer, not a plan
 
-**The live pending list is `docs/STATE.md` § PENDING** — single source, kept current,
+**The live pending list is `docs/STATE.md` § Open work** — single source, kept current,
 each item with the first command to run. This file used to carry the 2026-07-05 agenda;
 that agenda shipped in full (2026-07-07, session local-agent-9c) and the follow-on waves
 through 2026-07-10 are in STATE's DONE ledger.

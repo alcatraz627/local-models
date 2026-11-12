@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# lm hear: speech to text on this Mac (words, speakers, call digests, spoken intent).
+# This file owns the help screen, in the same shape as the other lm tools. The work
+# is in lib/hear.py, run with the repo's Python so the MLX speech libraries are found.
+set -eo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DIR/bin/_lib.sh"
+wants_all "$@" && HELP_ALL=true
+lm_identify   # exports LM_TTY and LM_SESSION, which lib/hear.py writes into each history row
+
+show_help() {
+  printf '%s%slm hear%s %s  turn speech into text on this Mac, and check it%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  _sec 'SPEAK  into this Mac'"'"'s microphone'
+  _cmd 'lm hear live'                   'talk, press Enter, get the words'
+  _cmd 'lm hear live --intent'          'the words, and what you were asking for'
+  _cmd 'lm hear live --notes'           'keeps listening; each sentence as you finish it'
+  _sec 'TRANSCRIBE  a voice note, a recording, a whole call'
+  _cmd 'lm hear memo.m4a'               'the words, in a few seconds'
+  _cmd 'lm hear call.mp4 --speakers'    'who said what, with times'
+  _sec 'UNDERSTAND  what it meant'
+  _cmd 'lm hear call call.mp4'          'transcript plus a digest; each point cites a time'
+  _cmd 'lm hear intent memo.m4a'        'what a spoken note asks for; it runs nothing'
+  _cmd 'lm hear intent --text "..."'    'the same, from typed text'
+  _sec 'CHECK  how far to trust a transcript'
+  _cmd 'lm hear check call.mp4'         'two unrelated transcribers, and where they differ'
+  _cmd 'lm hear check F --against R'    'judge an earlier result.json against both'
+  _sec 'PAST RUNS  every run keeps its audio'
+  _cmd 'lm hear history'                'your recent runs, numbered'
+  _cmd 'lm hear show 12'                'open run 12; no number means the latest'
+  _cmd 'lm hear again 12 --speakers'    'do run 12 over with other options; no re-recording'
+  _cmd 'lm hear again 12 --as call'     'the same audio as a call digest, an intent or a check'
+  _sec OPTIONS
+  _opt '--speakers'                     'label each turn with a speaker (about 1/4 of the audio length)'
+  _opt '--context "ACES, PIES"'         'names and terms to spell right'
+  _opt '--seconds N'                    'live: stop by itself after N seconds'
+  _opt '--json'                         'one JSON object on stdout'
+  _more
+  _sec NOTES
+  _note 'Reads anything macOS can open: mp4, mov, m4a, mp3, wav. mkv and webm need ffmpeg.'
+  _note 'A long call is read in 10-minute windows. Stop it and run it again: it resumes.'
+  _note 'Runs land in outputs/hear/ and logs/hear-history.jsonl. Design: docs/11-speech-lane.md'
+  _help_end 'lm hear -h'
+}
+
+case "${1:-}" in
+  ''|-h|--help|help) show_help; exit 0 ;;
+esac
+exec "$DIR/.venv/bin/python" "$DIR/lib/hear.py" "$@"

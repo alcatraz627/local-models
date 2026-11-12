@@ -126,6 +126,13 @@ else
   bad "measure lane — failing checks:"
   printf '%s\n' "$MC" | awk '/FAIL/ {print "       " $0}'
 fi
+HC="$(./.venv/bin/python probe/hear/check.py --unit 2>&1)"; hcrc=$?
+if [ "$hcrc" -eq 0 ]; then
+  ok "speech lane audit code (hear: agreement, digest citations, window join, resume; model-free): $(printf '%s' "$HC" | tail -1)"
+else
+  bad "speech lane — failing checks:"
+  printf '%s\n' "$HC" | awk '/FAIL/ {print "       " $0}'
+fi
 CR="$(./.venv/bin/python probe/fixtures/cmdcheck-route.py 2>&1)"; crrc=$?
 if [ "$crrc" -eq 0 ]; then
   ok "cmdcheck and routing words (q check / q cmd / prompt routing): $(printf '%s' "$CR" | tail -1)"

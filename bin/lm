@@ -66,9 +66,9 @@ suggest_next() {
 examples_table() {
   _r() { _help_row "$C" 53 "$1" "$2"; }
   _s() { printf '\n%s%s%s\n' "$Y" "$1" "$Rs"; }
-  printf '%s%slm examples%s %s— local/offline tools plus connected web and Gemini lanes%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
+  printf '%s%slm examples%s %s  local tools, plus the web and Gemini lanes that leave this Mac%s\n' "$Bd" "$C" "$Rs" "$Dm" "$Rs"
 
-  _s 'THE DAILY JOBS — lm'
+  _s 'THE DAILY JOBS: lm'
   _r 'lm "how do I see what is using port 5432"'    'quick answer; paths and typos in it route themselves'
   _r 'lm cmd "5 largest files in ~/Downloads"'      'one shell command, checked against its --help'
   _r 'lm read paste "what does the error say?"'     'the screenshot on your clipboard'
@@ -77,7 +77,7 @@ examples_table() {
   _r 'lm find "port 5432"'                          'search your past answers'
   _r 'lm fast 1h'                                   'keep answers instant for an hour'
 
-  _s 'ASK & FILE Q&A — q'
+  _s 'ASK & FILE Q&A: q'
   _r 'q "explain this stack trace: <paste>"'        'quick answer on the warm model'
   _r 'q cmd "free up port 3001"'                    'one macOS command, no prose'
   _r 'q --big "reason through this tradeoff"'        'heavier MoE, on demand'
@@ -89,11 +89,11 @@ examples_table() {
   _r 'q --preflight --ctx sales.xlsx --json'       'inspect sheets and context before a call'
   _r 'q --format SCHEMA "classify: …"'              'constrained decoding → parsed .data'
 
-  _s 'INPUTS & PIPING — local, except labeled connected calls'
+  _s 'INPUTS & PIPING: local, except labeled connected calls'
   _r 'git diff | q commit'                          'pipe stdin straight into an intent'
   _r 'pbpaste | q "tighten this copy"'              'clipboard text as input (macOS)'
   _r 'q --ctx - qa "who signs off?" < contract.md'  'a file as context via stdin'
-  _r 'q summarize --file report.pdf'                'a file — PDF/Word/HTML/xlsx auto-extracted'
+  _r 'q summarize --file report.pdf'                'a file: PDF/Word/HTML/xlsx auto-extracted'
   _r 'cat run.log | lm gemini "what failed and why?"' 'connected Gemini: piped stdin becomes context'
   _r 'kubectl get pods -o json | q --ctx - qa "any crashloops?"' 'a tool'\''s JSON output as context'
   _r 'screencapture -i /tmp/s.png && see /tmp/s.png --ui' 'grab a screen region, then read it'
@@ -105,7 +105,7 @@ examples_table() {
   _r 'lm gemini ingest docs/*.md src/*.py'          'connected Gemini: many files into one session'
   _r 'lm gemini ingest-repo .'                      'connected Gemini: pack repo, gitignore-aware'
 
-  _s 'VISION — see (read a screenshot into text)'
+  _s 'VISION: see (read a screenshot into text)'
   _r 'see shot.png "what state is the toggle in?"'   'grounded read (Qwen3-VL on MLX; minicpm-v4.6 if memory is tight)'
   _r 'see dashboard.png --ui'                        'UI inventory (Qwen3-VL by default)'
   _r 'see modal.png --mlx "is the dropdown open?"'   'high-accuracy mlx structure read'
@@ -115,26 +115,33 @@ examples_table() {
   _r 'see "~/Desktop/a shot.png" --ui'               'quoted spaced / ~ paths resolve'
   _r 'UI_DEFAULT_MLX=0 see shot.png --ui'            'revert --ui to the ollama tier'
 
-  _s 'COMPARE — see diff (does B faithfully imitate A?)'
+  _s 'COMPARE: see diff (does B faithfully imitate A?)'
   _r 'see diff before.png after.png'                 '$0 evidence pack + one judged read'
   _r 'see diff a.png b.png --only E5 --grid 32'      'refine one extractor, no model call'
 
-  _s 'BATCH FAN-OUT — lm fleet (envelope gate; --judge checks content)'
+  _s 'BATCH FAN-OUT: lm fleet (envelope gate; --judge checks content)'
   _r 'lm fleet review src/*.sh'                      'audit every script'
   _r 'lm fleet qa --prompt "find brand names" *.xlsx -m sweep' 'sweep sheets on the grunt tier'
   _r 'lm fleet summarize docs/*.md -m sweep -j 4'    'granite4:tiny-h; verify the summaries'
   _r 'lm fleet sample outputs/fleet/<run> --count 5' 'human-check a source/answer sample'
   _r 'lm fleet audit outputs/fleet/<run>'            'separate envelope, judge, and human gates'
 
-  _s 'CONNECTED GEMINI — external service, wrapper-only'
+  _s 'CONNECTED GEMINI: external service, wrapper-only'
   _r 'lm gemini models'                              'the model pick-list (* = default)'
   _r 'lm gemini -m gemini-3.8-flash "…"'             'pick a model for one call'
   _r 'lm gemini ingest-repo . && lm gemini ask "where is retry handled?"' 'whole-repo Q&A'
   _r 'lm gemini research "current state of X" --json' 'web-shaped, null-when-unsure'
 
-  _s 'IMAGE GEN — imagine (qwen by default, on the GPU)'
-  _r 'imagine --enhance "a cozy reading nook"'       'LLM-expanded prompt'
-  _r 'imagine refine 12 "warmer light"'              'seed-locked iterate on gen 12'
+  _s 'IMAGE GEN: imagine (qwen by default, on the GPU)'
+  _r 'lm imagine --enhance "a cozy reading nook"'       'LLM-expanded prompt'
+  _r 'lm imagine refine 12 "warmer light"'              'seed-locked iterate on gen 12'
+
+  _s 'SPEECH: hear (recordings and voice notes into text)'
+  _r 'lm hear memo.m4a'                              'the words, in a few seconds'
+  _r 'lm hear call.mp4 --speakers'                   'who said what, with times'
+  _r 'lm hear call call.mp4'                         'transcript plus a digest that cites times'
+  _r 'lm hear intent --text "open slack and mute general"' 'what a spoken note asks for; runs nothing'
+  _r 'lm hear check call.mp4'                        'two transcribers, and where they differ'
 
   _s 'UI VERIFY & REPO'
   _r 'lm ui-verify shot.png "the CTA is disabled"'   'strict pass/fail/unsure gate'
@@ -301,7 +308,8 @@ lm_doctor() {
   check "mlx vision cache (see --ui default: $mlx_repo)" \
         sh -c "ls '$mlx_dir'/snapshots/*/config.json"
   check "mflux venv ($DIR/.venv)"            test -x "$DIR/.venv/bin/mflux-generate"
-  local c; for c in lm q imagine warm see review; do
+  # imagine and hear are reached as `lm imagine` and `lm hear` only (owner, 2026-11-12).
+  local c; for c in lm q warm see review; do
     check "on PATH: $c -> $BIN/$c"           path_hits "$c"
   done
   check "logs dir writable"                  sh -c "mkdir -p '$DIR/logs' && touch '$DIR/logs/.w' && rm -f '$DIR/logs/.w'"
@@ -415,9 +423,9 @@ lm_timeline() {
   done
   case "$tool" in
     gem) tool=gemini ;; img) tool=imagine ;;
-    ''|q|see|imagine|fleet|gemini) : ;;
-    *) local g; g="$(did_you_mean "$tool" q see imagine fleet gemini)"
-       usage_fail "lm timeline" "unknown tool '$tool'${g:+ (did you mean '$g'?)}; one of q see imagine fleet gemini" ;;
+    ''|q|see|imagine|fleet|gemini|hear) : ;;
+    *) local g; g="$(did_you_mean "$tool" q see imagine fleet gemini hear)"
+       usage_fail "lm timeline" "unknown tool '$tool'${g:+ (did you mean '$g'?)}; one of q see imagine fleet gemini hear" ;;
   esac
   lm_identify
   # Only the newest N lines of each log can hold the newest N rows overall, so tail
@@ -448,6 +456,7 @@ lm_timeline() {
     tl_src see     "$DIR/logs/see-history.jsonl"        'row($ln; .mode // "read"; (.error != null or ((.response // "") | startswith("(visual read failed"))); ((.img // "?") | split("/") | last) + "  " + flat(.prompt // "describe"; 40))'
     tl_src fleet   "$DIR/logs/fleet-history.jsonl"      'row($ln; .intent; ((.fail // 0) > 0); "×\(.items)  \(.pass)✓/\(.fail)✗")'
     tl_src gemini  "$DIR/logs/gem-history.jsonl"        'row($ln; .kind; (.kind == "error"); flat(.prompt; 50)) | .code = ((.resp | capture("^(?<c>[a-z_]+):") | .c) // null)'
+    tl_src hear    "$DIR/logs/hear-history.jsonl"       'row($ln; .verb; (.ok == false); flat(.snippet // ((.file // "") | split("/") | last); 56)) | .code = (.error // null)'
   } | jq -cs --argjson n "$n" --argjson errors "$errors" --arg t "$LM_TTY" --arg s "$LM_SESSION" --argjson all "$all" "$JQ_HIST $JQ_REMEDY $JQ_MINE $JQ_LOCAL_TS"'
     map(. + {mine: mine($t; $s)})
     | map(select(if $errors then .err else true end))
@@ -681,6 +690,7 @@ case "$verb" in
              esac ;;
   q)        shift; exec "$BIN/q" "$@" ;;
   imagine)  shift; exec "$BIN/imagine" "$@" ;;
+  hear)     shift; exec "$BIN/hear" "$@" ;;
   see)      shift; exec "$BIN/see" "$@" ;;
   review)   shift; exec "$BIN/review" "$@" ;;
   probe)    shift; exec "$BIN/probe" "$@" ;;
@@ -722,6 +732,6 @@ case "$verb" in
   --version|-V|version) echo "lm ${LM_VERSION:-unknown}" ;;
   *) # Several words, or one with spaces, is a question typed straight after lm.
      if [ $# -gt 1 ] || [[ "$verb" == *" "* ]]; then ask_q "$@"; fi
-     g="$(did_you_mean "$verb" more how help ask cmd read diff doc again find fast q imagine see review probe fleet index gemini ui-verify rag bench opencode warm status models doctor timeline last examples version)"
+     g="$(did_you_mean "$verb" more how help ask cmd read diff doc again find fast q imagine hear see review probe fleet index gemini ui-verify rag bench opencode warm status models doctor timeline last examples version)"
      echo "lm: unknown verb '$verb'${g:+ (did you mean '$g'?)}; run lm for the jobs, or lm \"your question\" to ask" >&2; exit 2 ;;
 esac

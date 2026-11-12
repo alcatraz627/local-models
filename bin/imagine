@@ -30,13 +30,14 @@ lm_identify
 # ADD A MODEL = add one case line (no repo manager needed).
 resolve_model() {
   MODEL_ARGS=(); DEF_GUIDANCE=""; HF_REPO=""; MIN_GB=0
+  GRANT_GB=32   # memory to ask zrecover for; qwen was measured past 36 GB while loading
   case "$1" in
     schnell)                 BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model schnell); DEF_STEPS=4
                              HF_REPO="black-forest-labs--FLUX.1-schnell"; MIN_GB=28 ;;
     dev)                     BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model dev);     DEF_STEPS=20; DEF_GUIDANCE=3.5
                              HF_REPO="black-forest-labs--FLUX.1-dev"; MIN_GB=28 ;;
     qwen)                    BIN="$VENV/mflux-generate-qwen";  DEF_STEPS=20; DEF_GUIDANCE=4
-                             HF_REPO="Qwen--Qwen-Image"; MIN_GB=40 ;;
+                             HF_REPO="Qwen--Qwen-Image"; MIN_GB=40; GRANT_GB=44 ;;
     flux2|klein|flux2-klein) BIN="$VENV/mflux-generate-flux2"; MODEL_ARGS=(--base-model flux2-klein-4b); DEF_STEPS=8 ;;
     *)                       BIN="$VENV/mflux-generate";       MODEL_ARGS=(--model "$1");    DEF_STEPS=4 ;;
   esac
@@ -118,25 +119,25 @@ show_help() {
   local d="${IMAGINE_MODEL:-qwen}"   # whichever model config.sh makes the default
   printf '%s%simagine%s %s— draw an image on this Mac'"'"'s GPU, offline and free (default model: %s)%s\n' "$Bd" "$C" "$Rs" "$Dm" "$d" "$Rs"
   _sec USAGE
-  _cmd 'imagine "<prompt>"'      'generate with the default model (qwen takes about 1-2 minutes)'
-  _cmd 'imagine refine N "delta"' 'keep the look of entry N and change the prompt a little'
-  _cmd 'imagine vary N'          'same prompt as entry N, new roll of the dice'
-  _cmd 'imagine history, show N' 'recent images, numbered (★ = starred) · one in full'
-  _cmd 'imagine star N, prune'  'keep one safe · list (or -y: Trash) the images you did not star'
+  _cmd 'lm imagine "<prompt>"'      'generate with the default model (qwen takes about 1-2 minutes)'
+  _cmd 'lm imagine refine N "delta"' 'keep the look of entry N and change the prompt a little'
+  _cmd 'lm imagine vary N'          'same prompt as entry N, new roll of the dice'
+  _cmd 'lm imagine history, show N' 'recent images, numbered (★ = starred) · one in full'
+  _cmd 'lm imagine star N, prune'  'keep one safe · list (or -y: Trash) the images you did not star'
   _sec EXAMPLES
-  _ex 'imagine "a neon city at night, rain"' ''
-  _ex 'imagine --enhance "tired developer at 3am"' '# a model writes a richer prompt first'
-  _ex 'imagine -m qwen "a sign reading OPEN"' '# qwen and dev draw legible text'
-  _ex 'imagine refine 12 "warmer light"' '# steer entry 12 without losing it'
+  _ex 'lm imagine "a neon city at night, rain"' ''
+  _ex 'lm imagine --enhance "tired developer at 3am"' '# a model writes a richer prompt first'
+  _ex 'lm imagine -m qwen "a sign reading OPEN"' '# qwen and dev draw legible text'
+  _ex 'lm imagine refine 12 "warmer light"' '# steer entry 12 without losing it'
   _more
-  _cmd 'imagine redo N'          're-run entry N exactly'
-  _cmd 'imagine gallery'         'regenerate outputs/index.html from history'
-  _cmd 'imagine critique IMG ["goal"]' 'local vision-model critique of an image'
-  _ex 'imagine vary 12' '# same prompt, new roll'
-  _ex 'imagine --from photo.png "make it watercolor"' '# start from an input image'
-  _ex 'imagine --style photo "a corgi on a skateboard"' ''
-  _ex 'imagine critique out.png "a moody forest"' '# local vision critique'
-  _ex 'imagine star 12 && imagine prune -y' '# keep the good one, Trash the rest'
+  _cmd 'lm imagine redo N'          're-run entry N exactly'
+  _cmd 'lm imagine gallery'         'regenerate outputs/index.html from history'
+  _cmd 'lm imagine critique IMG ["goal"]' 'local vision-model critique of an image'
+  _ex 'lm imagine vary 12' '# same prompt, new roll'
+  _ex 'lm imagine --from photo.png "make it watercolor"' '# start from an input image'
+  _ex 'lm imagine --style photo "a corgi on a skateboard"' ''
+  _ex 'lm imagine critique out.png "a moody forest"' '# local vision critique'
+  _ex 'lm imagine star 12 && imagine prune -y' '# keep the good one, Trash the rest'
   _sec OPTIONS
   _opt '-e, --enhance'      'a model rewrites your idea into a rich prompt (smart default)'
   _opt '--from IMG [--strength X]' 'img2img: start from an input image (X=0..1, default 0.5)'
@@ -159,7 +160,7 @@ show_help() {
   _note 'default: config.sh IMAGINE_MODEL · per-call: -m <name> · first use downloads weights'
   _sec NOTES
   _note 'Local; no network after the one-time download. No tokens or billing. Each PNG documents itself and history records the full config, so redo, vary and refine can reproduce any past run.'
-  _help_end 'imagine -h'
+  _help_end 'lm imagine -h'
 }
 
 show_history() {
@@ -168,7 +169,7 @@ show_history() {
   jsonl_history "$LOG" "${1:-15}" "$JQ_LOCAL_TS"'
     (if .kind == "critique" then "  \(.ts | lts)  critique  \(.ms // 0)ms  \(.image // "?")"
      else "\(if .star then "★" else " " end) \(.ts | lts)  \(.steps)st  seed \(.seed)  \((.bytes/1024)|floor)KB  \((.prompt | gsub("\\s+"; " "))[0:40])" end)'
-  echo "  → imagine show N · redo/vary/refine N · star N · gallery"
+  echo "  → lm imagine show N · redo/vary/refine N · star N · gallery"
 }
 show_entry() {
   jsonl_entry "$LOG" "${1:-}" \
@@ -210,7 +211,7 @@ prune_outputs() {
       <(jq -r 'select(.output and ((.star // false) | not)) | .output' "$LOG" | sort -u) \
       <(jq -r 'select(.output and (.star // false)) | .output' "$LOG" | sort -u))
   if [ "$count" -eq 0 ]; then echo "nothing to prune (all outputs starred or already gone)"; return; fi
-  $yes || echo "→ imagine prune -y   to move these $count to Trash (starred entries are kept)"
+  $yes || echo "→ lm imagine prune -y   to move these $count to Trash (starred entries are kept)"
 }
 
 # Regenerate outputs/index.html — a self-contained gallery of every recorded
@@ -444,8 +445,27 @@ $ENHANCE && { _kv idea "$RAW_IDEA"; _kv enhanced "$PROMPT"; } || _kv prompt "$PR
 echo "  ${Dm}(mflux live progress below — first run of a new model also downloads it)${Rs}"
 
 GUID_ARGS=(); [ -n "$GUIDANCE" ] && GUID_ARGS=(--guidance "$GUIDANCE")
+
+# Ask the desktop memory guard for room, for this run only. zrecover stops any
+# python process at 8 GB and an image model needs several times that, so without
+# a grant the render dies seconds after the weights load. The grant names this
+# run's seed, is taken back on exit, and expires by itself if we never get there.
+# It lifts the size cap only: zrecover still sheds us if the Mac runs out of memory.
+ZGRANT=""
+if command -v zrecover >/dev/null 2>&1; then
+  ZGRANT=$(zrecover allow --match "$(basename "$BIN") .*--seed $SEED( |\$)" --gb "$GRANT_GB" \
+             --for 45m --note "imagine $MODEL" --json 2>/dev/null | jq -r '.id // empty' 2>/dev/null) || ZGRANT=""
+  if [ -n "$ZGRANT" ]; then
+    trap 'zrecover revoke "$ZGRANT" >/dev/null 2>&1 || true' EXIT
+    _kv memory "zrecover grant $ZGRANT, up to ${GRANT_GB} GB for this run"
+  else
+    echo "  ${eY}note:${eRs} no zrecover grant (it may stop this run at 8 GB): zrecover allow --match mflux-generate --gb $GRANT_GB" >&2
+  fi
+fi
 t0=$(date +%s)
-if "$BIN" "${MODEL_ARGS[@]}" --steps "$STEPS" --quantize "$QUANT" --seed "$SEED" \
+# Cap MLX's buffer cache: left alone it kept freed buffers and pushed qwen from
+# about 36 GB of real use to 49 GB by the final decode, past any grant zrecover gives.
+if "$BIN" "${MODEL_ARGS[@]}" --mlx-cache-limit-gb "${IMAGINE_MLX_CACHE_GB:-4}" --steps "$STEPS" --quantize "$QUANT" --seed "$SEED" \
      --width "$WIDTH" --height "$HEIGHT" --metadata "${GUID_ARGS[@]}" "${EXTRA[@]}" \
      --prompt "$PROMPT" --output "$OUT"; then rc=0; else rc=$?; fi
 t1=$(date +%s); secs=$(( t1 - t0 ))
@@ -454,7 +474,7 @@ if [ "$rc" -eq 0 ] && [ -f "$OUT" ]; then
   bytes=$(stat -f%z "$OUT" 2>/dev/null || echo 0)
   _sec DONE
   _kv file "$OUT"; _kv size "$(du -h "$OUT" | cut -f1)"; _kv time "${secs}s"
-  _kv seed "$SEED   ${Dm}(reuse: imagine --seed $SEED ... · or redo/vary/refine N)${Rs}"
+  _kv seed "$SEED   ${Dm}(reuse: lm imagine --seed $SEED ... · or redo/vary/refine N)${Rs}"
   $STEPWISE && _kv steps-dir "$STEPDIR"
   # Full reproducible config — redo/vary/refine and the gallery read this back.
   jq -cn \

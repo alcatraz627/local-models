@@ -4,7 +4,7 @@ A local LLM + vision + image-gen toolkit for one Apple Silicon Mac (M5 Pro, 64 G
 model calls run locally; `lm gemini` and `q --web` use the network. You are usually the
 *user* of these tools, not just their maintainer.
 
-**Read in this order:** `docs/STATE.md` (current state + what's pending, kept current) →
+**Read in this order:** `docs/STATE.md` (current state + what's pending, kept current; history in `docs/LEDGER.md`) →
 `docs/CAPABILITIES.md` (the full menu with copy-paste examples) → the design doc for
 whatever you're touching (`docs/03`–`docs/10`).
 

@@ -226,7 +226,7 @@ drift on multiline prompts, `ollama_resident` prefix over-match, per-file prune 
 gallery `-o` paths. Deferred knowingly: star-vs-append race (no locking; documented), pre-cid
 ts-collision chains (legacy entries only), auto-base state race (window minimized, comment owns it).
 Pending feature work (q `--web`, imagine registry additions, upscale step) is tracked in
-`STATE.md` § PENDING — the June 24 review prioritizes it; this list is orthogonal (correctness
+`STATE.md` § Open work — the June 24 review prioritizes it; this list is orthogonal (correctness
 and usability of what's already shipped).
 
 ### Non-goals (so nobody re-litigates them)

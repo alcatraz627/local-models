@@ -739,7 +739,7 @@ name = "imagine"
 kind = "job"
 aliases = []
 summary = "draw an image locally"
-usage = 'imagine "prompt"'
+usage = 'lm imagine "prompt"'
 more_label = 'lm imagine "..."'
 more_says = "local image generation (Flux/Qwen on the GPU)"
 help_says = "draw an image locally"
@@ -755,8 +755,40 @@ see_also = []
 next = ""
 fill = "your prompt"
 examples = [
-  { cmd = 'imagine "a cozy reading nook"', says = "about 1-2 minutes with the default model, free, offline", keywords = ["generate an image", "draw", "make a picture", "image of"] },
-  { cmd = 'imagine refine 12 "warmer light"', says = "redo a past generation with one change", keywords = ["refine", "steer", "iterate on"], fill = ["12", '"warmer light"'] },
+  { cmd = 'lm imagine "a cozy reading nook"', says = "about 1-2 minutes with the default model, free, offline", keywords = ["generate an image", "draw", "make a picture", "image of"] },
+  { cmd = 'lm imagine refine 12 "warmer light"', says = "redo a past generation with one change", keywords = ["refine", "steer", "iterate on"], fill = ["12", '"warmer light"'] },
+]
+
+[[job]]
+name = "hear"
+kind = "job"
+aliases = []
+summary = "turn speech into text: a voice note, a recording, a whole call"
+usage = "lm hear live [--notes] | lm hear [call|intent|check] <recording> [--speakers] [--json]"
+more_label = "lm hear <recording>"
+more_says = "speech to text, speakers, call digests, spoken intent"
+help_says = "turn a recording into text and check it"
+inputs = "an audio or video file macOS can open (mp4, mov, m4a, mp3, wav); intent also takes --text"
+output = "the transcript as text; --json one object; call adds a digest whose points cite transcript times"
+exit_codes = "0 ok, 2 bad usage, 10 a model failed or nothing was said, 12 file missing or unreadable"
+cost_tier = "mlx"
+cost_secs = "3 for a voice note; about a quarter of the recording's length with --speakers"
+leaves_mac = false
+side_effects = "loads a speech model, writes outputs/hear/ and logs/hear-history.jsonl; call also loads the big text model"
+keywords = ["transcribe a recording", "speech to text", "transcribe a call", "who said what", "meeting summary", "voice note"]
+see_also = ["doc"]
+next = ""
+fill = "your recording"
+examples = [
+  { cmd = "lm hear live", says = "talk into the microphone, press Enter, get the words", keywords = ["dictate", "speak", "microphone", "record my voice"] },
+  { cmd = "lm hear live --notes", says = "keeps listening and prints each sentence as you finish it", keywords = ["live transcription", "transcribe as I talk", "meeting notes live"] },
+  { cmd = "lm hear memo.m4a", says = "the words, in a few seconds", keywords = ["transcribe", "speech to text", "voice note"], fill = ["memo.m4a"] },
+  { cmd = "lm hear call.mp4 --speakers", says = "who said what, with times", keywords = ["who said what", "speakers"], fill = ["call.mp4"] },
+  { cmd = "lm hear call call.mp4", says = "transcript plus a digest of what the call meant", keywords = ["meeting summary", "summarize a call", "call notes"], fill = ["call.mp4"] },
+  { cmd = "lm hear intent memo.m4a", says = "what a spoken note is asking for; runs nothing", keywords = ["voice command", "spoken intent"], fill = ["memo.m4a"] },
+  { cmd = "lm hear check call.mp4", says = "two unrelated transcribers and where they disagree", keywords = ["check a transcript", "audit a transcript"], fill = ["call.mp4"] },
+  { cmd = "lm hear history", says = "your recent runs, numbered; every run keeps its audio", keywords = ["past transcripts", "hear history"] },
+  { cmd = "lm hear again 12 --speakers", says = "do a past run over with other options, without recording again", keywords = ["re-run a transcript", "redo a recording"], fill = ["12"] },
 ]
 
 [[job]]

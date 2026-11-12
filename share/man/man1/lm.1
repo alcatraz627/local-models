@@ -72,8 +72,12 @@ Search exact text first, then by meaning.
 .B lm index [find X]
 Repo symbol map: build once, ask where a name is defined.
 .TP
-.B imagine \(dqprompt\(dq
+.B lm imagine \(dqprompt\(dq
 Draw an image locally.
+.TP
+.B lm hear live [\-\-notes] | lm hear [call|intent|check] <recording> \
+[\-\-speakers] [\-\-json]
+Turn speech into text: a voice note, a recording, a whole call.
 .TP
 .B lm probe <model>
 Judge whether a local model is trustworthy.
@@ -175,6 +179,12 @@ Fan out across files.
 .TP
 .B lm index find fleet_worker
 Where is X, no model call.
+.TP
+.B lm imagine \(dqa cozy reading nook\(dq
+About 1\-2 minutes with the default model, free, offline.
+.TP
+.B lm hear live
+Talk into the microphone, press Enter, get the words.
 .TP
 .B lm probe gemma4:26b
 Run the reliability eval on one model.

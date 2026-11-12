@@ -68,7 +68,8 @@ KEEP IT HANDY
 | `lm fleet <intent> [--prompt P] files...` | ask one question of many independent files | small, depends on file count; -j sets the parallelism s | no |
 | `lm rag index|search|ask ...` | search exact text first, then by meaning | small, indexing: minutes for a big folder; search: under 2 s | no |
 | `lm index [find X]` | repo symbol map: build once, ask where a name is defined | no model, under 1 after the first build s | no |
-| `imagine "prompt"` | draw an image locally | mlx, 60-120 with the default model s | no |
+| `lm imagine "prompt"` | draw an image locally | mlx, 60-120 with the default model s | no |
+| `lm hear live [--notes] | lm hear [call|intent|check] <recording> [--speakers] [--json]` | turn speech into text: a voice note, a recording, a whole call | mlx, 3 for a voice note; about a quarter of the recording's length with --speakers s | no |
 | `lm probe <model>` | judge whether a local model is trustworthy | big, minutes s | no |
 | `lm bench <set>` | run a fixed behavior and latency fixture set | small, minutes s | no |
 | `lm ui-verify <img> "claim"` | check claims about a screenshot against a UI inventory | vision, 20-60 s | no |

@@ -1,301 +1,128 @@
-# local-models — STATE (agent handoff / index)
+---
+reader: an agent or the owner picking this project up cold
+---
 
-Project handoff index and historical ledger. Read this first, then verify current state with `lm status`, `lm models`, and the implementation. Reviewed 2026-10-22.
+# local-models: state
 
-**What it is:** a local-model toolkit on an Apple-Silicon Mac (M5 Pro, 64 GB), running alongside
-cloud agents. Per-request expiry, explicit leases, and scheduled warmth control residency.
-**The full command menu with examples: `docs/CAPABILITIES.md`.**
+A toolkit of local language, vision, image and speech models on one Apple Silicon Mac (64 GB). It runs beside cloud agents and covers what they do poorly or should not see.
 
-**Disk budget (reasoned, not a code check):** local-model storage (`~/.ollama/models` +
-`~/.cache/huggingface`) stays under 150 GB steady-state, 200 GB absolute. Ladder and
-per-band actions are hard rule 3 in `CLAUDE.md`. Footprint 2026-09-11 is ~115 GB after the
-model survey (added minicpm-v4.6, granite4:tiny-h, Qwen3-VL-8B via mlx-vlm; evicted glm-4.7-flash).
-The host check on 2026-09-27 measured about 114 GB across those two caches.
+This file says what is true now. Check it against the live commands before relying on it:
 
-## Entrypoint
+```bash
+lm status              # server, loaded models, disk
+lm models              # tiers and what is installed
+bash scripts/verify.sh # the smoke suite
+```
 
-`lm` (on PATH) is the front door. `lm` prints the overview, `lm examples` a colored
-comprehensive showcase (incl. INPUTS & PIPING: stdin/clipboard/file/screenshot/web/glob),
-`lm help <job>` a short route for a specific job, and `lm status` the server/warm/models view.
-All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bin/`).
+History is in `docs/LEDGER.md`. The full command menu is in `docs/CAPABILITIES.md`.
 
-| Command | What | Help |
+## What works
+
+| Area | Command | State |
 |---|---|---|
-| `q "..."` | quick local LLM — answers, macOS commands (`q cmd`), titles; `--json`/`--format SCHEMA` (constrained decoding → `.data`), `--glow`; **`--web`** = search-then-answer (DDG, cited) · **`--diy`** = self-routing (planner picks intent/web/file/image/tier, gray-narrated, flags win); `q history`/`show N` | `q -h` |
-| `imagine "..."` | local image gen (Flux/Qwen on GPU); `--enhance --from --style --neg --seed`; `history`/`show`/`critique` | `imagine -h` |
-| `see <img> [q]` | local vision — structural read or grounded answer; **good-but-verify text**; `--ui` = sectioned UI inventory; `--ui --json` on the default MLX path is best-effort structured output, not schema-constrained · `--ocr` = exact text via Apple Vision · `--menubar` = capture+read live top strip · `--crop`/`--region` = focused read · `see more "q"` = drill into last image; reads land in `outputs/see/` | `see -h` |
-| `lm ui-verify <img> "claim"…` | the $0 UI verification gate — enumerable claims judged strictly (pass/fail/unsure; unsure never passes; exit 0 only when all pass) against either a `see --ui --json` inventory (screenshots) or `--app <Name>` = the LIVE accessibility tree via `ax` (native apps, exact); `--region/--crop` for focused reads, `--json` for agents | `lm ui-verify -h` |
-| `review <pr#\|file\|dir>` | local code review — PR/files/folders/stdin; `--full` (whole files via API, no checkout), `--findings` (schema-constrained objects), `--glow` | `review -h` |
-| `lm probe <model>` | judgment eval — the gate that decides if a model earns a tier | `lm probe` |
-| `lm fleet <intent> <files…>` | batch fan-out: N files × one intent; envelope, optional caller content judge, and sampled human verdict are separate; run record | `lm fleet -h` |
-| `lm bench <set>` | fixed correctness and latency workload with disk and command-process memory record | `lm bench -h` |
-| `lm index [find X]` | repo symbol map — "where is X" with live staleness | `lm index -h` |
-| `lm opencode [args]` | opencode on the local code tier — auto lease/release around the session | — |
-| `lm gemini "..."` | the gemini lane (default gemini-3.8-flash, opt-in gemini-4-argon, wrapper-only, read-only posture); `ingest`/`ask` per-project sessions (UUID create/resume); structured `gemini_unavailable` fallback. **VERIFIED end-to-end 2026-07-07** — auth = API key in `~/.gemini/.env` (600, wrapper-loaded; settings selectedType=gemini-api-key). Note: plan-mode gemini can READ the workspace it runs in — don't point it at dirs holding secrets | `lm gemini -h` |
-| `warm on\|off [tier\|model] [ttl]` | **bounded lease** (companion 2h, big tiers 60m; `forever` opts in to a pin); `warm off all` sweeps | `warm -h` |
-| `lm status` / `models` / `doctor` / `timeline` | server + resident + on-disk · tiers · smoke-check · merged history (q/imagine/see/fleet/gemini), `lm last`, `lm --version` | `lm` |
+| Quick answers | `lm ask`, `q` | in use |
+| Shell commands | `lm cmd` | in use, checked against the tool's own help |
+| Reading images | `lm read`, `see` | in use |
+| Comparing images | `lm diff`, `see diff` | in use |
+| Reading documents | `lm doc` | in use |
+| Speech | `lm hear`, `lm hear live` | files tested on one real call; live tested with fed audio, not yet a real voice |
+| Image generation | `lm imagine` | frozen, works |
+| Code review | `lm review` | in use |
+| Batch runs | `lm fleet` | in use |
+| Large context | `lm gemini` | in use, leaves the Mac |
+| Retrieval | `lm rag` | built, optional |
 
-## Architecture
+`lm help <name>` explains any of them. `lm examples` shows worked commands.
 
-- **Server:** self-hosted `ollama serve` via LaunchAgent `com.alcatraz.local-models-ollama`
-  (`bin/lm-serve`). Policy baked in: `MAX_LOADED_MODELS=2`, `KEEP_ALIVE=0`, flash-attn + q8 KV.
-  Port 127.0.0.1:11434. **MLX is format-routed inside Ollama** (safetensors tags → MLX runner,
-  GGUF → llama-server); measured verdict in `docs/05` §1 — Q4_K_M/llama.cpp kept for the code tier.
-- **Model lifecycle: cold by default (owner, 2026-10-22).** Every model loads per request and
-  unloads after it (server `KEEP_ALIVE=0`). `warm on` leases the small companion
-  (`gemma4-e4b-warm`, ~5.6 GB) for 2h; `warm on code [ttl]` leases a big tier for 60m by default,
-  and `lm fleet` / `lm opencode` lease automatically. Only an explicit `forever` pins. There is
-  no morning warm-up; `warm-evening-off` (daily 19:00 `off all`, inside gcc-cron) is the backstop.
-- **Tiers (config.sh):** small=`gemma4-e4b-warm` · big=`gemma4:26b` · code=`qwen3.6:35b-a3b`
-  (probe-gated 9/9). Every `see` read (plain and `--ui`) uses Qwen3-VL-8B through MLX by default;
-  vision=`minicpm-v4.6` is the automatic fallback when a big ollama model is resident or the MLX
-  read fails (the envelope then carries `.fallback`). `see diff` keeps gemma4:26b.
-- **Intents are data:** `intents/<name>.toml` (including ask/cmd/title/commit/summarize/
-  explain-code/describe-data/qa/review/complete/code-dispatch/diy-plan). `describe-data` names
-  a deterministic table handler; the other intents route to a model. Adding a handler requires
-  implementation as well as a TOML entry.
-- **Histories are the API:** `logs/q-history.jsonl` (successes AND failures), `logs/see-history.jsonl`,
-  `logs/fleet-history.jsonl`, `logs/gem-history.jsonl`, `logs/compare-history.jsonl` (one line per `see diff`), `logs/opencode-history.jsonl`, `outputs/imagine-history.jsonl` (critiques are `kind: critique` rows) — merged by `lm timeline` (q, imagine, see, fleet and gemini; not compare or opencode), mined
-  weekly by `scripts/self-audit.sh` (gcc-schedule `lm-self-audit`, Sun 11:00 → digest + proposal
-  on recurring failures). Fleet runs leave full records in `outputs/fleet/<ts>-<intent>/`.
-- **OpenCode:** `~/.config/opencode/opencode.jsonc` has the `ollama` provider (all local chat
-  models, qwen3.6 default). Use `lm opencode` so the lease is handled.
-- **Image models** live in the HF cache; `imagine` = mflux (project `.venv`).
+Only `lm`, `q`, `see`, `warm` and `review` are on PATH. Newer tools are reached through `lm`.
 
-## Key files
+## How it runs
 
-- `bin/` — `lm q imagine warm see review review-pr probe lm-serve` · `_lib.sh` (colors/help/jsonl-history/
-  residency/`resolve_tier`) · `config.sh` (tier vars)
-- `lib/` — orchestration internals, NOT on PATH: `fleet` (fan-out runner) · `fleet-review.py`
-  (human verdicts) · `data-profile.py` (table facts) · `repo-index` · `gemini` (+ `gemini-stream.py`, `gemini-direct.py`) · `rag` · `websearch` · `vis-*` · `ui-verify`
-- `intents/` — the registry + schemas: `review-findings` · `ui-inventory` · `ui-verify`
-- `outputs/see/` — the vision artifact store (one folder per read: source copy as read,
-  read.md, meta.json, notes.md; newest 150 kept; `see open N`)
-- `scripts/self-audit.sh` — the weekly feedback sink
-- **`scripts/verify.sh` — the one-command smoke battery: run after ANY change and at
-  session start after a handoff.** Checks cover syntax, doctor, q envelope+format, fleet+lease,
-  index, gemini lane (skips cleanly when unavailable), histories/timeline, sink, gcc hooks
-  (pipe-tests), schedules. Its header lists what it deliberately does NOT cover.
-- `probe/fixtures/table-contract.py` exercises full-table counts, preflight, malformed rows,
-  and stdin. `lm bench quick` records a fixed cross-capability workload.
-- `probe/` — `items.toml` (9-item judgment suite) · `runs/` (verdicts) ·
-  `fixtures/unfinished-v1/` (the finish-a-codebase exercise: fixture + conduct.sh + RESULTS.md —
-  qwen3.6 completed it 16/16 under a pytest Judge, 2026-07-07)
-- `docs/CAPABILITIES.md` — **the exhaustive food menu** (all abilities, grouped, with examples)
-- `docs/05-perf-levers-and-usage-audit.md` §1 — **the measured MLX verdict (2026-07-07)**
-- `docs/07-implementation.md` — the phased plan (Phase 1 largely built; see PENDING)
-- `docs/09-local-fleet.md` — fleet design from 269 real sub-agent dispatches
-- `docs/03-tool-orchestration-decision.md` — local models do NOT drive their own tools
-- `docs/04` — stay on Ollama · `docs/NEXT-SESSION.md` — last session's agenda state
-- Research archives: `.claude/output/20260616-model-tiers/` · `20260619-*` (landscape, judgment
-  benchmarks, re-rank) · `20260620-*` (perf levers, usage audit, efficacy architecture) ·
-  `20260707-1334-mlx-report/` (the MLX verdict, styled HTML)
-- LaunchAgents: `com.alcatraz.local-models-ollama` · `com.alcatraz.warm-morning` ·
-  `com.alcatraz.warm-evening-off` · `com.alcatraz.lm-self-audit`
+- **Server.** Ollama, started by a LaunchAgent, on `127.0.0.1:11434`.
+- **Nothing stays loaded.** A model loads for a request and unloads after it. `warm on` holds one for a set time.
+- **Vision and speech run outside Ollama**, on MLX, from the repo's `.venv`.
+- **Memory.** zrecover stops any process that grows too large. `lm imagine` and `lm hear` ask it for a grant for one run.
+- **Every run is logged.** The history files under `logs/` and `outputs/` are what other tools read.
 
-## DONE (ledger — one line per wave; detail lives in git log + the linked reports)
+| Seat | Model | Size |
+|---|---|---|
+| small | `gemma4-e4b-warm` | 6 GB |
+| big | `gemma4:26b` | 17 GB |
+| code | `qwen3.6:35b-a3b` | 23 GB |
+| sweep | `granite4:tiny-h` | 4 GB |
+| vision | Qwen3-VL-8B, 4-bit | 6 GB |
+| vision fallback | `minicpm-v4.6` | 1.6 GB |
+| speech, words | Qwen3-ASR 0.6B | 2 GB |
+| speech, speakers | VibeVoice-ASR, 4-bit | 5.7 GB |
+| image | Qwen-Image | 50 GB |
 
-- **2026-10-22 · lm discoverability:** one job list (`lib/verbs.toml`) drives everything people and agents read.
-  - It generates the `lm` screens, `lm --capabilities [--json]`, zsh completion, man pages, tldr pages and the CAPABILITIES §0 block.
-  - `lm how "<request>"` finds the command without running it. `--go` runs only argument-free, read-only jobs.
-  - JSON errors carry `remedy` and `next`. Answers on a terminal get one gray `next:` hint.
-  - Regenerate with `scripts/gen-verbs.sh`. `probe/fixtures/verbs-drift.py` (in verify.sh) fails on any drift.
-  - Reports: `.claude/output/20261022-lm-discover/` (brief, build-report, validator, fixes).
+`config.sh` is the one place these are set.
 
-- **2026-10-22 · lm usability wave:** 17 findings from an audit of the CLI as a person uses it.
-  - `lm` opens on jobs (ask, cmd, read, diff, doc, again, find, fast); `lm more` has the rest.
-  - Bare `q` routes on a terminal. `q check` tests a command answer against the tool's own help.
-  - `q again`, `see paste`, `see latest`. `see` reads exact text and counts before a model.
-  - History views default to this terminal; `--all` or `LM_ALL=1` shows every caller.
-  - Audit: `.claude/output/20261022-lm-usability/audit.md`. Build notes: `build-summary.md` beside it.
+## Disk
 
-- **2026-10-22 · vision comparison + lm CLI review wave:** a 42-case vision harness
-  (`probe/vision/`, deterministic truths, meaning-based scorers, script baselines, selftest
-  in verify.sh) run over 7 vision models, plus a 14-case text comparison (`probe/textcmp/`).
-  Qwen3-VL-8B MLX led (101/112); minicpm-v4.6, the plain `see` default, came last (74).
-  Summary and the open default-swap decision: `docs/20261022-model-comparison.md`. Also:
-  `see diff --mlx`; `lm gemini` sends piped input over 200 KB to the API directly
-  (`--direct`/`--cli`), and gemini-cli 0.64 now serves 3.8-flash as requested; the memory
-  guard no longer kills big Ollama loads at warn pressure without an MLX process alive.
-  An adversarial review of the CLI (23 defects, `.claude/output/20261022-lm-adversarial/`)
-  was fixed and then attacked by a second validator, whose 14 findings were fixed too:
-  `lm timeline` 43 s to 0.4 s, unknown flags and missing values rejected everywhere with
-  one message, local times in history, `lm last`, `lm doctor --json`, an exit-code table.
+122 GB of models on disk. The target is under 150 GB and the hard stop is 200 GB. The rule is in `CLAUDE.md`.
 
-- **2026-09-12 · local-model survey + integration wave (through `/bloop`):** ran 5 candidates
-  through their real gates (survey + verdict at `.claude/output/20260911-model-survey/`), then
-  built and adversarially validated the recommendations. Shipped: **VISION_MODEL → minicpm-v4.6**
-  (smaller, better UI structure, no hallucinations); **`see --mlx` / `-m mlx:<repo>`** MLX-VLM
-  backend so Qwen3-VL-8B runs through `see`, and **`see --ui` now routes to it by default**
-  (UI_DEFAULT_MLX=1) so routine UI reads no longer load the 17GB gemma4:26b (memory reclaim,
-  Qwen3-VL tied it 5/5 on UI fixtures at ~6GB); **`-m sweep` fleet tier** (granite4:tiny-h,
-  ~1.5x; this wave called it judge-gated, though the default only checked the response envelope); **`scripts/mem-guard.py`** memory watchdog (kernel-pressure-triggered,
-  armed automatically by `see --mlx`) after an mlx+ollama co-load OOM'd the machine; disk-budget
-  as CLAUDE.md hard rule 3. gcc updated (model-tier-routing + local-models feature doc) to route
-  UI-verify to `see --mlx` and sweeps to `-m sweep`. GLM-4.7-Flash rejected (fabricated on the
-  probe). Adversarial gate found 8 issues (all fixed, incl. a pressure-metric flaw and a pid-reuse
-  bug caught on re-test): `.claude/output/20260912-bloop-validation/report.md`. Suite green
-  (verify 38/0, battery 53/53).
+## Open work
 
-- **2026-07-13 · capability wave (5, each through `/bloop`):** **asset-verify**
-  (`lib/asset-verify.py` — derived rungs judged against a best-achievable resample at
-  their own size; found data-forge's icon set already optimal) · **findings-gate**
-  (`lib/findings-gate.py` — the $0 local-review pre-gate's trust layer: fail-CLOSED
-  containment, so a fabricated file:line never reaches a human as evidence; wired as
-  /bloop Phase 4.0) · **fleet-over-real-code-task** (the routing experiment: the 35b
-  coder re-implemented the real E1 change under the battery judge, 33/33 round 1 — the
-  scoped-worker-under-a-judge seat CLEARS; the autonomous tier does not) · **E8 live-web
-  lane** (`lib/e8-{dom.py,extract.js}` — exact computed styles; the tool owns the diff,
-  not the browser) · **imagegen convergence lane** (docs/10 §11 — seed-locked `refine`,
-  or the ledger's fixed/persisting semantics are meaningless). Battery 25 → 48. Every
-  gate found real defects self-review missed (8/8 /bloop runs): a lazy-decode traceback,
-  a fixture structurally blind to compositing, a root-containment bypass, and E8's
-  alpha-dropping FALSE NEGATIVE (transparent→opaque black read as "negligible").
-  Reports: `.claude/output/20260713-*`.
+| Item | Next step |
+|---|---|
+| Speech on the owner's voice | Record 20 clips and score `lm hear` and `lm hear intent` on them. |
+| Speech end state | Goal `9a93c78fcd48`. Requirements and order of work are in `docs/11-speech-lane.md` under "The end state". Step 1 (history, show, re-run, kept audio) is done. Next: voices in live notes. |
+| Long-call speakers | People who speak little get a new label in each window. |
+| Long-call digest | One pass is thin. Take notes per ten minutes first. |
+| Big seat | `qwen3.8:27b` was recommended for a probe and never run. |
+| Model refresh | Follow `docs/model-refresh-guide.md` monthly. |
+| Routing policy | Write down when work goes local, to Gemini, or to the cloud. |
+| Speculative decoding | One measurement on the MLX path settles a disputed claim. |
+| Pi and phone peer | Waiting on the csync agent and a Pi power fault. |
+| Codex setup | Two acceptance checks remain. Codex is out of quota. |
 
-- **2026-07-12 · visual-compare Phase C (loop) — capability COMPLETE:** L3 mechanical
-  half shipped: `lib/vis-ledger.py` (status transitions as set comparisons, stall/
-  policy-pass signals, shape-validated fix-proposing errors, atomic writes) +
-  `see diff --no-read` (loop-round default, ~1s, skip ≠ failure in telemetry) +
-  `/vis-compare --loop` protocol (gcc). Battery 25→30 (F10 transitions/stall/stop ·
-  F10b malformed shapes · F10c torn-write). Gate caught a real BLOCKER again (shape
-  gap + status fabricating an empty loop on a corrupt ledger) — 4/4 /bloop runs now.
-  E7/E8 stay documented lanes (docs/10 §10). Report:
-  `.claude/output/20260712-loop-ledger-validation/report.md`.
-- **2026-07-12 · visual-compare Phase D CLOSED (acceptance signed):** two real pairs
-  run end-to-end and user-graded — run 1 login pair (verdict re-graded
-  faithful-with-notes; policy v2: `[info-add]` class + live-data rule) and run 2
-  data-forge tray icon pair, source vs 30px rung (pass-with-notes confirmed; policy
-  v3: `[render-fidelity]` class + derived-size leniency, hue exempt). Calibration
-  records sit next to each verdict.json under `outputs/see/`; policy lives at
-  `~/.claude/skills/vis-compare/policy.md`. Phase C (loop) un-gated, not started.
-- **2026-07-11 · E1 numeric position deltas (first `/bloop` run):** `moved` entries
-  in the L1 pack carry `from_xy`/`to_xy` normalized centers; `delta_xy` only for
-  unambiguous 1-vs-1 pairings (duplicate averaging would fabricate motion);
-  malformed/non-finite geometry skipped whole. Battery grew to 19 (F9 synthesized-OCR
-  contract — E1 finally guarded model-free — + F9b malformed-geometry/strict-JSON).
-  Built via the gcc `/bloop` loop as its first live test; the adversarial gate again
-  caught a real fabrication (bb.get defaults → confident (0,0) motion) that
-  self-review missed — 3/3 runs now. Report:
-  `.claude/output/20260711-e1-coords-validation/report.md`.
-- **2026-07-10 · visual-compare L1 (evidence half):** **`see diff` evidence pack** —
-  deterministic `$0` extractors (`lib/vis-compare.py`, pure PIL, no numpy/opencv): E1 text/pos ·
-  E3 palette/ΔE (CIE76) · E4 dHash+aHash · E5 grid-ΔE heatmap · E6 edge/shape grid;
-  modality-adaptive (icons skip the text lanes) + comparability gate. `--json` returns the full
-  pack in `.evidence`; the artifact gains `evidence.json` + `contact.png` (A│B│ΔE-heat);
-  `--only`/`--grid` slice reruns diff a content-addressed cache and return just the delta
-  (~0.06s, no model); every run journals to `logs/compare-history.jsonl`. Fixtures-first:
-  `probe/fixtures/make-fixtures.py` (F2-F6) + `vis-battery.py` F1-F8 in verify.sh — the
-  fabrication guard (identical pair → all zero) runs on every change. Both L1 and the L2
-  judge were adversarially validated + hardened (L1: E3 population-weighting killed a
-  JPEG-re-encode fabrication; L2: a self-check that every measured claim trace to a cited
-  evidence path, after a dry-run judge fabricated grid coords). Design + built-vs-deferred:
-  `docs/10-visual-compare-design.md`.
-- **2026-07-10 · visual-compare L2 (judge):** **`/vis-compare` gcc skill** at
-  `~/.claude/skills/vis-compare/` — native-vision judgment over the L1 pack + contact
-  sheet, classifying each divergence against a user-editable `policy.md` (imitation
-  doctrine + 8-rung divergence ladder with canonical slugs + weight-aware floor) into
-  looks-worse / neutral / improvement / not-worth-chasing, never a raw score. `verdict.json`
-  contract, `--revisit` + `suppressions.jsonl` feedback (stable content-anchor fingerprints),
-  announce-before-spend. `policy.md` v1 is a DRAFT awaiting the user's taste edit. Phase
-  C (loop) / D (calibration) pending.
-- **2026-07-10 · compare + placement:** **`see diff A B`** — two-layer image compare for
-  recreate-with-a-freer-hand workflows (deterministic OCR text/position diff both sides +
-  one big-tier two-image judged report: TEXT CHANGES/LAYOUT SHIFTS/ADDED-REMOVED/STYLE/
-  FIDELITY NOTES; artifact stores both sources; `text_diff` in --json). **Positional OCR**:
-  `see --ocr --json` → `.data.words` with x/y/w/h + script-computed 3×3 `pos`;
-  **`ui-verify --boxes`** makes placement claims rulable (verified blind). Shakedown menu:
-  diy one-line traces · routing into q-history (`q show N` explains it) · websearch
-  release-domain rerank (turned the claude version-compare green — the general fix beat
-  the rejected lm-latest subsystem) · `lm doctor` optional-extras · residency-aware see
-  timeouts · `q models`.
-- **2026-07-10 · q adapts:** **`q --diy`** (plan-then-execute: warm model emits a
-  schema-constrained plan, the script validates + executes — web/file/image/tier/intent,
-  gray-narrated, deterministic prompt-scan backstop, doc-intents degrade instead of
-  erroring) + **`q --web`** (`lib/websearch`: DDG lite, no key, cited answers, offline
-  degrade). Also: LICENSE (MIT) · self-audit digest gains per-day error trend (acting on
-  the Jul-10 digest: 15/18 gemini errors were day-1 auth setup, not live) · verify.sh 32.
-- **2026-07-10 · capability wave:** `see --ocr` (Apple Vision exact text) · `ui-verify --app`
-  (live AX-tree evidence via `ax`) · `gemini ingest-repo` (repomix) · Context7 MCP · gcc skills
-  wired + maiden-tested (/ui-gripe found a real pricing-copy bug on run #1). The gemini "@-token"
-  bug's true mechanism found + fixed (plan-mode model reads paths mentioned in piped content).
-- **2026-07-10 · RAG swim test:** full local RAG lane built, evaled 12/13 / 0 fabrications over
-  the gcc docs, then ARCHIVED by user call (parse-now > recall) —
-  `.claude/output/20260710-rag-swim-test/report.md`
-- **2026-07-09 · vision wave:** see artifact store (`outputs/see/`, fixes --menubar dead path) ·
-  `--crop`/`--region` crop-then-read · `more`/`open`/`note` verbs · `lm ui-verify` v1 (screenshot
-  lane) · gemini session self-heal · /ui-gripe skill authored.
-- **2026-07-07 · agent wave:** MLX verdict (docs/05 §1, Q4_K_M kept) · `lm fleet` · 16/16
-  codebase-finisher under a pytest judge · `q --format` · warm leases + `lm opencode` +
-  scheduled warmth · feedback sink + weekly self-audit · `lm index`.
-- **2026-07-05:** `see` (bake-off: minicpm-v) · `review`/`review-pr` · `probe` harness ·
-  code-tier gate GREEN (qwen3.6 9/9, 51 GB reclaimed).
-- **2026-06:** q/imagine/lm core · intents-as-data · server+warm policy · the research base
-  (docs/03/04/05/09, `.claude/output/2026061*` + `2026062*`).
+The long form of each older item is in `docs/LEDGER.md` under "Open items".
 
-## PENDING — current gates and optional work
+## Known failures in the smoke suite
 
-### Next round (queued 2026-10-22)
+| Check | Cause |
+|---|---|
+| guard-model-tier block path | A gcc hook outside this repo. |
+| `logs/gem-history.jsonl` corrupt | Two parallel `lm gemini` calls wrote one row over another. |
 
-- **Plain `see` default: DONE 2026-10-22** (owner approved). Qwen3-VL-8B on MLX, minicpm-v4.6 as the automatic fallback (`READ_DEFAULT_MLX` in config.sh).
-- **Odd-one-out and counting lane for `see`: DONE 2026-10-22.** `see count` and `see odd` (`lib/measure.py`, model-free), checked by `probe/fixtures/measure-check.py` in verify.sh.
-- **Qwen3.6-27B (MLX, 16 GB): DONE 2026-10-22.** Run recorded in `probe/vision/REPORT.md` and pruned from disk.
-- **lm usability leftovers:** `--format` still wants a schema file (no inline shorthand); `q history <word>` ignores its argument (use `lm find`); the `--diy` narration still labels an image read `intent=describe-data`; `q again --big|--code` and a real MLX `see diff` judge are wired but were not run live. History's "mine" match can claim an old row when macOS reuses a tty name.
-- **Older candidate suite** (`probe/candidates/`): stages 1 to 3 still need runners (granite-docling, image tools, MiniCPM5-2B). The vision harness supersedes its stage 0 and stage 1 reads.
-- **Codex is out of quota until 2026-11-20.** Builds go to sonnet seats until then. Argon stays the ideation and review seat.
-- **Outside-model track record:** `docs/model-notes.md`. Add a row after every Argon, Codex or Gemini run.
-- **Pre-existing verify.sh failures (2, as of 2026-10-22):**
-  - The guard-model-tier block path, a gcc hook outside this repo.
-  - The ollama launchd job exits 1 ("address already in use" after idle shutdown, a restart race in `lm-serve`).
-  - From a worktree, `lm doctor` also fails its PATH checks. That is expected: the wrappers point at the main checkout.
+## Lessons that still hold
 
-- **Speech and retrieval:** the September trials in `docs/20260926-lm-implementation-trials.md`
-  establish feasibility, not adoption. Record 20 owner-spoken Mac clips and a held-out
-  personal-document retrieval set before changing defaults. `lm rag` remains optional.
-- **Pi, phone, and Mac csync peer:** hold implementation until the main csync Codex
-  agent completes its overlapping work. The Pi power fault must be cleared before
-  any useful on-device performance trial.
-- **Codex gcc acceptance:** exercise `tag` and `preference-graduation` on owner-selected
-  canonical changes, then verify discovery from a fresh Codex session. The bounded
-  Codex-only i-dream pass ran on September 27; its five parsed insights were inspected,
-  and none justified a standing rule (`docs/20260927-codex-idream-live-pass.md`).
-- **Fleet over a real code task — EXERCISED 2026-07-13** (`.claude/output/20260713-fleet-code-task/experiment.md`).
-  The on-disk 35b coder re-implemented the real E1 numeric-deltas change in a pre-E1 worktree
-  under the battery judge: **33/33 green round 1, 35s, 1383 tok**, incl. a spec-only (untested)
-  requirement. VERDICT: the scoped-worker-under-a-mechanical-judge seat CLEARS the efficacy bar;
-  the autonomous tier (decomposition/design/fixture-authoring) is NOT evidenced — the cloud
-  orchestrator supplied all of that. Routing rule proposed in the report. Open: the 80B candidate
-  (not on disk; user call to pull); `lm probe` stays the complementary breadth gate.
-- **Governor policy table** — codify when work routes local/gemini/cloud (user notes 2026-07-07;
-  pairs with the gcc model-tier harness + the Jul-28 telemetry review).
-- **MTP speculative decode measurement** — the July research claims +74% throughput on the MLX
-  path and contradicts this doc's earlier note about Ollama `-mtp-*` flags; one measurement
-  session settles both. Start: check `ollama show` / server log for MTP surface on current build.
-  (Counter-finding to keep: draft-model spec-dec REGRESSES on llama.cpp/Metal — never enable it
-  on GGUF tiers.)
-- **Gated / deferred:** `procedures/*.toml` + `lm run` (needs a 2nd real recipe) ·
-  `review-pr` worktree variant · imagegen §8 upgrades ·
-  dev-ControlNet · voice lane (whisper.cpp ears + Kokoro voice — researched, fits zero-idle,
-  waiting on user want).
-- **Archived research:** the Jul-10 augmentation digest ranks further candidates:
-  `.claude/output/20260710-augment-research/digest.md`
+- For a small local model, the prompt matters more than which model it is.
+- Turn thinking off with the API flag. A prompt that says "no thinking" is ignored.
+- A re-quantized model needs its gate run again.
+- Trust a passing check. Never trust a spec sheet or a model's confidence.
+- Hold a big model with a timed lease. A pin gets forgotten.
+- A retry needs the evidence and the exact change wanted. Repeating the spec does not converge.
+- Write pipelines in bash. zsh `echo` expands `\n` inside JSON.
+- Replay the reporter's real workload before closing a bug. A synthetic repro can pass while the real one fails.
+- Pick the evidence by surface: the accessibility tree for native apps, `see --ui` for pixels, `see --ocr` for exact text.
+- Local vision checks facts well and judges looks badly.
+- Speech models need more memory the longer the audio is. Read long audio in windows.
 
-## Key lessons (load-bearing)
+## Where things are
 
-- For small local models, **the prompt is a bigger quality lever than the model**.
-- `think:false` must be the **API flag** — prompt-level "no thinking" is ignored.
-- **Re-quantized weights need re-gating** — NVFP4 kept conclusions, lost terseness; the probe
-  caught what tok/s couldn't. Trust = a passing gate, never a spec sheet.
-- **MLX in Ollama is format-routed, not a toggle** — verify engagement from the server log line,
-  never the tag name. Benchmark prefill with fresh prompts (KV-cache reuse inflates ~30×).
-- **Leases, not pins, for big models** — bounded TTLs self-heal; `keep_alive` is last-writer-wins.
-- **Worker retry feedback must ship evidence + a character-precise delta** — restating the spec
-  converges never; the delta converged in one round (unfinished-v1 RESULTS.md).
-- **Conductor pipelines are bash, never inline zsh** — zsh `echo` expands `\n` inside JSON envelopes.
-- A tool isn't delivered until it's **on PATH and invoked as a bare command**.
-- **Synthetic repro ≠ workload repro** — a bug report is only cleared by replaying the reporter's
-  workload class; six synthetic shapes all passed while the first real 1.3MB pack failed.
-- **Pick the evidence lane by surface:** AX tree for running native apps (exact), `see --ui` for
-  any pixels (structured), `see --ocr` for verbatim strings. Verify before quoting; judge natively.
-- **Vision trust boundary (measured):** zero fabrications on enumerables, weak on aesthetics —
-  local vision is a verifier and checklist-generator, never a critic.
+| Path | Holds |
+|---|---|
+| `bin/` | the commands |
+| `lib/` | the machinery behind them |
+| `lib/verbs.toml` | the one list every help screen is generated from |
+| `intents/` | prompts as data, one file per job |
+| `probe/` | checks with known answers |
+| `scripts/verify.sh` | the smoke suite |
+| `docs/` | design docs, numbered |
+| `logs/`, `outputs/` | run histories and artifacts |
+
+## Sources
+
+| Fact | From |
+|---|---|
+| Disk figure | `du -sh ~/.ollama/models ~/.cache/huggingface` |
+| Seats and models | `config.sh`, `lib/hear.py` |
+| Speech results | `docs/11-speech-lane.md` |
+| Vision and text comparison | `docs/20261022-model-comparison.md` |
+| Smoke suite result | `bash scripts/verify.sh` |
+| Cold-by-default ruling | owner |
+| Scoped-under-lm ruling | owner |
+
+Reviewed 2026-11-12.

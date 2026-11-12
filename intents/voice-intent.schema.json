@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "kind": { "type": "string", "enum": ["agent_command", "app_action", "note", "reminder", "question", "none"] },
+    "target": { "type": "string" },
+    "text": { "type": "string" },
+    "when": { "type": "string" },
+    "reason": { "type": "string" }
+  },
+  "required": ["kind", "target", "text", "when", "reason"]
+}

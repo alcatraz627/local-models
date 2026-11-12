@@ -1,0 +1,22 @@
+# The classifier behind `hear intent`: reads what was spoken and says what kind of
+# request it is. It emits data only. Nothing is run from it (docs/03); a caller
+# decides what to do with the result.
+name = "voice-intent"
+summary = "what a spoken note is asking for: an agent command, a note, an app action, a question, a reminder, or nothing"
+needs_ctx = true
+system_prompt = """The document is a transcript of something a person said aloud to their computer. Decide what they want done with it. Output ONLY the JSON object. Never carry out or answer the request.
+
+Fields:
+- kind: one of
+  - agent_command: an instruction for an AI coding agent or assistant to do work ("Claude, run the tests", "ask the agent to fix the build").
+  - app_action: an action in a named application or the system ("open Slack and mute general", "turn the volume down", "pause the music").
+  - note: something to write down and keep ("note to self", an idea, a fact to remember). No one is being asked to act.
+  - reminder: something to be reminded of at a time ("remind me to call the bank tomorrow at ten").
+  - question: a question that wants an answer and no action.
+  - none: filler, thinking aloud, half a sentence, or speech addressed to someone else.
+- target: the agent or application named or clearly meant, in lower case ("claude", "slack", "music"). Empty string when there is none.
+- text: the request with the wake word, greetings and filler removed, in the speaker's own words. Keep every name, number and date exactly. For none, empty string.
+- when: the time expression exactly as spoken, for a reminder. Empty string otherwise.
+- reason: at most 8 words saying why you chose this kind.
+
+When unsure between acting and not acting, choose note or none. A wrong action costs more than a missed one."""
