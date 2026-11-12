@@ -31,6 +31,10 @@ os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 ROOT = Path(__file__).resolve().parent.parent
 LOG = ROOT / "logs" / "hear-history.jsonl"
 OUT = ROOT / "outputs" / "hear"
+# The test suite sets this so its runs land in a throwaway folder, not in the owner's history.
+if os.environ.get("LM_HEAR_SANDBOX"):
+    LOG = Path(os.environ["LM_HEAR_SANDBOX"]) / "hear-history.jsonl"
+    OUT = Path(os.environ["LM_HEAR_SANDBOX"]) / "outputs"
 
 # One model per job. `words` is the most exact on plain speech and the fastest,
 # `speakers` is the only one that says who is talking, `stamps` gives per-sentence
@@ -250,14 +254,32 @@ def transcribe(src: Path, speakers: bool, context: str, tmp: Path, kind: str = "
             print(f"hear: picked up {reused} of {len(parts)} windows from an earlier run that did not finish", file=sys.stderr)
         segs, unmatched = stitch(windows)
         shutil.rmtree(partial, ignore_errors=True)
-        if unmatched:
-            notes.append(f"{unmatched} speaker label(s) started mid-call with nobody to match them to; "
-                         "each may be a new person or someone who was silent where two windows join")
+        unload(model)
+        if len(parts) > 1:
+            # Matching by the shared minute misses anyone quiet during it. Their voice settles it.
+            segs, note = settle_voices(segs, wav)
+            notes.append(note)
     else:
         segs, _ = run_model(model, kind, wav, context, seconds)
-    unload(model)
+        unload(model)
     return {"seconds": round(seconds, 1), "model": MODELS[kind], "segments": segs, "notes": notes,
             "text": " ".join(s["text"] for s in segs).strip()}
+
+
+def settle_voices(segs, wav: Path):
+    """Join speaker labels that are one person's voice; return the turns and a sentence on what was done."""
+    import numpy as np
+    import voiceprint
+    with wave.open(str(wav), "rb") as w:
+        audio = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768
+    before = len({s["speaker"] for s in segs})
+    segs, st = voiceprint.merge_voices(segs, audio)
+    note = f"{before} speaker labels were checked by voice and came down to {st['people']}"
+    if st["likely"]:
+        note += f"; {st['likely']} brief label(s) were attached to the closest voice, which is likely but not certain"
+    if st["unchecked"]:
+        note += f"; {st['unchecked']} had too little speech to check"
+    return segs, note
 
 
 def stamp(t: float) -> str:
@@ -434,8 +456,12 @@ def main() -> int:
     ap.add_argument("--intent", action="store_true", help="live only: also say what the spoken note is asking for")
     ap.add_argument("--seconds", type=float, default=0, help="live only: stop by itself after this long")
     ap.add_argument("--__feed", dest="feed", default="", help=argparse.SUPPRESS)   # tests: a wav played in place of the microphone
-    ap.add_argument("--as", dest="as_verb", default="", choices=["", "call", "intent", "check"],
-                    help="again only: do the past run over as a call digest, an intent, or a check")
+    ap.add_argument("--__feed-speed", dest="feed_speed", type=float, default=25.0, help=argparse.SUPPRESS)   # 1 plays it at life speed
+    ap.add_argument("--state", default="", help=argparse.SUPPRESS)   # the folder the live screen and the listener share
+    ap.add_argument("--plain", action="store_true", help="live notes only: plain lines, no screen")
+    ap.add_argument("--as", dest="as_verb", default="", choices=["", "call", "intent", "check", "voices"],
+                    help="again only: do the past run over as a call digest, an intent or a check; "
+                         "voices re-checks who is who by voice without transcribing again")
     ap.add_argument("--json", action="store_true", help="one JSON object on stdout")
     a = ap.parse_args()
 
@@ -479,7 +505,20 @@ def main() -> int:
             src = audio_of(n, r)
             verb = a.as_verb or "words"
             name = (Path(r["file"]).stem if r.get("file") else "live") + f"-again-{n}"
-        if verb == "live":
+            if verb == "voices":
+                old = json.loads((Path(r["artifact"]) / "result.json").read_text()) if r.get("artifact") else {}
+                if not any("speaker" in s for s in old.get("segments", [])):
+                    raise HearError("no_speakers", f"run {n} has no speaker labels to re-check", f"lm hear again {n} --speakers")
+                segs, note = settle_voices(old["segments"], to_wav(src, tmp))
+                tr = {**{k: old.get(k) for k in ("seconds", "model")}, "segments": segs, "notes": [note],
+                      "text": " ".join(s["text"] for s in segs).strip()}
+                payload = {"ok": True, "verb": "voices", **tr}
+                md = as_markdown(tr)
+                files, human = {"transcript.md": md}, md
+                print(f"hear: {note}", file=sys.stderr)
+        if verb == "voices":
+            pass   # done above, from the past run's own words
+        elif verb == "live":
             import hear_live
             payload = hear_live.run(a, tmp)
             files = {}

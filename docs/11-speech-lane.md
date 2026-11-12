@@ -60,6 +60,55 @@ Not yet tested: a real voice spoken into the microphone. The speakers were muted
 
 It hears the microphone only. On a video call it hears you, and hears the others only if they play through the speakers.
 
+## The two screens
+
+Both are built on the shared terminal kit, so they look and behave like the other tools.
+
+| Screen | Opens with | Shows |
+|---|---|---|
+| Live | `lm hear live --notes` | Each line as it is heard, with its time and speaker. The sentence still being spoken sits at the bottom. |
+| Past runs | `lm hear browse` | Every run, newest first, with the digest and transcript of the highlighted one beside it. |
+
+Keys on the live screen:
+
+| Key | Does |
+|---|---|
+| space | pause and resume. A paused session hears and records nothing. |
+| m | mark this moment. The mark goes into the transcript. |
+| f | follow the newest line, or stay where you are reading |
+| s | stop and save |
+| d | stop, then write a digest with speakers |
+| q | asks whether to stop |
+
+Keys on the past-runs screen:
+
+| Key | Does |
+|---|---|
+| enter | read the digest or transcript in full |
+| s | do the run over with speaker labels |
+| c | do the run over as a call, with a digest |
+| v | recheck who is who by voice |
+| o | open the run's folder |
+
+Every redo asks first, uses the audio kept with the run, and makes a new run.
+
+For a pipe or a log, `lm hear live --notes --plain` prints plain lines, and `lm hear history` lists runs.
+
+## Telling voices apart
+
+A voice print is 256 numbers that stay close for one person and move apart for another.
+
+| Used for | How |
+|---|---|
+| A long call | Every speaker label gets a print. Labels at 0.88 or closer are joined. A label with under 20 s of speech joins its closest voice at 0.70, and only if no other voice is nearly as close. |
+| Live notes | Each line is compared with the voices heard so far. This is a first guess: one sentence is a noisy sample. |
+| A quick exchange | A stretch is cut at a pause when the voices on each side are clearly different and each side is at least 1.5 s. |
+| An old run | `lm hear again N --as voices` rechecks its labels in seconds, with no transcribing. |
+
+The thresholds come from the real call. Two halves of one person's speech scored 0.96 to 0.99. Two different people on the same line scored 0.82.
+
+No names are stored, and no print is kept after the run. Saved voices are version 2.
+
 ## Which model does which job
 
 | Job | Model | Why this one | Measured on the scripted call (65 s) |
@@ -67,6 +116,7 @@ It hears the microphone only. On a video call it hears you, and hears the others
 | words | Qwen3-ASR 0.6B (MLX, bf16) | most exact, fastest | 1.1% word error, 2.6 s, 2 GB |
 | who spoke | VibeVoice-ASR 4-bit (MLX, 5.7 GB on disk) | one model for words, speakers and times | 1.7% word error, 3 of 3 speakers, 12 of 12 turns, 15 s, 6 GB |
 | second opinion | Parakeet TDT 0.6B v3 (MLX) | unrelated to the other two, has sentence times | one wrong word ("off" for "of") |
+| telling voices apart | WeSpeaker ResNet34 (MLX, 26 MB) | small, fast, the one pyannote uses | same person 0.96 to 0.99, two people on one line 0.82 |
 | digest | `gemma4:26b` through `q --intent call-digest` | long context, best local prose | kept every decision, owner and date; named nobody who was not named aloud |
 | intent | `gemma4-e4b-warm` through `q --intent voice-intent`, schema-constrained | small and obeys the schema | 6 of 6 spoken notes |
 
@@ -152,12 +202,12 @@ Set by the owner on 2026-11-12, after trying `lm hear live`. The basics work. Th
 
 | Wanted | Today |
 |---|---|
-| A transcript that groups what was said by voice. Names are not needed. | Partly. Recordings get speaker labels, and people who speak little split into several. Live notes get no labels until `lm hear call` is run on the saved audio. |
+| A transcript that groups what was said by voice. Names are not needed. | Yes for recordings: a voice check joins labels that are one person (the real call went from 11 labels to 5). Live notes label each line as a first guess, and two people who sound alike can share a label until the recording is run through `lm hear call`. |
 | Approximate timestamps. They need not be exact. | Yes. |
 | The full raw recording kept as a backup. | Yes. Every run folder holds `audio.wav`, the 16 kHz copy, about 115 MB an hour. The original file is not copied. |
 | The same everyday controls as every `lm` tool: history, show a past run. | Yes. `lm hear history`, `lm hear show N`, and rows in `lm timeline`. |
 | Re-run a past run with different options, without recording again. | Yes. `lm hear again N --speakers` or `--as call`. |
-| A better screen: clearer visuals, real controls, and no waiting. | No. Output is plain lines. |
+| A better screen: clearer visuals, real controls, and no waiting. | Yes, first version. `lm hear live --notes` opens a live screen and `lm hear browse` lists past runs. Colours have not been looked at by a person yet. |
 | Works like Granola: sits through a meeting and writes it up. | Partly. It hears the microphone only, and does not start by itself. |
 | Works like Wispr Flow: speak anywhere and the words land where the cursor is. | No. There is no hotkey and no paste. |
 | Clanky in Slack can use it for calls. | No. Nothing calls it yet. |
@@ -175,8 +225,8 @@ The local meeting app and Clanky's call feature are layers on top of the `lm` su
 | Step | What | Why here |
 |---|---|---|
 | 1, done | History, show and re-run for `lm hear`, and its rows in `lm timeline`. Every run keeps its raw audio. | Everything later reads past runs. Re-run needs the audio. |
-| 2 | Voices in live notes, and fewer split speakers on long calls. | The transcript is the product. |
-| 3 | The live screen: a list-and-preview layout, running text, key controls. | Needs steps 1 and 2 to have something to show. |
+| 2, done | Voices in live notes, and fewer split speakers on long calls. | The transcript is the product. |
+| 3, done | The live screen: a list-and-preview layout, running text, key controls. | Needs steps 1 and 2 to have something to show. |
 | 4 | A hotkey, and paste at the cursor. | The Wispr Flow half. Needs the owner's choice of key. |
 | 5 | The other side of a call, and starting by itself. | The Granola half. Needs a system-audio device on this Mac. |
 | 6 | Clanky. | A thin caller over what steps 1 to 5 built. |

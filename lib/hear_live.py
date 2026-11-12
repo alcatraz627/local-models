@@ -155,10 +155,10 @@ class FileFeed:
         pass
 
 
-def open_mic(q: "queue.Queue", feed: str = ""):
+def open_mic(q: "queue.Queue", feed: str = "", speed: float = 25.0):
     """Start the microphone; every block of audio it hears goes onto the queue."""
     if feed:
-        source = FileFeed(feed, q)
+        source = FileFeed(feed, q, speed)
         source.start()
         return source
     try:
@@ -187,7 +187,7 @@ def mic_silent_error():
 def once(a, tmp: Path) -> dict:
     """Record one clip (until Enter, or for --seconds), then transcribe it."""
     q = queue.Queue()
-    stream = open_mic(q, a.feed)
+    stream = open_mic(q, a.feed, getattr(a, "feed_speed", 25.0))
     try:
         if a.feed:
             while not stream.done:
@@ -223,14 +223,57 @@ def once(a, tmp: Path) -> dict:
     return payload
 
 
+class Panel:
+    """The live screen's side of a session: what the screen reads, and the keys it sends back.
+
+    The listening process and the screen are two programs. They meet in one
+    folder: this writes the lines heard and a one-line state there, and reads
+    the words the screen leaves when a key is pressed (pause, mark, stop). With
+    no folder, every method does nothing, which is the plain no-screen mode.
+    """
+
+    def __init__(self, folder: str = ""):
+        self.folder = Path(folder) if folder else None
+        self.paused, self.follow, self.seen = False, True, 0
+
+    def line(self, row: dict) -> None:
+        if self.folder:
+            with (self.folder / "lines.jsonl").open("a") as f:
+                f.write(json.dumps(row) + "\n")
+
+    def show(self, status: str, t: float, interim: str = "") -> None:
+        if not self.folder:
+            return
+        staged = self.folder / "state.tmp"
+        staged.write_text(json.dumps({"status": status, "t": round(t, 1), "paused": self.paused,
+                                      "follow": self.follow, "interim": interim}))
+        staged.replace(self.folder / "state.json")   # the screen must never read half a file
+
+    def commands(self):
+        """The words the screen has left since the last look, oldest first."""
+        if not self.folder:
+            return []
+        try:
+            words = (self.folder / "control").read_text().split()
+        except OSError:
+            return []
+        new, self.seen = words[self.seen:], len(words)
+        return new
+
+
 def notes(a) -> dict:
     """Listen until stopped, printing each utterance as it ends and keeping the audio."""
     out = hear.OUT / f"{time.strftime('%Y%m%dT%H%M%S')}-live"
     out.mkdir(parents=True, exist_ok=True)
+    panel = Panel(getattr(a, "state", ""))
+    panel.show("starting", 0)
     q = queue.Queue()
     model = hear.load_model("words")
-    stream = open_mic(q, a.feed)
+    stream = open_mic(q, a.feed, getattr(a, "feed_speed", 25.0))
     cutter, lines, heard_sound = Cutter(), [], False
+    import voiceprint
+    voices = voiceprint.LiveVoices()
+    voiceprint.net()   # load it now, so the first sentence is not the slow one
     full = wave.open(str(out / "audio.wav"), "wb")
     full.setnchannels(1)
     full.setsampwidth(2)
@@ -243,32 +286,79 @@ def notes(a) -> dict:
     signal.signal(signal.SIGTERM, ask_stop)   # a kill still closes the audio file properly
 
     def take(utterance):
+        # A quick exchange arrives as one stretch; give each speaker in it a line of their own.
         start, audio = utterance
+        for offset, piece in voiceprint.split_at_voice_change(audio):
+            take_one(start + offset, piece)
+
+    def take_one(start, audio):
         with tempfile.NamedTemporaryFile(suffix=".wav") as f:
             write_wav(Path(f.name), audio)
             segs, _ = hear.run_model(model, "words", Path(f.name), a.context)
         text = " ".join(s["text"] for s in segs).strip()
         if text:
-            line = f"[{hear.stamp(start)}] {text}"
-            lines.append({"start": round(start, 2), "text": text})
-            print(line, flush=True)
+            # A first guess at who is talking, from this sentence's voice alone. The pass
+            # that `lm hear call` runs afterwards over the whole recording is the firm one.
+            who = voices.label(audio)
+            line = f"[{hear.stamp(start)}] " + (f"Speaker {who}: " if who is not None else "") + text
+            lines.append({"start": round(start, 2), "end": round(start + len(audio) / RATE, 2), "text": text,
+                          **({"speaker": who} if who is not None else {})})
+            panel.line(lines[-1])
+            print(line, file=sys.stderr if a.json else sys.stdout, flush=True)   # --json keeps stdout for the one object
             with (out / "transcript.md").open("a") as f:   # every line is on disk the moment it exists
                 f.write(line + "\n")
 
     print(f"hear: listening. Ctrl-C to stop. Saving to {out}", file=sys.stderr)
     t0 = time.time()
+    interim, interim_at = "", 0.0
+
+    def hearing_now():
+        """The words of the sentence still being spoken, for the screen to show before it ends."""
+        if len(cutter.cur) * cutter.n < RATE:
+            return ""
+        with tempfile.NamedTemporaryFile(suffix=".wav") as f:
+            write_wav(Path(f.name), np.concatenate(cutter.cur))
+            segs, _ = hear.run_model(model, "words", Path(f.name), a.context)
+        return " ".join(s["text"] for s in segs).strip().rstrip(".")   # the model ends every guess with a full stop
+
     try:
         while not stop["now"] and not (a.seconds and time.time() - t0 >= a.seconds):
+            for word in panel.commands():
+                if word == "stop":
+                    stop["now"] = True
+                elif word in ("pause", "resume"):
+                    panel.paused = word == "pause"
+                    if panel.paused:
+                        held = cutter.flush()      # what was being said when pause was pressed still counts
+                        if held:
+                            take(held)
+                        interim = ""
+                elif word == "follow":
+                    panel.follow = not panel.follow
+                elif word == "mark":
+                    panel.line({"mark": True, "start": round(cutter.t, 2)})
+                    with (out / "transcript.md").open("a") as f:
+                        f.write(f"[{hear.stamp(cutter.t)}] (marked here)\n")
             try:
                 block = q.get(timeout=0.2)
             except queue.Empty:
                 if a.feed and stream.done:
                     break
+                panel.show("listening", cutter.t, interim)
                 continue
+            if panel.paused:
+                panel.show("listening", cutter.t)
+                continue                            # a paused session hears nothing and records nothing
             heard_sound = heard_sound or float(np.abs(block).max()) >= 1e-5
             full.writeframes((np.clip(block, -1, 1) * 32767).astype(np.int16).tobytes())
-            for u in cutter.push(block):
+            ended = cutter.push(block)
+            for u in ended:
                 take(u)
+            if ended or not cutter.cur:
+                interim = ""
+            elif panel.folder and time.time() - interim_at >= 1.0:
+                interim, interim_at = hearing_now(), time.time()
+            panel.show("listening", cutter.t, interim)
     finally:
         stream.stop()
         stream.close()
@@ -276,6 +366,7 @@ def notes(a) -> dict:
     last = cutter.flush()
     if last:
         take(last)
+    panel.show("stopped", cutter.t)
     hear.unload(model)
     if not heard_sound:
         raise mic_silent_error()

@@ -14,7 +14,8 @@ show_help() {
   _sec 'SPEAK  into this Mac'"'"'s microphone'
   _cmd 'lm hear live'                   'talk, press Enter, get the words'
   _cmd 'lm hear live --intent'          'the words, and what you were asking for'
-  _cmd 'lm hear live --notes'           'keeps listening; each sentence as you finish it'
+  _cmd 'lm hear live --notes'           'a live screen: each sentence and who said it, as you talk'
+  _cmd 'lm hear live --notes --plain'   'the same as plain lines, for a pipe or a log'
   _sec 'TRANSCRIBE  a voice note, a recording, a whole call'
   _cmd 'lm hear memo.m4a'               'the words, in a few seconds'
   _cmd 'lm hear call.mp4 --speakers'    'who said what, with times'
@@ -26,6 +27,7 @@ show_help() {
   _cmd 'lm hear check call.mp4'         'two unrelated transcribers, and where they differ'
   _cmd 'lm hear check F --against R'    'judge an earlier result.json against both'
   _sec 'PAST RUNS  every run keeps its audio'
+  _cmd 'lm hear browse'                 'past runs on one screen, transcript beside the list'
   _cmd 'lm hear history'                'your recent runs, numbered'
   _cmd 'lm hear show 12'                'open run 12; no number means the latest'
   _cmd 'lm hear again 12 --speakers'    'do run 12 over with other options; no re-recording'
@@ -43,7 +45,17 @@ show_help() {
   _help_end 'lm hear -h'
 }
 
+has_arg() { local want="$1" x; shift; for x in "$@"; do [ "$x" = "$want" ] && return 0; done; return 1; }
+
 case "${1:-}" in
   ''|-h|--help|help) show_help; exit 0 ;;
+  browse) shift; exec "$DIR/lib/hear-screen" browse "$@" ;;
+  live)
+    # Live notes on a terminal open the screen. Plain lines stay for pipes, --json and --plain,
+    # and --state means the screen itself is starting the listener.
+    if has_arg --notes "$@" && [ -t 0 ] && [ -t 1 ] && command -v fzf >/dev/null 2>&1 \
+       && ! has_arg --plain "$@" && ! has_arg --json "$@" && ! has_arg --state "$@"; then
+      shift; exec "$DIR/lib/hear-screen" live "$@"
+    fi ;;
 esac
 exec "$DIR/.venv/bin/python" "$DIR/lib/hear.py" "$@"

@@ -781,7 +781,9 @@ next = ""
 fill = "your recording"
 examples = [
   { cmd = "lm hear live", says = "talk into the microphone, press Enter, get the words", keywords = ["dictate", "speak", "microphone", "record my voice"] },
-  { cmd = "lm hear live --notes", says = "keeps listening and prints each sentence as you finish it", keywords = ["live transcription", "transcribe as I talk", "meeting notes live"] },
+  { cmd = "lm hear live --notes", says = "a live screen: each sentence and who said it, as you talk", keywords = ["live transcription", "transcribe as I talk", "meeting notes live"] },
+  { cmd = "lm hear browse", says = "past runs on one screen, with the transcript beside the list", keywords = ["browse transcripts", "past recordings"] },
+  { cmd = "lm hear again 12 --as voices", says = "recheck who is who by voice, without transcribing again", keywords = ["fix speaker labels", "merge speakers"], fill = ["12"] },
   { cmd = "lm hear memo.m4a", says = "the words, in a few seconds", keywords = ["transcribe", "speech to text", "voice note"], fill = ["memo.m4a"] },
   { cmd = "lm hear call.mp4 --speakers", says = "who said what, with times", keywords = ["who said what", "speakers"], fill = ["call.mp4"] },
   { cmd = "lm hear call call.mp4", says = "transcript plus a digest of what the call meant", keywords = ["meeting summary", "summarize a call", "call notes"], fill = ["call.mp4"] },

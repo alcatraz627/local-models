@@ -8,6 +8,7 @@ minute). Build the fixtures first with make-fixture.py.
 """
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +26,8 @@ results = []
 
 def check(name: str, ok: bool, detail: str = "") -> None:
     results.append(ok)
+    if ok and "--failures" in sys.argv:
+        return
     print(f"  {'ok  ' if ok else 'FAIL'} {name}" + (f"  ({detail})" if detail else ""))
 
 
@@ -86,6 +89,8 @@ def unit() -> None:
             o.setnchannels(1); o.setsampwidth(2); o.setframerate(hear.RATE)
             o.writeframes(b"\x00\x00" * hear.RATE * 1300)   # three windows
         keep = (hear.run_model, hear.load_model, hear.unload, hear.zrecover_grant, hear.to_wav, hear.OUT)
+        kept_settle, settled = hear.settle_voices, []
+        hear.settle_voices = lambda segs, wav: (settled.append(len(segs)) or segs, "voices stood in for the test")
         hear.run_model, hear.load_model, hear.unload = fake_model, (lambda k: None), (lambda m: None)
         hear.zrecover_grant, hear.to_wav, hear.OUT = (lambda *a: None), (lambda s, t: long_wav), Path(td) / "out"
         try:
@@ -102,8 +107,10 @@ def unit() -> None:
             check("resume: the next run reads only the windows that were missing", calls == ["part1.wav", "part2.wav"], str(calls))
             check("resume: the finished transcript has all three windows", len(tr["segments"]) == 3, str(len(tr["segments"])))
             check("resume: nothing is left behind after success", not list((Path(td) / "out" / ".partial").glob("*")))
+            check("long call: the voice check runs once, over the joined transcript", settled == [3] and "voices stood in" in " ".join(tr["notes"]), str(settled))
         finally:
             hear.run_model, hear.load_model, hear.unload, hear.zrecover_grant, hear.to_wav, hear.OUT = keep
+            hear.settle_voices = kept_settle
 
     # The live cutter: quiet room, two spoken stretches with a pause between, one key click.
     import numpy as np
@@ -150,6 +157,46 @@ def unit() -> None:
     check("live cutter: with no pause, the forced cut lands on the quietest moment", len(cut) >= 1 and abs(len(cut[0][1]) / rate - 4.4) < 0.4,
           str([round(len(c[1]) / rate, 2) for c in cut]))
 
+    # Joining labels by voice. Prints are built to sit at chosen distances from each other.
+    import voiceprint as vp
+
+    def near(base, other, alike):
+        v = alike * base + np.sqrt(1 - alike * alike) * other
+        return v / np.linalg.norm(v)
+    e = np.eye(8, dtype=np.float32)
+    ann, bob = e[0], near(e[0], e[1], 0.82)          # two people who sound alike on one line
+    owner, sure, likely = vp.join_labels({"a": (ann, 300.0), "a2": (near(ann, e[2], 0.97), 80.0), "b": (bob, 200.0)})
+    check("voices: one person split in two is joined", owner["a2"] == owner["a"] and sure == 1, f"{owner} sure={sure}")
+    check("voices: two people who sound alike stay apart", owner["b"] != owner["a"], str(owner))
+    owner, sure, likely = vp.join_labels({"a": (ann, 300.0), "c": (e[3], 200.0), "few": (near(ann, e[4], 0.76), 12.0)})
+    check("voices: a brief label goes to the one voice it is close to", owner["few"] == owner["a"] and likely == 1 and sure == 0, f"{owner} likely={likely}")
+    owner, sure, likely = vp.join_labels({"a": (ann, 300.0), "b": (bob, 200.0), "few": (near(near(ann, bob, 0.95), e[5], 0.80), 12.0)})
+    check("voices: a brief label close to two voices is left alone", owner["few"] == "few" and likely == 0, f"{owner}")
+    owner, sure, likely = vp.join_labels({"a": (ann, 300.0), "few": (near(ann, e[4], 0.55), 12.0)})
+    check("voices: a brief label that is not close enough is left alone", owner["few"] == "few", str(owner))
+    owner, sure, likely = vp.join_labels({"a": (ann, 300.0), "long": (near(ann, e[4], 0.76), 90.0)})
+    check("voices: plenty of speech at 0.76 is a different person, not a join", owner["long"] == "long", str(owner))
+    # One stretch of live audio: person A, a short pause, person B, a short pause, person B again.
+    # The stand-in printer tells them apart by loudness, which is all the test needs.
+    def loud(s, gain):
+        return (rng.standard_normal(int(rate * s)) * gain).astype(np.float32)
+
+    def by_gain(a):
+        return e[0] if float(np.sqrt(np.mean(a * a))) < 0.07 else e[1]
+    gap = np.zeros(int(rate * 0.45), dtype=np.float32)
+    exchange = np.concatenate([loud(1.6, 0.05), gap, loud(1.6, 0.10), gap, loud(1.6, 0.10)])
+    parts2 = vp.split_at_voice_change(exchange, printer=by_gain)
+    check("voice change: a quick exchange is cut where the speaker changes", len(parts2) == 2 and abs(parts2[1][0] - 1.8) < 0.3,
+          str([(round(p[0], 2), round(len(p[1]) / rate, 2)) for p in parts2]))
+    check("voice change: nothing is lost in the cut", sum(len(p[1]) for p in parts2) == len(exchange))
+    solo = np.concatenate([loud(1.6, 0.10), gap, loud(1.6, 0.10)])
+    check("voice change: one speaker pausing stays whole", len(vp.split_at_voice_change(solo, printer=by_gain)) == 1)
+    check("voice change: a stretch with no pause stays whole", len(vp.split_at_voice_change(loud(3.0, 0.1), printer=by_gain)) == 1)
+
+    segs_in = [{"start": 0, "end": 0.5, "text": "x", "speaker": "7"}]
+    out_segs, stats = vp.merge_voices(segs_in, np.zeros(16000, dtype=np.float32) + 0.0)
+    check("voices: a label too short to print is kept and counted", out_segs[0]["speaker"] == "0" and stats["unchecked"] == 1, str(stats))
+
     # Past runs: numbering, the latest, a missing one, and where a run's audio is found.
     with tempfile.TemporaryDirectory() as td:
         kept_log, kept_out = hear.LOG, hear.OUT
@@ -190,8 +237,17 @@ def unit() -> None:
     check("transcript line carries time and speaker", md == "[01:01] Speaker A1: Hi.\n", repr(md))
 
 
+SANDBOX = None
+
+
 def run_hear(*args) -> dict:
-    r = subprocess.run([str(ROOT / "bin" / "hear"), *args, "--json"], capture_output=True, text=True)
+    """Run the real command, with its history and run folders pointed at a throwaway place."""
+    global SANDBOX
+    if SANDBOX is None:
+        import tempfile
+        SANDBOX = tempfile.mkdtemp(prefix="hear-check-")
+    r = subprocess.run([str(ROOT / "bin" / "hear"), *args, "--json"], capture_output=True, text=True,
+                       env=dict(os.environ, LM_HEAR_SANDBOX=SANDBOX))
     try:
         return json.loads(r.stdout)
     except ValueError:
@@ -231,6 +287,25 @@ def live() -> None:
         if not ok:
             print(f"       {n['file']}: wanted {n['intent']}/{n['target'] or '-'}, got {got.get('kind')}/{got.get('target')}")
     check("intent: every spoken note routed to the right kind", hits == len(truth["notes"]), f"{hits} of {len(truth['notes'])}")
+
+    # Live notes, with the scripted call played in place of the microphone.
+    ln = run_hear("live", "--notes", "--__feed", str(FIX / "call.wav"))
+    lines = ln.get("segments", [])
+    wer_l = word_error_rate(script, ln.get("text", ""))
+    check("live notes: words within 5% word error", ln.get("ok") and wer_l <= 0.05, f"{wer_l:.1%}")
+    # Two of the three scripted voices sound alike, so a turn of one may share a line with the
+    # other. The third is clearly different: each of her turns must start a line of its own.
+    def line_at(t):
+        return next((a for a in lines if abs(a["start"] - t["start"]) < 1.5), None)
+    hers = [line_at(t) for t in turns if t["speaker"] == "Priya"]
+    check("live notes: every turn of the clearly different voice starts its own line", all(hers), f"{sum(1 for h in hers if h)} of {len(hers)}")
+    check("live notes: no sentence is cut into fragments", len(lines) <= len(turns), f"{len(lines)} lines for {len(turns)} turns")
+    her_labels = {h.get("speaker") for h in hers if h}
+    other_labels = {a.get("speaker") for a in lines if a not in hers}
+    check("live notes: the clearly different voice keeps a label of its own", len(her_labels) == 1 and not (her_labels & other_labels),
+          f"{her_labels} against {other_labels}")
+    kept = Path(ln.get("artifact", "/nonexistent")) / "audio.wav"
+    check("live notes: the recording is kept", kept.is_file() and kept.stat().st_size > 1_000_000)
 
     dg = run_hear("call", str(FIX / "call.wav"))
     digest = (dg.get("digest") or "").lower()

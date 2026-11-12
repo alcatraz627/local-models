@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# hear-screen: the two screens of lm hear. One browses past runs with the transcript beside
+# the list. The other shows a listening session as it happens, with keys to pause, mark and stop.
+set -u
+# A list command that fails must fail as a whole, or its screen opens empty.
+set -o pipefail
+
+PY=/usr/bin/python3
+case "$0" in
+  */*) SELF="${HEAR_SCREEN_SELF:-$0}" ;;
+  *)   SELF="${HEAR_SCREEN_SELF:-$(command -v hear-screen || printf '%s' "$0")}" ;;
+esac
+
+# The folder a file really lives in, following any links to it.
+real_dir() {
+  local file="$1" dir target
+  while [ -L "$file" ]; do
+    dir=$(cd -P "$(dirname "$file")" && pwd)
+    target=$(readlink "$file")
+    case "$target" in /*) file="$target" ;; *) file="$dir/$target" ;; esac
+  done
+  (cd -P "$(dirname "$file")" && pwd)
+}
+LIB="$(real_dir "$SELF")"
+HELPER="$LIB/hear-screen-helper.py"
+HEAR="$LIB/../bin/hear"
+hp() { "$PY" "$HELPER" "$@"; }
+
+# Run the command that fills the screen once before the screen opens, and say so when it fails.
+screen_ready() {
+  local out
+  if out=$("$@" 2>&1) && [ -n "$out" ]; then return 0; fi
+  printf 'lm hear could not open its screen.\n%s\n' "$out" >&2
+  return 1
+}
+
+have_screen() { [ -t 0 ] && [ -t 1 ] && command -v fzf >/dev/null 2>&1; }
+
+browse() {
+  local q start
+  screen_ready "$SELF" --__browse-rows || exit 1
+  q=$(printf '%q' "$SELF")
+  # Come back to the run that was just opened or redone, so the place is not lost.
+  start=$(hp browse-rows | cut -f1 | grep -n -x -- "${1:-}" | cut -d: -f1)
+  hp browse-rows | fzf --ansi --no-input --reverse --height=100% --info=hidden --no-scrollbar \
+    --delimiter=$'\t' --with-nth=2 --sync \
+    --header "$(hp browse-header)" --footer "$(hp browse-keys)" \
+    --preview "$q --__browse-detail {1}" --preview-window "right,58%,border-left" \
+    --bind "start:pos(${start:-2})" \
+    --bind "j:down,k:up" \
+    --bind "enter:transform($q --__browse-flow enter {1})" \
+    --bind "s:transform($q --__browse-flow speakers {1})" \
+    --bind "c:transform($q --__browse-flow call {1})" \
+    --bind "v:transform($q --__browse-flow voices {1})" \
+    --bind "o:transform($q --__browse-flow folder {1})" \
+    --bind "q:transform($q --__browse-flow quit),esc:transform($q --__browse-flow quit)"
+  return 0
+}
+
+# Do a past run over, in the open, so its progress lines are seen. Then wait for a key:
+# a message printed just before the screen redraws is never read.
+redo() {
+  local n="$1"; shift
+  printf '\nDoing run %s over. This screen comes back when it is done.\n\n' "$n"
+  if "$HEAR" again "$n" "$@" >/dev/null; then printf '\nDone. It is the newest run in the list.\n'
+  else printf '\nThat did not finish. The line above says why.\n'; fi
+  printf 'Press any key to go back. '
+  IFS= read -r -s -n 1 _ </dev/tty || true
+}
+
+live() {
+  local dir="$1" q d cols pane room
+  q=$(printf '%q' "$SELF"); d=$(printf '%q' "$dir")
+  screen_ready "$SELF" --__live-rows "$dir" || return 1
+  # The pane's rules are 58 wide. On a wide terminal it sits beside the lines; on a narrow one
+  # it goes underneath, so the words being heard keep the full width.
+  cols=$(stty size 2>/dev/null </dev/tty | cut -d' ' -f2); [ -n "$cols" ] || cols=$(tput cols 2>/dev/null || printf 100)
+  if [ "$cols" -ge 124 ]; then pane="right,60,border-left"; room=$((cols - 62 - 14))
+  else pane="down,11,border-top"; room=$((cols - 16)); fi
+  # The list is read again every half second. Each time it has loaded, the screen moves to the
+  # newest line when follow is on, then asks for the list again.
+  hp live-rows "$dir" "$room" | fzf --ansi --no-input --reverse --height=100% --info=hidden --no-scrollbar \
+    --delimiter=$'\t' --with-nth=2 --sync --no-sort --track \
+    --header "$(hp live-header "$dir")" --footer "$(hp live-keys)" \
+    --preview "$q --__live-detail $d {1}" --preview-window "$pane" \
+    --bind "load:transform($q --__live-tick $d $room)" \
+    --bind "j:down,k:up" \
+    --bind "space:transform($q --__live-flow $d pause)" \
+    --bind "m:transform($q --__live-flow $d mark)" \
+    --bind "f:transform($q --__live-flow $d follow)" \
+    --bind "s:transform($q --__live-flow $d stop)" \
+    --bind "d:transform($q --__live-flow $d digest)" \
+    --bind "q:transform($q --__live-flow $d quit),esc:transform($q --__live-flow $d quit)"
+  return 0
+}
+
+# Start listening behind the screen, show the screen, and tidy up whichever way it ends.
+listen() {
+  local dir pid want=""
+  dir=$(mktemp -d "${TMPDIR:-/tmp}/hear-live.XXXXXX")
+  "$HEAR" live --notes --state "$dir" "$@" >"$dir/out.json" 2>"$dir/err.log" &
+  pid=$!
+  trap 'printf "stop\n" >>"$dir/control" 2>/dev/null; wait "$pid" 2>/dev/null' EXIT INT TERM
+  live "$dir"
+  [ -f "$dir/want-digest" ] && want=digest
+  printf 'stop\n' >>"$dir/control"
+  wait "$pid" 2>/dev/null
+  trap - EXIT INT TERM
+  local folder
+  folder=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1])).get("artifact",""))' "$dir/out.json" 2>/dev/null)
+  if [ -z "$folder" ]; then
+    printf 'Listening ended without saving.\n' >&2
+    sed -n '$p' "$dir/err.log" >&2
+    return 10
+  fi
+  printf 'Saved: %s\n' "$folder"
+  if [ "$want" = digest ]; then
+    printf 'Writing the digest, with speakers. This takes about a quarter of the length.\n'
+    "$HEAR" call "$folder/audio.wav"
+  else
+    printf 'For speakers and a digest: lm hear call %s/audio.wav\n' "$folder"
+  fi
+}
+
+case "${1:-}" in
+  --__browse-rows)   hp browse-rows ;;
+  --__browse-detail) hp browse-detail "$2" ;;
+  --__browse-flow)
+    # A question asked in a box over the screen. The helper answers with a few words,
+    # which become what the screen does next.
+    q=$(printf '%q' "$SELF")
+    word=$(hp browse-flow "${2:-}" "${3:-}")
+    case "$word" in
+      redraw)    printf 'clear-screen' ;;
+      abort)     printf 'abort' ;;
+      read\ *)   printf 'execute(less -R -- %q)' "${word#read }" ;;
+      folder\ *) printf 'execute-silent(open -- %q)' "${word#folder }" ;;
+      again\ *)  printf 'execute(%s --__redo %s)+reload(%s --__browse-rows)+transform-header(%s --__browse-header)+first+down' "$q" "${word#again }" "$q" "$q" ;;
+    esac
+    ;;
+  --__browse-header) hp browse-header ;;
+  --__redo)          shift; redo "$@" ;;
+  --__live-rows)     hp live-rows "$2" "${3:-44}" ;;
+  --__live-header)   hp live-header "$2" ;;
+  --__live-detail)   hp live-detail "$2" "${3:-now}" ;;
+  --__live-tick)
+    q=$(printf '%q' "$SELF"); d=$(printf '%q' "$2")
+    again="reload(sleep 0.5; $q --__live-rows $d ${3:-44})+transform-header($q --__live-header $d)"
+    case "$(hp live-tick "$2")" in
+      follow) printf 'last+%s' "$again" ;;
+      *)      printf '%s' "$again" ;;
+    esac
+    ;;
+  --__live-flow)
+    q=$(printf '%q' "$SELF"); d=$(printf '%q' "$2")
+    word=$(hp live-flow "$2" "${3:-}")
+    case "$word" in
+      refresh) printf 'transform-header(%s --__live-header %s)+refresh-preview' "$q" "$d" ;;
+      redraw)  printf 'clear-screen' ;;
+      abort)   printf 'abort' ;;
+      digest)  : >"$2/want-digest"; printf 'abort' ;;
+    esac
+    ;;
+  --__live-screen)   live "$2" ;;
+  browse)
+    if have_screen; then browse "${2:-}"; else hp browse-rows | cut -f2; hp browse-header; fi
+    ;;
+  live)
+    shift
+    if have_screen; then listen "$@"; else printf 'The live screen needs a terminal. For plain lines: lm hear live --notes --plain\n' >&2; exit 2; fi
+    ;;
+  -h|--help|help|"")
+    printf 'hear-screen browse   past runs, with the transcript beside the list\nhear-screen live     a listening session as it happens\n' ;;
+  *) printf 'no command %s  try: hear-screen --help\n' "$1" >&2; exit 2 ;;
+esac

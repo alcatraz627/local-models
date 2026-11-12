@@ -67,8 +67,7 @@ Only `lm`, `q`, `see`, `warm` and `review` are on PATH. Newer tools are reached 
 | Item | Next step |
 |---|---|
 | Speech on the owner's voice | Record 20 clips and score `lm hear` and `lm hear intent` on them. |
-| Speech end state | Goal `9a93c78fcd48`. Requirements and order of work are in `docs/11-speech-lane.md` under "The end state". Step 1 (history, show, re-run, kept audio) is done. Next: voices in live notes. |
-| Long-call speakers | People who speak little get a new label in each window. |
+| Speech end state | Goal `9a93c78fcd48`. Requirements and order of work are in `docs/11-speech-lane.md` under "The end state". Steps 1 to 3 are done (past runs, voices, the two screens). The rest waits on the owner's three gates. |
 | Long-call digest | One pass is thin. Take notes per ten minutes first. |
 | Big seat | `qwen3.8:27b` was recommended for a probe and never run. |
 | Model refresh | Follow `docs/model-refresh-guide.md` monthly. |
