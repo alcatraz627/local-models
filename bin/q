@@ -825,7 +825,7 @@ fi
 # Don't disturb the warm pin: keep_alive is last-writer-wins per request, so if
 # the target model is already resident keep it resident (-1); otherwise load it
 # just for this call and let it unload (0).
-if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
+if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; ollama_room "$MODEL"; fi
 
 # Lease hint: repeated cold loads of a big model deserve a nudge toward
 # `warm on` — suggestion only, residency stays the human's call. Bash decides

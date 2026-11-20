@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# mem-room: ask the desktop memory guard for room before a big model loads.
+#
+# zrecover stops an Ollama model server once it passes 20 GB, and the big and
+# code models sit above that when loaded (the code model was measured at 28 GB).
+# Without a grant the load is killed, Ollama retries, and the caller sees a
+# refused connection. A grant lifts the size cap for that one model only, for a
+# set time. zrecover still sheds the model if the Mac itself runs short of
+# memory, so a grant cannot hang the machine.
+#
+#   mem-room MODEL [SECONDS]     take (or reuse) a grant; prints the grant id, if one was made
+#   mem-room --release MODEL     end this model's grants now
+#   mem-room --need MODEL        print the GB this model would be granted (0 = under the cap)
+#
+# Always exits 0: a missing guard or an unreadable model must never block a load.
+set -uo pipefail
+HOST="${OLLAMA_HOST:-http://127.0.0.1:11434}"
+OVERHEAD_GB="${LM_ROOM_OVERHEAD_GB:-8}"   # context cache and runtime on top of the weights
+FLOOR_GB="${LM_ROOM_FLOOR_GB:-16}"        # at or below this the standing cap already fits
+MAX_GB="${LM_ROOM_MAX_GB:-48}"            # the most zrecover will grant
+
+command -v zrecover >/dev/null 2>&1 || exit 0
+command -v jq >/dev/null 2>&1 || exit 0
+
+mode=grant
+case "${1:-}" in
+  --release) mode=release; shift ;;
+  --need)    mode=need; shift ;;
+esac
+model="${1:-}"; secs="${2:-900}"
+[ -n "$model" ] || exit 0
+
+# The weights file names the server process, so the grant can match one model
+# and nothing else that happens to run under llama-server.
+show="$(curl -s -m 5 "$HOST/api/show" -d "$(jq -cn --arg m "$model" '{model:$m}')" 2>/dev/null)" || exit 0
+sha="$(printf '%s' "$show" | jq -r '.modelfile // ""' 2>/dev/null | sed -n 's/^FROM .*sha256-\([0-9a-f]\{12\}\).*/\1/p' | sed -n '1p')"
+[ -n "$sha" ] || exit 0
+match="llama-server .*sha256-$sha"
+
+if [ "$mode" = release ]; then
+  zrecover grants --json 2>/dev/null | jq -r --arg m "$match" '.[]? | select(.match == $m) | .id' 2>/dev/null \
+    | while read -r gid; do zrecover revoke "$gid" >/dev/null 2>&1 || true; done
+  exit 0
+fi
+
+bytes="$(curl -s -m 5 "$HOST/api/tags" 2>/dev/null \
+  | jq -r --arg m "$model" '[.models[]? | select(.name == $m or (.name | startswith($m + ":")))][0].size // 0' 2>/dev/null)"
+[[ "${bytes:-0}" =~ ^[0-9]+$ ]] || bytes=0
+need=$(( (bytes + 1073741823) / 1073741824 + OVERHEAD_GB ))
+[ "$need" -gt "$MAX_GB" ] && need="$MAX_GB"
+if [ "$bytes" -eq 0 ] || [ "$need" -le "$FLOOR_GB" ]; then
+  [ "$mode" = need ] && echo 0
+  exit 0
+fi
+if [ "$mode" = need ]; then echo "$need"; exit 0; fi
+
+[[ "$secs" =~ ^[0-9]+$ ]] || secs=900
+# A grant that already covers this load, for at least as long, is reused.
+now="$(date +%s)"
+covered="$(zrecover grants --json 2>/dev/null | jq -r --arg m "$match" --argjson g "$need" --argjson t "$(( now + secs ))" \
+  '[.[]? | select(.match == $m and .gb >= $g and .until >= $t)] | length' 2>/dev/null)"
+[ "${covered:-0}" -gt 0 ] 2>/dev/null && exit 0
+
+mins=$(( (secs + 59) / 60 ))
+zrecover allow --match "$match" --gb "$need" --for "${mins}m" --note "lm: $model" --json 2>/dev/null \
+  | jq -r '.id // empty' 2>/dev/null
+exit 0

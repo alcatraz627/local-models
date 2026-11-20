@@ -370,6 +370,14 @@ ollama_ensure() {
 # resident gemma4-e4b-warm as itself and pin the wrong model forever.
 ollama_resident() { ollama_cli ps 2>/dev/null | awk -v m="$1" 'NR>1 && ($1 == m || index($1, m ":") == 1) {f=1} END{exit !f}'; }
 
+# Make room for MODEL before it loads: a zrecover grant for that model alone,
+# for SECONDS (default 15 minutes). Every caller that may cold-load a model calls
+# this first, or zrecover stops any model over its 20 GB cap mid-load. Small
+# models and Macs without zrecover are a no-op. Details: lib/mem-room.
+ollama_room() { # MODEL [SECONDS]
+  "${DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}/lib/mem-room" "$@" >/dev/null 2>&1 || true
+}
+
 server_down_msg() {
   echo "ollama server is DOWN ($OLLAMA_HOST)" >&2
   echo "  start it: launchctl kickstart gui/$(id -u)/$LM_LAUNCHD_LABEL" >&2

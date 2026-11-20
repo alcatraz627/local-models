@@ -179,6 +179,12 @@ def snapshot():
         if os.path.isdir(base):
             for fn in os.listdir(base):
                 p = os.path.join(base, fn)
+                # The server's own output log is written by the server process whenever a
+                # model unloads, so it can change during this check with no help command
+                # involved. Its request log (ollama-serve.err.log) stays in: a help screen
+                # that contacted the server would show there.
+                if fn == "ollama-serve.log":
+                    continue
                 if os.path.isfile(p):
                     st = os.stat(p)
                     out[p] = (st.st_size, st.st_mtime_ns)

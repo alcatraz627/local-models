@@ -26,6 +26,9 @@ DEFAULT_LEASE="60m"
 pin() { # MODEL KEEP_ALIVE(number or "duration")
   local ka="$2" out secs
   secs="$(ka_seconds "$ka" 2>/dev/null)" && [ -n "$secs" ] && ka="$secs"   # one form Ollama always reads (it has no 'd')
+  # Room for as long as the lease, plus a margin; "forever" gets a day at a time
+  # because the memory guard only gives timed grants (re-run warm on to renew).
+  if [[ "$ka" =~ ^[0-9]+$ ]]; then ollama_room "$1" "$(( ka + 300 ))"; else ollama_room "$1" 86400; fi
   [[ "$ka" =~ ^-?[0-9]+$ ]] || ka="\"$ka\""
   out="$(curl -s "$OLLAMA_HOST/api/generate" -d "{\"model\":\"$1\",\"keep_alive\":$ka}")" \
     || { echo "failed to reach Ollama at $OLLAMA_HOST" >&2; lm_fix_line server_down; exit 10; }
@@ -141,11 +144,13 @@ case "$cmd" in
       ollama_cli ps 2>/dev/null | awk 'NR>1 {print $1}' | while read -r m; do
         echo "shutting down $m ..."
         ollama_cli stop "$m" 2>/dev/null || true
+        "$DIR/lib/mem-room" --release "$m" || true
       done
     else
       model="$(resolve_tier "${target:-$WARM_MODEL}")"
       echo "shutting down $model ..."
       ollama_cli stop "$model" 2>/dev/null || true
+      "$DIR/lib/mem-room" --release "$model" || true
     fi
     ollama_cli ps || true
     ;;

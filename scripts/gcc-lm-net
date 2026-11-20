@@ -1,0 +1,12 @@
+#!/bin/bash
+# gcc-lm-net: keeps `lm net serve` running, so approved devices can use this
+# Mac's models whenever it is awake.
+#
+# launchd starts this file, and Login Items shows it by this name. Idle, the
+# server is one small Python process that does nothing until a device asks;
+# models load per request and unload after it, as everywhere else in lm.
+# Turn it off and on in Switchboard, or with: gcc-schedule disable lm-net
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# launchd gives a bare PATH; the tools lm net calls (jq, ollama, tailscale) live here.
+export PATH="/opt/homebrew/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
+exec "$DIR/bin/lm" net serve

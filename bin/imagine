@@ -306,7 +306,7 @@ critique_image() {
   # model stays pinned (keep_alive -1) instead of being unloaded by a default of 0.
   ollama_ensure || { server_down_msg; rm -f "$tmp"; return 10; }
   local keep=0 t0 resp text ms
-  ollama_resident "$model" && keep=-1
+  if ollama_resident "$model"; then keep=-1; else ollama_room "$model"; fi
   t0=$(python3 -c 'import time; print(int(time.time()*1000))')
   resp=$(jq -n --arg m "$model" --argjson k "$keep" \
         --arg s "You are an honest, concise art critic examining a generated image." \

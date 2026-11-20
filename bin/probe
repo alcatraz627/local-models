@@ -29,8 +29,20 @@ def load_items():
     return json.loads(out.stdout)["item"]
 
 
+_ROOM = set()
+
+
+def make_room(model):
+    """Ask the memory guard for room once per model, for the length of a probe run."""
+    if model in _ROOM:
+        return
+    _ROOM.add(model)
+    subprocess.run([str(DIR / "lib/mem-room"), model, "7200"], capture_output=True)
+
+
 def chat(model, messages, keep="5m"):
     """One /api/chat round. keep_alive holds the model resident across items."""
+    make_room(model)
     body = json.dumps({"model": model, "messages": messages, "stream": False,
                        "keep_alive": keep, "think": False,
                        "options": {"temperature": 0}}).encode()

@@ -88,8 +88,16 @@ Run a fixed behavior and latency fixture set.
 .B lm ui\-verify <img> \(dqclaim\(dq
 Check claims about a screenshot against a UI inventory.
 .TP
-.B lm opencode [args]
-Opencode on the local code model, leased for the session.
+.B lm opencode [\-m small|big|code|sweep] [args]
+Opencode on a local model, held for the session.
+.TP
+.B lm studio [gen|rework|again|history|models|download|servers|doctor] \
+[args]
+The image studio: make and rework images in your browser.
+.TP
+.B lm net [serve|devices|approve NAME|off NAME|on NAME|add NAME \
+ADDRESS|ping|log]
+Let other devices use this machine's models, and use theirs.
 .TP
 .B lm timeline [N] [\-\-errors] [\-\-tool T] [\-\-all] [\-\-json]
 Your recent calls, newest last.
@@ -197,6 +205,12 @@ Strict pass/fail/unsure gate.
 .TP
 .B lm opencode
 Start opencode with the code model loaded, released when you exit.
+.TP
+.B lm studio
+Open the studio in your browser.
+.TP
+.B lm net
+This device, the servers it knows, and the devices that asked to use it.
 .TP
 .B lm timeline
 Your last 20 calls across q, see, imagine, fleet and gemini.

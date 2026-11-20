@@ -46,6 +46,39 @@ BR="$(.venv/bin/python probe/fixtures/bench-rag-contract.py 2>&1)" \
 echo "── toolkit (lm doctor) ──"
 if ./bin/lm doctor >/dev/null 2>&1; then ok "lm doctor (server, models, venv, PATH)"; else bad "lm doctor — run it directly to see which check"; fi
 
+echo "── docs: the index lists every doc and has no dead link ──"
+if net_out="$(python3 -W ignore probe/fixtures/net-contract.py 2>&1)"; then ok "lm net: only approved devices get in, every request is logged ($(printf '%s' "$net_out" | rg -o 'Ran [0-9]+ tests'))"; else bad "lm net contract: $(printf '%s' "$net_out" | rg -m 3 '^(FAIL|ERROR)' | tr '\n' ' ')"; fi
+if docs_out="$(python3 probe/fixtures/docs-index.py 2>&1)"; then ok "$(printf '%s' "$docs_out" | tail -n 1)"; else bad "docs index: $(printf '%s' "$docs_out" | head -n 3 | tr '\n' ' ')"; fi
+
+echo "── imagine-kit: the standalone image kit (stand-in engine, no model) ──"
+# The kit's own Python has Pillow, which the marked-area test needs; plain python3 skips that one test.
+kit_py=python3; [ -x imagine-kit/.venv/bin/python ] && kit_py=imagine-kit/.venv/bin/python
+if kit_out="$("$kit_py" -W ignore imagine-kit/tests/test_kit.py 2>&1)"; then ok "imagine-kit: $(printf '%s' "$kit_out" | rg -o 'Ran [0-9]+ tests' | tail -n 1), all passed"; else bad "imagine-kit tests: $(printf '%s' "$kit_out" | rg -m 3 '^(FAIL|ERROR)' | tr '\n' ' ')"; fi
+
+echo "── memory room: a big model gets a zrecover grant before it loads (no model loaded) ──"
+# Without the grant zrecover stops the code model mid-load at its 20 GB cap and
+# the caller only sees a refused connection.
+if command -v zrecover >/dev/null 2>&1; then
+  room_model="$(bash -c 'source ./config.sh; echo "$CODE_MODEL"')"
+  room_need="$(./lib/mem-room --need "$room_model")"
+  room_id="$(./lib/mem-room "$room_model" 60)"
+  room_seen="$(zrecover grants --json 2>/dev/null | jq -r --arg i "$room_id" '[.[]? | select(.id == $i and .gb > 20)] | length')"
+  ./lib/mem-room --release "$room_model"
+  room_left="$(zrecover grants --json 2>/dev/null | jq -r --arg i "$room_id" '[.[]? | select(.id == $i)] | length')"
+  if [ "${room_need:-0}" -gt 20 ] && [ -n "$room_id" ] && [ "$room_seen" = 1 ] && [ "$room_left" = 0 ]; then
+    ok "mem-room: $room_model granted ${room_need} GB, then released"
+  else
+    bad "mem-room: need=${room_need:-?} id=${room_id:-none} seen=${room_seen:-?} left=${room_left:-?}"
+  fi
+  if [ "$(./lib/mem-room --need "$(bash -c 'source ./config.sh; echo "$WARM_MODEL"')")" = 0 ]; then
+    ok "mem-room: the small model needs no grant"
+  else
+    bad "mem-room: the small model was sized for a grant"
+  fi
+else
+  skip "zrecover not installed"
+fi
+
 echo "── q: envelope + constrained decoding (warm/small tier) ──"
 R=$(./bin/q --json --timeout 60 "Reply with one word: ok" 2>/dev/null)
 [ "$(printf '%s' "$R" | jq -r .ok 2>/dev/null)" = "true" ] && ok "q --json envelope" || bad "q --json: $R"

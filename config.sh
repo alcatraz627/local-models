@@ -56,7 +56,7 @@ UI_DEFAULT_MLX="${UI_DEFAULT_MLX:-1}"
 
 # Plain `see` reads (no --ui, no diff, no explicit -m) also go to the MLX Qwen3-VL
 # model: it passed 101 of 112 vision checks against minicpm-v4.6's 74
-# (docs/20261022-model-comparison.md; owner approved 2026-10-22). VISION_MODEL stays
+# (docs/reviews/20261022-model-comparison.md; owner approved 2026-10-22). VISION_MODEL stays
 # the fallback: `see` re-runs on it when a big ollama model is resident (the co-load
 # OOM risk) or the MLX read fails. Set READ_DEFAULT_MLX=0 to read with VISION_MODEL.
 READ_DEFAULT_MLX="${READ_DEFAULT_MLX:-1}"
@@ -81,3 +81,14 @@ GEMINI_MODELS="${GEMINI_MODELS:-gemini-3.8-flash gemini-4-argon}"
 # the API (lib/gemini-direct.py): the CLI once hung 16 minutes on a 1.9 MB pack
 # that the API answered in 115s. Only one-shot and digest calls qualify (no session).
 GEMINI_DIRECT_BYTES="${GEMINI_DIRECT_BYTES:-200000}"
+
+# lm net: other devices using this machine's models, and this one using theirs
+# (lib/lmnet.py, which mirrors these defaults so it also runs with no bash).
+# LM_NET_HOME holds this device's key, its server list and the devices it has
+# approved; it sits outside the repo because it is per-machine and private.
+LM_NET_HOME="${LM_NET_HOME:-$HOME/.config/lm/net}"
+LM_NET_PORT="${LM_NET_PORT:-5119}"            # claimed in the gcc port ledger as lm-net; 5118 is claude-see
+LM_NET_LOG="${LM_NET_LOG:-}"                  # empty means logs/net-history.jsonl in this repo
+LM_NET_NAME="${LM_NET_NAME:-}"                # empty means this machine's host name
+LM_NET_SEE="${LM_NET_SEE:-}"                  # empty means bin/see; the contract test points it at a stand-in
+LM_NET_IMAGINE="${LM_NET_IMAGINE:-}"          # empty means imagine-kit/imagine, the kit that draws for other devices

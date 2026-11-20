@@ -599,7 +599,7 @@ fi
 # stays resident (-1), cold loads just for this call (0). Matters for --ui
 # batches: a `warm on big 30m` lease survives each read instead of being
 # evicted by a hardcoded keep_alive:0.
-if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; fi
+if ollama_resident "$MODEL"; then KEEP=-1; else KEEP=0; $MLX || ollama_room "$MODEL"; fi
 
 # Constrained-decoding schema, set only for --ui --json (mirrors q's --format):
 # passed to Ollama's `format` field so the model's output IS schema-valid JSON,

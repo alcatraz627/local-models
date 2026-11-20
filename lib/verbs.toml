@@ -869,23 +869,78 @@ examples = [
 name = "opencode"
 kind = "job"
 aliases = []
-summary = "opencode on the local code model, leased for the session"
-usage = "lm opencode [args]"
-more_label = "lm opencode [args]"
-more_says = "opencode on the local code model — auto pin/unpin around the session"
-help_says = "opencode on the local code model"
-inputs = "whatever opencode takes"
+summary = "opencode on a local model, held for the session"
+usage = "lm opencode [-m small|big|code|sweep] [args]"
+more_label = "lm opencode [-m tier] [args]"
+more_says = "opencode on a local model, loaded for the session and released on exit"
+help_says = "opencode on a local model"
+inputs = "whatever opencode takes; -m takes a tier word, ollama/<name>, or a cloud model"
 output = "the opencode session"
-exit_codes = "the exit code of opencode; 12 when opencode is not installed"
+exit_codes = "the exit code of opencode; 2 when -m has no value; 12 when opencode is not installed"
 cost_tier = "code"
 cost_secs = "30 to load; then interactive"
 leaves_mac = false
-side_effects = "holds the code model (23 GB) for the session, up to 4h, released on exit; writes logs/opencode-history.jsonl"
+side_effects = "starts the server, holds the chosen model (the code model is 28 GB loaded) for the session, up to 4h, with a zrecover grant so the load is not killed; both end on exit; writes logs/opencode-history.jsonl"
 keywords = ["coding agent on the local model", "run opencode", "local coding session"]
 see_also = ["review", "fast"]
 next = ""
 examples = [
   { cmd = "lm opencode", says = "start opencode with the code model loaded, released when you exit" },
+  { cmd = "lm opencode -m big", says = "the same on the big model; small and sweep are faster and weaker" },
+  { cmd = 'lm opencode run --auto "fix the failing test"', says = "one task with no screen" },
+]
+
+[[job]]
+name = "studio"
+kind = "job"
+aliases = []
+summary = "the image studio: make and rework images in your browser"
+usage = "lm studio [gen|rework|again|history|models|download|servers|doctor] [args]"
+more_label = "lm studio [command]"
+more_says = "the image studio in your browser, or one image from the command line"
+help_says = "make and rework images in a browser app"
+inputs = "nothing to open the app; or a studio command with its own arguments (lm studio help lists them)"
+output = "the app in your browser; a studio command prints the file it wrote, or JSON with --json"
+exit_codes = "0 done, 1 a problem the message explains, 2 bad usage"
+cost_tier = "image"
+cost_secs = "10 to 30 per image on this Mac with the default model"
+leaves_mac = false
+side_effects = "serves the app on a local port until you press Ctrl-C; keeps images, sources and history in imagine-kit/data; a render takes a zrecover grant for its model; with --on NAME the request goes to that machine"
+keywords = ["image studio", "edit a photo", "rework an image", "image app", "make an image in the browser", "combine images", "image models"]
+see_also = ["imagine", "net", "models"]
+next = ""
+examples = [
+  { cmd = "lm studio", says = "open the studio in your browser" },
+  { cmd = 'lm studio gen "make the jacket red" --from photo.jpg', says = "rework one photo from the command line" },
+  { cmd = "lm studio models", says = "the image models, and whether each is downloaded" },
+  { cmd = "lm studio download klein", says = "fetch the default image model (16 GB)" },
+]
+
+[[job]]
+name = "net"
+kind = "job"
+aliases = []
+summary = "let other devices use this machine's models, and use theirs"
+usage = "lm net [serve|devices|approve NAME|off NAME|on NAME|add NAME ADDRESS|ping|log]"
+more_label = "lm net [command]"
+more_says = "offer this machine's models to devices you approve, or use another machine's"
+help_says = "share models between your devices"
+inputs = "a command; approve, off, on and forget take a device name; add takes a name and an address"
+output = "plain text; --json with status, devices, servers, ping or log prints JSON"
+exit_codes = "0 done, 1 refused or unreachable, 2 bad usage"
+cost_tier = "none"
+cost_secs = "under 1; a request to a server takes as long as its model does"
+leaves_mac = false
+side_effects = "nothing goes to a cloud service; keeps this device's key, its server list and its approved devices in ~/.config/lm/net; lm net serve listens on port 5119 until stopped; a request to a server you added sends your picture to that machine; writes logs/net-history.jsonl"
+keywords = ["use my other mac", "share models with another device", "approve a device", "remote models", "tailnet", "surrogate machine", "who used my models"]
+see_also = ["status", "read"]
+next = ""
+examples = [
+  { cmd = "lm net", says = "this device, the servers it knows, and the devices that asked to use it" },
+  { cmd = "lm net serve", says = "offer this machine's models to approved devices until you press Ctrl-C" },
+  { cmd = "lm net approve m5air", says = "approve a device once, for everything; works before it first asks" },
+  { cmd = "lm net add studio 100.64.0.7", says = "remember another machine as a server and ask it for approval" },
+  { cmd = "lm net log", says = "who used what, allowed or refused" },
 ]
 
 [[job]]
