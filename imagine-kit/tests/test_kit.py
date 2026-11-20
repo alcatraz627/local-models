@@ -517,6 +517,28 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(json.loads(r.stdout)["seed"], 77)
 
+    def test_a_refusal_is_json_with_a_stable_code_when_json_was_asked_for(self):
+        r = self.run_kit("gen", "x", "--from", "/no/such/file.png", "--json")
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(json.loads(r.stdout)["code"], "source_missing")
+
+    def test_doctor_as_json_says_what_this_computer_can_use(self):
+        got = json.loads(self.run_kit("doctor", "--json").stdout)
+        self.assertTrue(got["can_draw"])
+        self.assertIn(got["default_model"], [m["id"] for m in got["models"]])
+        self.assertIn("tier", got["machine"])
+
+    def test_an_area_on_the_command_line_must_be_four_numbers(self):
+        r = self.run_kit("rework", "1", "greener", "--area", "0.2,0.2")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("left,top,width,height", r.stderr)
+
+    def test_a_follow_up_can_name_the_machine_that_draws_it(self):
+        self.run_kit("gen", "a base for a follow-up", "--seed", "5")
+        newest = kit.read_history()[-1]["id"]
+        r = self.run_kit("again", str(newest), "--on", "nowhere", "--json")
+        self.assertEqual(json.loads(r.stdout)["code"], "no_such_server")
+
     def test_an_unknown_command_exits_2(self):
         self.assertEqual(self.run_kit("frobnicate").returncode, 2)
 

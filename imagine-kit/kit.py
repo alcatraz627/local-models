@@ -1413,6 +1413,7 @@ COMMANDS
   again N                        image N's request with a new roll of the dice
   refine N "change"              image N's starting point, with the prompt changed
   rework N "change"              image N itself as the source, changed as you say
+  check N                        measure what image N changed from its source
   improve "idea" [--edit]        turn a short idea into a fuller prompt
   history [N]                    the last N images (default 15)
   models                         each model, its size, and whether it is ready
@@ -1423,14 +1424,25 @@ COMMANDS
 OPTIONS FOR gen
   --from IMAGE          a source image; repeat for up to four
   --loose [0.1-0.9]     start loosely from the first source, not a strict edit
-  --model NAME          klein (default) or qwen
+  --model NAME          klein (default), qwen, gemini or gpt
   --style NAME          photo, cinematic, illustration, watercolor, anime, 3d, product
-  --size WxH            output size; the default follows the source, or 1024x1024
-  --steps N  --seed N   more steps is slower and finer; a seed repeats a result
-  --on NAME             draw on another machine (see: ./imagine servers)
-  --json                print the full record as JSON
+  --size WxH  --steps N  --seed N   output size (default follows the source), steps, a seed to repeat a result
+  --area X,Y,W,H        with one source or rework: keep the change inside this part (shares, 0 to 1)
+  --on NAME  --json     draw on another machine; print the record, or an error, as JSON
 
 More: README.md for the guide, PROMPTING.md for how to write prompts that work."""
+
+
+def area_arg(text):
+    """Read `--area X,Y,W,H`: the left, top, width and height of the part to change, as shares of the image."""
+    try:
+        box = [float(v) for v in text.split(",")]
+    except ValueError:
+        box = []
+    if len(box) != 4:
+        raise KitError("bad_usage", "--area wants four numbers from 0 to 1: left,top,width,height. "
+                       "For the middle of the image: --area 0.25,0.25,0.5,0.5")
+    return box
 
 
 def print_entry(e, as_json=False):
@@ -1479,9 +1491,12 @@ def cli(argv):
         ap.add_argument("--seed", type=int)
         ap.add_argument("--json", action="store_true")
         ap.add_argument("--on", dest="server")
+        ap.add_argument("--area")
         a = ap.parse_args(rest)
         req = {"prompt": " ".join(a.prompt), "sources": a.sources, "model": a.model, "style": a.style,
                "steps": a.steps, "seed": a.seed, "server": a.server}
+        if a.area:
+            req["region"] = area_arg(a.area)
         if a.loose is not None:
             req.update(use="start", strength=a.loose)
         if a.size:
@@ -1493,7 +1508,26 @@ def cli(argv):
     if cmd in ("again", "refine", "rework"):
         if not rest or not rest[0].lstrip("#").isdigit():
             raise KitError("bad_usage", f"Usage: ./imagine {cmd} N" + ('' if cmd == 'again' else ' "change"'))
-        return run(follow_up(cmd, int(rest[0].lstrip("#")), " ".join(rest[1:])))
+        as_json, words, area, where = "--json" in rest, [], None, None
+        args = iter(rest[1:])
+        for arg in args:
+            if arg == "--area":
+                area = area_arg(next(args, ""))
+            elif arg == "--on":
+                where = next(args, "")
+            elif arg != "--json":
+                words.append(arg)
+        req = follow_up(cmd, int(rest[0].lstrip("#")), " ".join(words))
+        if area:
+            req["region"] = area
+        if where:
+            req["server"] = where
+        return run(req, as_json)
+    if cmd == "check":
+        if not rest or not rest[0].lstrip("#").isdigit():
+            raise KitError("bad_usage", "Usage: ./imagine check N")
+        report = check_change(int(rest[0].lstrip("#")))
+        return print(json.dumps(report) if "--json" in rest else report["words"])
     if cmd == "improve":
         editing = "--edit" in rest
         got = improve_prompt(" ".join(r for r in rest if r != "--edit"), editing)
@@ -1525,6 +1559,12 @@ def cli(argv):
         download(rest[0], lambda have, total: print(f"\r  {have} of {total} GB", end="", flush=True))
         return print("\nDone.")
     if cmd == "doctor":
+        if "--json" in rest:        # for a program: what this computer is, and which models it can use now
+            models = [model_status(k) for k in MODELS]
+            return print(json.dumps({"machine": machine(), "models": models, "default_model": default_model(),
+                                     "can_draw": any(s["ready"] and s["ram_ok"] and s.get("engine_ok", True)
+                                                     for s in models),
+                                     "servers": [s["name"] for s in net_servers()]}))
         return doctor()
     if cmd == "servers":
         known = net_servers()
@@ -1581,6 +1621,8 @@ def main():
     try:
         cli(sys.argv[1:])
     except KitError as err:
+        if "--json" in sys.argv:        # a program asked for JSON, so the refusal is JSON too, with its stable code
+            print(json.dumps(err.as_dict()))
         print(f"imagine: {err.message}" + (f"\n  {err.fix}" if err.fix else ""), file=sys.stderr)
         sys.exit(2 if err.code == "bad_usage" else 1)
     except KeyboardInterrupt:

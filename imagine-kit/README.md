@@ -159,7 +159,7 @@ Change one thing at a time. Two changes in one instruction often means neither l
 
 **Improve my prompt** rewrites a short idea as a fuller prompt, which you can edit or undo. If the Ollama app is running on your computer it uses a model from there. Without it, the kit uses a simple built-in template.
 
-How to write prompts that work is in [PROMPTING.md](PROMPTING.md).
+How to write prompts that work is in [PROMPTING.md](PROMPTING.md). If an AI agent such as Claude Code is doing this for you, point it at [AGENTS.md](AGENTS.md).
 
 ## The models
 
