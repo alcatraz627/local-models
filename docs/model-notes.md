@@ -28,6 +28,7 @@ Newest first.
 | 2026-10-21 | PR review of speedway #110 by URL, through `lm gemini` | none, it failed | No answer after 451s: it tried to read `.git` (blocked), then "Invalid stream" | The wrapper ran it read-only, with no GitHub access. Pipe `gh pr diff` in instead of passing a URL |
 | 2026-10-21 | Ideate the local-model candidate test plan (70K-char context pack) | citations scripted against the tree; fixture paths checked | 20 of 25 file:line citations exact, 2 near, 3 wrong; every fixture path real; candidates real but 2024-25 vintage | Missed the September releases. Plan: `.claude/output/20261021-argon-candidates/argon-test-plan.md` |
 | 2026-10-21 | 170K-token sweep of this repo (needle, absent-fact trap, 5 config facts) | exact-answer key | 7/7, 8.4s, about $0.68 | Same score as gemini-3.8-flash at several times the cost |
+| 2026-11-04 | PR review of winhere-pim #34, #35, #38, diff on stdin through `gemini-direct.py` | each finding read against the code | 4 findings: 2 held, 2 false. #35 was "no findings" twice in about 6s | A pack path given as the prompt is not read, so use stdin. A diff alone has no schema, which caused one false finding |
 
 ## gemini-3.8-flash (requested) / gemini-3.6-flash (served)
 
@@ -40,13 +41,29 @@ Newest first.
 
 | Date | Task | Checked how | Result | Note |
 |---|---|---|---|---|
+| 2026-11-04 | One anchored sentence per change unit, 3 PRs, against haiku, gemini flash and local | anchors checked by script, sentences read | 2 of 3 answered, 17 s each; short behaviour-first sentences; one reply was not readable JSON | Fastest; haiku chose instead for answering 3 of 3. `~/Code/Claude/cmap/docs/narrative-comparison.md` |
 | 2026-10-22 | Build the vision harness and fix 23 CLI review findings, two runs at once | the drafts were finished and tested by Claude sonnet seats | Both runs hit the account usage limit midway: full drafts of the harness files, none run; partial edits to `_lib.sh` and `q` | Quota resets 2026-11-20. Its harness drafts were sound enough to finish, with one crash (a missing baseline) |
 | 2026-10-21 | PR review, speedway #110, exploring the exported tree read-only, effort high | each finding read against the code at head (shallow) | 2 findings: 1 held (the most product-relevant of either review), 1 false (shared with Argon) | gpt-6-astra and gpt-6-sol are refused on this ChatGPT login; luna is the heaviest accepted |
+
+## Codex gpt-6-sol
+
+| Date | Task | Checked how | Result | Note |
+|---|---|---|---|---|
+| 2026-11-05 | Release vs PRD review, winhere-pim | defects read against code and live runs | 7 defects: 1 false, 1 that matters, 5 small | Verdict overstated; see below |
+
+### 2026-11-05 release vs PRD review
+
+- **Task:** winhere-pim `2416367` against the Export Builder CPRD of 11.2.26 plus database copies, read-only, with a verdict asked for every PRD line.
+- **False:** a pepper mismatch on copies. Staff sign-in had already worked on a live copy, and the doc says the staging pepper holds production's value.
+- **Matters to the customer:** China users have no Export Builder, the same as production before.
+- **Small:** 5 PRD-literal or edge gaps nobody would notice. "Not fit to ship" was overstated.
+- **Model:** accepted on this login now, unlike 2026-10-21. Its file:line evidence was solid throughout.
+- **Lesson:** a verdict on every line invites padding. Ask what would block or annoy the customer instead.
 
 ## Local vision (minicpm-v4.6, Qwen3-VL-8B MLX)
 
 | Date | Task | Checked how | Result | Note |
 |---|---|---|---|---|
 | 2026-10-22 | Same harness, Qwen3.6-27B 4-bit on MLX | as above | 94/112, 13.1 s median; beats Qwen3-VL-8B on 3 cases, loses on 4 (counting, UI inventories with invented elements) | pruned |
-| 2026-10-22 | 42-case vision harness, 3 seeds, 7 models | generated truths, meaning-based scorers, every failing cell read | Qwen3-VL-8B 101/112, Qwen3.5-9B 100, qwen3.6:35b 98, gemma4:26b 97, Qwen3-VL-4B 85, gemma4-e4b 78, minicpm-v4.6 74 | `docs/20261022-model-comparison.md` |
+| 2026-10-22 | 42-case vision harness, 3 seeds, 7 models | generated truths, meaning-based scorers, every failing cell read | Qwen3-VL-8B 101/112, Qwen3.5-9B 100, qwen3.6:35b 98, gemma4:26b 97, Qwen3-VL-4B 85, gemma4-e4b 78, minicpm-v4.6 74 | `docs/reviews/20261022-model-comparison.md` |
 | 2026-10-21 | Name the odd motif of 12 on the Affinity rug-border fixture | case.json truth (motif 9) | minicpm said 3, Qwen3-VL said 6: both wrong | Counting and comparing many small shapes is a measuring job; a pixel script found motif 9 |

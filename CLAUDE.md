@@ -6,7 +6,8 @@ model calls run locally; `lm gemini` and `q --web` use the network. You are usua
 
 **Read in this order:** `docs/STATE.md` (current state + what's pending, kept current; history in `docs/LEDGER.md`) →
 `docs/CAPABILITIES.md` (the full menu with copy-paste examples) → the design doc for
-whatever you're touching (`docs/03`–`docs/10`).
+whatever you're touching (`docs/03` to `docs/11`). `docs/README.md` indexes every doc and holds
+the rules for adding one. A new doc needs a row there or `scripts/verify.sh` fails.
 
 ## The three hard rules
 

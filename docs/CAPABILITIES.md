@@ -73,7 +73,9 @@ KEEP IT HANDY
 | `lm probe <model>` | judge whether a local model is trustworthy | big, minutes s | no |
 | `lm bench <set>` | run a fixed behavior and latency fixture set | small, minutes s | no |
 | `lm ui-verify <img> "claim"` | check claims about a screenshot against a UI inventory | vision, 20-60 s | no |
-| `lm opencode [args]` | opencode on the local code model, leased for the session | code, 30 to load; then interactive s | no |
+| `lm opencode [-m small|big|code|sweep] [args]` | opencode on a local model, held for the session | code, 30 to load; then interactive s | no |
+| `lm studio [gen|rework|again|history|models|download|servers|doctor] [args]` | the image studio: make and rework images in your browser | image, 10 to 30 per image on this Mac with the default model s | no |
+| `lm net [serve|devices|approve NAME|off NAME|on NAME|add NAME ADDRESS|ping|log]` | let other devices use this machine's models, and use theirs | none, under 1; a request to a server takes as long as its model does s | no |
 | `lm timeline [N] [--errors] [--tool T] [--all] [--json]` | your recent calls, newest last | no model, under 1 s | no |
 | `lm last [tool] [--all] [--json]` | your latest call, in full | no model, under 1 s | no |
 | `lm models [--json]` | installed models and which tier each is | no model, under 1 s | no |

@@ -37,7 +37,7 @@ The dated record of what was built, moved out of `STATE.md` on 2026-11-12. Newes
   (`probe/vision/`, deterministic truths, meaning-based scorers, script baselines, selftest
   in verify.sh) run over 7 vision models, plus a 14-case text comparison (`probe/textcmp/`).
   Qwen3-VL-8B MLX led (101/112); minicpm-v4.6, the plain `see` default, came last (74).
-  Summary and the open default-swap decision: `docs/20261022-model-comparison.md`. Also:
+  Summary and the open default-swap decision: `docs/reviews/20261022-model-comparison.md`. Also:
   `see diff --mlx`; `lm gemini` sends piped input over 200 KB to the API directly
   (`--direct`/`--cli`), and gemini-cli 0.64 now serves 3.8-flash as requested; the memory
   guard no longer kills big Ollama loads at warn pressure without an MLX process alive.
@@ -235,7 +235,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - `docs/07-implementation.md`: the phased plan (Phase 1 largely built; see PENDING)
 - `docs/09-local-fleet.md`: fleet design from 269 real sub-agent dispatches
 - `docs/03-tool-orchestration-decision.md`: local models do NOT drive their own tools
-- `docs/04`: stay on Ollama · `docs/NEXT-SESSION.md`: last session's agenda state
+- `docs/04`: stay on Ollama · `docs/archive/NEXT-SESSION.md`: last session's agenda state
 - Research archives: `.claude/output/20260616-model-tiers/` · `20260619-*` (landscape, judgment
   benchmarks, re-rank) · `20260620-*` (perf levers, usage audit, efficacy architecture) ·
   `20260707-1334-mlx-report/` (the MLX verdict, styled HTML)
@@ -271,7 +271,7 @@ All commands are also directly on PATH (exec-wrappers in `~/.local/bin/` → `bi
 - **Codex gcc acceptance:** exercise `tag` and `preference-graduation` on owner-selected
   canonical changes, then verify discovery from a fresh Codex session. The bounded
   Codex-only i-dream pass ran on September 27; its five parsed insights were inspected,
-  and none justified a standing rule (`docs/20260927-codex-idream-live-pass.md`).
+  and none justified a standing rule (`docs/reviews/20260927-codex-idream-live-pass.md`).
 - **Fleet over a real code task: EXERCISED 2026-07-13** (`.claude/output/20260713-fleet-code-task/experiment.md`).
   The on-disk 35b coder re-implemented the real E1 numeric-deltas change in a pre-E1 worktree
   under the battery judge: **33/33 green round 1, 35s, 1383 tok**, incl. a spec-only (untested)

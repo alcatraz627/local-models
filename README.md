@@ -111,13 +111,14 @@ lm gemini ingest-repo . && lm gemini ask "list retry handlers with file paths"  
 
 | Document | What's in it |
 |---|---|
-| [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) | the full menu — every ability, grouped, with examples |
+| [`docs/README.md`](docs/README.md) | the index of every doc, and the rules for adding one |
 | [`docs/STATE.md`](docs/STATE.md) | what is true now; the dated history is in docs/LEDGER.md |
+| [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) | the full menu: every ability, grouped, with examples |
+| [`docs/opencode.md`](docs/opencode.md) | running the opencode coding agent on the local models |
+| [`imagine-kit/README.md`](imagine-kit/README.md) | a standalone image app to share: make and rework images from a prompt and source images |
 | [`docs/q-spec.md`](docs/q-spec.md) | the `q` contract: intents, envelope, constrained decoding |
 | [`docs/03-tool-orchestration-decision.md`](docs/03-tool-orchestration-decision.md) | why the command owns file and tool access |
-| [`docs/04-ollama-vs-llamacpp-decision.md`](docs/04-ollama-vs-llamacpp-decision.md) / [`docs/05-perf-levers-and-usage-audit.md`](docs/05-perf-levers-and-usage-audit.md) | dated runtime choice and measurements |
-| [`docs/09-local-fleet.md`](docs/09-local-fleet.md) / [`docs/10-visual-compare-design.md`](docs/10-visual-compare-design.md) | batch-worker and visual-evidence design |
-| [`docs/20260926-lm-implementation-trials.md`](docs/20260926-lm-implementation-trials.md) | latest speech, retrieval, Pi, and Codex trial results; outstanding gates included |
+| [`docs/reviews/`](docs/reviews/) | dated reviews and trial results |
 | [`docs/research/`](docs/research/) | dated research archives, not the current model inventory |
 
 The [MIT license](LICENSE) covers this repository. Each tool writes its own
