@@ -1,0 +1,16 @@
+# The image engine for Linux and Windows (under WSL) with an NVIDIA graphics card.
+# These exact versions drew and reworked images on Ubuntu 24.04 with a 16 GB card.
+# diffusers is pinned to a commit because the FLUX.2 klein pipeline was not yet in a release.
+torch==2.15.0
+torchvision==0.29.2
+diffusers @ git+https://github.com/huggingface/diffusers@e24786a5d347439a2847be74c4a61405426fbb42
+transformers==5.23.0
+accelerate==1.16.0
+bitsandbytes==0.50.2
+safetensors==0.8.0
+tokenizers==0.23.3
+sentencepiece==0.2.3
+protobuf==7.36.2
+pillow==13.0.0
+huggingface_hub==2.4.0
+numpy==2.5.5

@@ -1,0 +1,16 @@
+#!/bin/bash
+# imagine: the one command for the kit. With no arguments it opens the app.
+# It runs kit.py with the Python that install.sh set up, and says so plainly
+# when that step has not been done yet.
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PY="$HERE/.venv/bin/python"
+if [ ! -x "$PY" ]; then
+  if [ "${IMAGINE_KIT_FAKE:-}" = "1" ] || [ -n "${IMAGINE_KIT_BIN:-}" ]; then
+    PY="$(command -v python3)"
+  else
+    echo "imagine: not set up yet. Run this once, from the kit's folder:" >&2
+    echo "  ./install.sh" >&2
+    exit 1
+  fi
+fi
+exec "$PY" "$HERE/kit.py" "$@"

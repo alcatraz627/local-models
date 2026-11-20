@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Make and rework images on your own computer, from a prompt and optional source images.">
+<title>Imagine Kit</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23222a35'/%3E%3Cpath d='M6 23l6-8 5 6 3-4 6 6z' fill='%23f2b84b'/%3E%3Ccircle cx='22' cy='10' r='3' fill='%23f6f1e7'/%3E%3C/svg%3E">
+<style>
+  /* Dark is the base palette. Light applies when the system asks for it, until the reader picks one. */
+  :root {
+    --bg: #15181d; --panel: #1d2128; --sunk: #262b34; --line: #343b47;
+    --text: #ece8e0; --soft: #a2a9b5; --accent: #f2b84b; --accent-text: #1b1608;
+    --bad: #ff8a80; --bad-bg: #3a1f1d; --good: #86c995; --star: #f2b84b;
+    --radius: 10px; --control: 36px;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5f2ec; --panel: #fffdf9; --sunk: #ece7dd; --line: #d9d2c4;
+      --text: #20242b; --soft: #5d6470; --accent: #a4550a; --accent-text: #fffdf9;
+      --bad: #b3261e; --bad-bg: #fbe9e7; --good: #2f6b3a; --star: #b07c00;
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f2ec; --panel: #fffdf9; --sunk: #ece7dd; --line: #d9d2c4;
+    --text: #20242b; --soft: #5d6470; --accent: #a4550a; --accent-text: #fffdf9;
+    --bad: #b3261e; --bad-bg: #fbe9e7; --good: #2f6b3a; --star: #b07c00;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 ui-sans-serif, -apple-system, "Helvetica Neue", sans-serif; }
+  svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7;
+          stroke-linecap: round; stroke-linejoin: round; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  button { display: inline-flex; align-items: center; gap: 7px; height: var(--control); padding: 0 11px;
+           background: transparent; border: 0; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  button:hover:not(:disabled) { background: var(--sunk); }
+  button:disabled { opacity: .45; cursor: default; }
+  button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible, .drop:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; padding: 0 16px; }
+  button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+  button.armed { background: var(--bad-bg); color: var(--bad); }
+  button[aria-pressed=true].toggle { background: var(--sunk); box-shadow: 0 0 0 1px var(--line); }
+  select, input[type=number], input[type=text], input[type=password] { height: var(--control); padding: 0 9px; background: var(--panel);
+           border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+  textarea { width: 100%; min-height: 104px; padding: 10px 11px; background: var(--panel); resize: vertical;
+             border: 1px solid var(--line); border-radius: 8px; line-height: 1.45; }
+  [data-tip] { position: relative; }
+  [data-tip]:hover::after, [data-tip]:focus-visible::after {
+    content: attr(data-tip); position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: max-content;
+    max-width: 280px; padding: 7px 9px; background: var(--text); color: var(--bg); border-radius: 7px;
+    font-size: 13px; font-weight: 400; line-height: 1.35; white-space: normal; text-align: left; }
+  .actions [data-tip]:hover::after, .threads [data-tip]:hover::after { right: auto; left: 0; }
+
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  header h1 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 16px; font-weight: 650; }
+  header .grow { flex: 1; }
+  .model { display: flex; align-items: center; gap: 8px; color: var(--soft); font-size: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; }
+  .dot.off { background: var(--bad); }
+
+  main { display: grid; grid-template-columns: 210px minmax(300px, 360px) 1fr; gap: 16px; padding: 16px;
+         max-width: 1700px; margin: 0 auto; align-items: start; }
+  section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
+                  min-width: 0; }
+  h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--soft); }
+  .field { margin-bottom: 14px; }
+  .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .hint { color: var(--soft); font-size: 13px; margin: 6px 0 0; }
+
+  /* Threads: one per idea, each holding every image made on the way. */
+  .threads { display: grid; gap: 6px; }
+  .threads button { height: auto; padding: 6px; gap: 9px; text-align: left; white-space: normal; align-items: center;
+                    border: 1px solid transparent; width: 100%; }
+  .threads button[aria-current=true] { background: var(--sunk); border-color: var(--line); }
+  .threads img, .threads .blank { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; flex: none;
+                                  background: var(--sunk); }
+  .threads .t { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+                font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; }
+  .threads .c { color: var(--soft); font-size: 12px; }
+  .threads .new { justify-content: center; border: 1.5px dashed var(--line); color: var(--soft); min-height: 44px; }
+
+  .drop { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 76px; padding: 10px;
+          border: 1.5px dashed var(--line); border-radius: 8px; color: var(--soft); text-align: center; cursor: pointer; }
+  .drop.over { border-color: var(--accent); color: var(--text); background: var(--sunk); }
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .thumb { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb button { position: absolute; top: 3px; right: 3px; height: 22px; width: 22px; padding: 0; justify-content: center;
+                  background: var(--panel); border-radius: 50%; }
+  .thumb button svg { width: 13px; height: 13px; }
+  .library { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; margin-top: 8px; }
+  .library button { height: auto; padding: 0; aspect-ratio: 1; border-radius: 6px; overflow: hidden; }
+  .library img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .seg { display: inline-flex; background: var(--sunk); border-radius: 8px; padding: 3px; }
+  .seg button { height: 30px; }
+  .seg button[aria-pressed=true] { background: var(--panel); box-shadow: 0 0 0 1px var(--line); }
+  details summary { cursor: pointer; color: var(--soft); font-size: 14px; display: flex; align-items: center; gap: 6px;
+                    list-style: none; height: 30px; }
+  details summary::-webkit-details-marker { display: none; }
+  details[open] summary svg { transform: rotate(90deg); }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .grid3 label { font-size: 13px; color: var(--soft); display: grid; gap: 4px; }
+  .grid3 input { width: 100%; }
+
+  .bar { height: 6px; background: var(--sunk); border-radius: 3px; overflow: hidden; margin: 6px 0; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .bar.wait i { width: 35%; animation: slide 1.3s ease-in-out infinite; }
+  @keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .bar.wait i { animation: none; margin-left: 0; width: 100%; opacity: .5; } }
+  .line { margin-top: 12px; display: grid; gap: 8px; }
+  .job { background: var(--sunk); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  .job .row { flex-wrap: nowrap; }
+  .job .what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .job button { height: 26px; width: 26px; padding: 0; justify-content: center; flex: none; }
+
+  .notice { border-radius: 8px; padding: 11px 12px; margin-bottom: 14px; background: var(--sunk); }
+  .notice.bad { background: var(--bad-bg); color: var(--bad); }
+  .notice strong { display: block; margin-bottom: 2px; }
+  .notice code, .hint code { font: 13px ui-monospace, Menlo, monospace; }
+  .notice .row { margin-top: 9px; }
+
+  .head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; min-height: var(--control); }
+  .head h2 { margin: 0; font-size: 15px; color: var(--text); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .head input { flex: 1; }
+  .stage { display: grid; place-items: center; min-height: 420px; background: var(--sunk); border-radius: 8px; overflow: hidden; }
+  .frame { position: relative; line-height: 0; max-width: 100%; }
+  .frame img { max-width: 100%; max-height: 68vh; display: block; user-select: none; -webkit-user-drag: none; }
+  .frame.marking { cursor: crosshair; touch-action: none; }
+  .mark { position: absolute; border: 2px solid var(--accent); background: rgba(242, 184, 75, .16);
+          box-shadow: 0 0 0 9999px rgba(0, 0, 0, .28); pointer-events: none; }
+  .frame { overflow: hidden; }
+  .empty { color: var(--soft); text-align: center; max-width: 34ch; padding: 24px; }
+  .empty svg { width: 34px; height: 34px; margin-bottom: 8px; }
+  .meta { color: var(--soft); font-size: 13px; margin: 10px 0 4px; overflow-wrap: anywhere; }
+  .said { margin: 2px 0 10px; overflow-wrap: anywhere; }
+  .from { display: flex; align-items: center; gap: 6px; margin: 8px 0; color: var(--soft); font-size: 13px; flex-wrap: wrap; }
+  .from button { height: auto; padding: 0; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+  .from img { width: 40px; height: 40px; object-fit: cover; display: block; }
+  .from button.back { height: 30px; padding: 0 10px; border: 0; background: var(--sunk); color: var(--text); }
+  .actions { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .change { display: grid; gap: 8px; margin-top: 12px; }
+  .change textarea { min-height: 64px; }
+  .starred { color: var(--star); }
+  .starred svg { fill: currentColor; }
+  .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-top: 14px; }
+  .shelf button { height: auto; padding: 0; border-radius: 8px; overflow: hidden; position: relative;
+                  border: 2px solid transparent; aspect-ratio: 1; }
+  .shelf button[aria-current=true] { border-color: var(--accent); }
+  .shelf img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .shelf .n { position: absolute; left: 4px; bottom: 4px; padding: 0 5px; border-radius: 5px; font-size: 12px;
+              background: rgba(0,0,0,.6); color: #fff; }
+  .shelf .s { position: absolute; right: 4px; top: 4px; color: var(--star); }
+  .shelf .s svg { fill: currentColor; width: 14px; height: 14px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+  @media (max-width: 1100px) {
+    main { grid-template-columns: minmax(300px, 360px) 1fr; }
+    #threadsPanel { grid-column: 1 / -1; }
+    .threads { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) {
+    header { padding: 10px 12px; gap: 6px; flex-wrap: wrap; }
+    header button { padding: 0 8px; }
+    .model { min-width: 0; }
+    .model select { max-width: 150px; }
+    /* On a phone the choice of computer gets its own row, so neither picker is cut short. */
+    #whereWrap { order: 5; flex: 1 1 100%; }
+    #whereWrap select { flex: 1; max-width: none; }
+    main { padding: 12px; gap: 12px; }
+    .stage { min-height: 260px; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16v4M17 18h4"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 16l5-5 4 4 3-3 6 6"/><circle cx="16" cy="9" r="1.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-wand" viewBox="0 0 24 24"><path d="M5 19L16 8M14 6l4 4M18 3v3M16.5 4.5h3M6 5v2M5 6h2"/></symbol>
+  <symbol id="i-dice" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r=".6"/><circle cx="15" cy="15" r=".6"/><circle cx="15" cy="9" r=".6"/><circle cx="9" cy="15" r=".6"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.5 5.2 5.7.8-4.1 4 1 5.6L12 17l-5.1 2.6 1-5.6-4.1-4 5.7-.8z"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+  <symbol id="i-theme" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8M12 17h.01"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8.5 4.5 4.5 0 0 1 17 18z"/><path d="M12 11v5M10 14l2 2 2-2"/></symbol>
+  <symbol id="i-area" viewBox="0 0 24 24"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><rect x="8" y="9" width="8" height="6" rx="1"/></symbol>
+  <symbol id="i-split" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8 8H4V4M4 8a8 8 0 1 1 2 9"/></symbol>
+</svg>
+
+<header>
+  <h1><svg class="i" style="color:var(--accent)"><use href="#i-image"/></svg>Imagine Kit</h1>
+  <span class="grow"></span>
+  <label class="model" id="whereWrap" hidden><span>Runs on</span>
+    <select id="where" aria-label="Which computer draws the image"></select></label>
+  <label class="model"><span class="dot" id="modelDot"></span><span class="sr">Model</span>
+    <select id="model" aria-label="Model"></select></label>
+  <button id="help" aria-label="How this works" data-tip="Write what you want and press Make image. Add source images to rework them. Each idea is a thread that keeps every image made on the way. Open any image to change it, or mark an area and say what should change there."><svg class="i"><use href="#i-help"/></svg></button>
+  <button id="theme" aria-label="Switch between light and dark" data-tip="Switch between light and dark"><svg class="i"><use href="#i-theme"/></svg></button>
+</header>
+
+<main>
+  <section class="panel" id="threadsPanel" aria-label="Threads">
+    <h2>Threads</h2>
+    <div class="threads" id="threads"></div>
+  </section>
+
+  <section class="panel" aria-label="What to make">
+    <div id="setup"></div>
+
+    <div class="field">
+      <h2>Source images (optional)</h2>
+      <div class="thumbs" id="thumbs"></div>
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Add source images">
+        <svg class="i"><use href="#i-plus"/></svg><span>Drop images here, paste, or click to choose. Up to four.</span>
+      </div>
+      <input type="file" id="file" accept="image/*" multiple hidden>
+      <details id="libraryWrap" hidden>
+        <summary><svg class="i"><use href="#i-chev"/></svg>Images you added before</summary>
+        <div class="library" id="library"></div>
+      </details>
+      <div id="useRow" hidden>
+        <div class="row" style="margin-top:10px">
+          <div class="seg" role="group" aria-label="How to use the source images">
+            <button id="useEdit" aria-pressed="true">Rework them</button>
+            <button id="useStart" aria-pressed="false">Start loosely</button>
+          </div>
+          <label id="strengthWrap" class="row" hidden><span class="hint" style="margin:0">Keep</span>
+            <input type="range" id="strength" min="0.1" max="0.9" step="0.05" value="0.5" aria-label="How much of the source to keep">
+            <span class="hint" style="margin:0" id="strengthSay"></span></label>
+        </div>
+        <p class="hint" id="useHint"></p>
+      </div>
+    </div>
+
+    <div class="field">
+      <h2 id="promptLabel">What do you want to see?</h2>
+      <textarea id="prompt" aria-labelledby="promptLabel" placeholder="A red bicycle leaning on a wet brick wall, early morning"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="improve" data-tip="Rewrites a short idea as a fuller prompt. You can edit the result, or undo it."><svg class="i"><use href="#i-wand"/></svg>Improve my prompt</button>
+        <button id="undo" hidden><svg class="i"><use href="#i-undo"/></svg>Undo</button>
+        <span class="grow" style="flex:1"></span>
+        <label class="row" id="styleWrap"><span class="hint" style="margin:0">Style</span><select id="style" aria-label="Style"></select></label>
+      </div>
+      <p class="hint" id="improveSay" role="status"></p>
+    </div>
+
+    <details class="field">
+      <summary><svg class="i"><use href="#i-chev"/></svg>Size, steps and seed</summary>
+      <div class="grid3">
+        <label>Width<input type="number" id="width" min="256" max="2048" step="16" placeholder="auto"></label>
+        <label>Height<input type="number" id="height" min="256" max="2048" step="16" placeholder="auto"></label>
+        <label>Steps<input type="number" id="steps" min="1" max="60" placeholder="auto"></label>
+      </div>
+      <div class="grid3" style="grid-template-columns:1fr">
+        <label>Seed (a number repeats a result; empty picks a new one)<input type="number" id="seed" min="1" placeholder="new each time"></label>
+      </div>
+    </details>
+
+    <div class="row">
+      <button class="primary" id="go"><svg class="i"><use href="#i-spark"/></svg>Make image</button>
+      <label class="row"><span class="hint" style="margin:0">Tries</span>
+        <select id="tries" aria-label="How many tries to make at once"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+    </div>
+    <p class="hint" id="whereSay"></p>
+    <div id="progress" class="line" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" aria-label="Result">
+    <div class="head" id="head"></div>
+    <div class="stage" id="stage"></div>
+    <div id="detail"></div>
+    <div class="shelf" id="shelf" aria-label="Images in this thread"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const icon = name => `<svg class="i"><use href="#i-${name}"/></svg>`;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let state = null, sources = [], selected = null, use = 'edit', armedDelete = null, seenJobs = '', followJobs = new Set();
+let thread = undefined;      // the open thread; null means "a new one", undefined means "not chosen yet"
+let viewSource = null;       // a source image shown on the stage in place of the selected image: {ref, url}
+let mark = null, marking = false, renaming = false, comparing = false, checkSay = '', beforeImprove = null;
+
+async function api(path, body, raw, headers) {
+  const opt = body === undefined && raw === undefined ? {} :
+    {method: 'POST', body: raw ?? JSON.stringify(body), headers: headers ?? {'Content-Type': 'application/json'}};
+  let res;
+  try { res = await fetch(path, opt); }
+  catch { return {ok: false, code: 'offline', message: 'The kit is not running.', fix: 'Start it again in the terminal with ./imagine, then reload this page.'}; }
+  return res.json();
+}
+
+function currentModel() { return state.models.find(m => m.id === $('model').value) || state.models[0]; }
+function live() { return state.jobs.filter(j => j.state === 'queued' || j.state === 'running'); }
+// True when another computer will draw, so this one needs no engine, model or spare memory.
+function elsewhere() { return $('where').value !== ''; }
+function canDraw() {
+  const m = currentModel();
+  return elsewhere() || (m.cloud ? m.ready : m.engine_ok && m.ready && m.ram_ok);
+}
+function inThread(t) { return state.history.filter(h => h.thread === t).reverse(); }
+function threadTitle(t) { const first = inThread(t)[0]; return state.thread_names[t] || (first ? first.prompt : 'New thread'); }
+
+// A draft survives a reload: the prompt, the style and the source images in the box.
+function saveDraft() {
+  try { localStorage.setItem('imagine-kit-draft', JSON.stringify({prompt: $('prompt').value, style: $('style').value, sources, use})); } catch {}
+}
+function loadDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem('imagine-kit-draft') || '{}');
+    if (d.prompt) $('prompt').value = d.prompt;
+    if (d.style) $('style').value = d.style;
+    if (Array.isArray(d.sources)) sources = d.sources.slice(0, 4);
+    if (d.use) use = d.use;
+  } catch {}
+}
+
+function renderWhere(first) {
+  const sel = $('where'), keep = sel.value, here = state.installed && state.machine.tier !== 'none';
+  $('whereWrap').hidden = state.servers.length === 0;
+  sel.innerHTML = '<option value="">This computer</option>' +
+    state.servers.map(s => `<option value="${esc(s.name)}">${esc(s.name)}</option>`).join('');
+  // A computer that cannot draw by itself starts on the first machine that can.
+  sel.value = first && !here && state.servers.length ? state.servers[0].name : keep;
+}
+
+function renderModels() {
+  const sel = $('model'), keep = sel.value || state.default_model;
+  sel.innerHTML = state.models.map(m => `<option value="${m.id}">${esc(m.name)}${m.ready ? '' : m.cloud ? ' (needs a key)' : ' (not downloaded)'}</option>`).join('');
+  sel.value = keep;
+  const m = currentModel();
+  $('modelDot').className = 'dot' + (elsewhere() || (m.ready && m.ram_ok && (m.cloud || m.engine_ok)) ? '' : ' off');
+}
+
+function renderSetup() {
+  const m = currentModel(), box = $('setup');
+  const downloading = live().some(j => j.kind === 'download');
+  if (elsewhere()) box.innerHTML = '';
+  else if (m.cloud && !m.ready) {
+    box.innerHTML = `<div class="notice"><strong>${esc(m.name)} needs a key from ${esc(m.who)}</strong>
+      This model runs at ${esc(m.who)}, which charges for each image. A key is how it knows the images are yours.
+      <ol style="margin:8px 0 0;padding-left:20px">
+        <li>Open <a href="${esc(m.key_page)}" target="_blank" rel="noopener" style="color:inherit">${esc(m.who)}'s key page</a> and sign in.</li>
+        <li>Create a key and copy it.</li>
+        <li>Paste it here. It is kept on this computer only.</li>
+      </ol>
+      <div class="row"><input type="password" id="keyBox" aria-label="Key from ${esc(m.who)}" placeholder="Paste the key" style="flex:1">
+        <button class="primary" id="keySave">Save key</button></div>
+      <p class="hint" id="keySay" role="status"></p></div>`;
+    $('keySave').onclick = async () => {
+      const res = await api('/api/key', {provider: m.cloud, key: $('keyBox').value});
+      if (res.ok) refresh(true); else $('keySay').textContent = res.message + ' ' + (res.fix || '');
+    };
+  } else if (m.cloud) box.innerHTML = '';
+  else if (!m.engine_ok) {
+    // This computer cannot run the chosen model. Say why, and what does work here.
+    const others = state.models.filter(x => x.cloud).map(x => x.name).join(' or ');
+    box.innerHTML = `<div class="notice bad"><strong>${esc(m.name)} cannot run on this computer</strong>${esc(m.engine_fix)}
+      <div style="margin-top:6px">You can still make images here: pick ${esc(others)} at the top right${state.servers.length ? ', or choose another machine under Runs on' : ''}.</div></div>`;
+  } else if (!m.ram_ok) {
+    box.innerHTML = `<div class="notice bad"><strong>${esc(m.name)} is too large for this computer</strong>It needs ${m.min_ram_gb} GB of memory and this computer has ${state.ram_gb} GB. Pick another model at the top right.</div>`;
+  } else if (!m.ready && !downloading) {
+    box.innerHTML = `<div class="notice"><strong>${esc(m.name)} is not downloaded yet</strong>${esc(m.blurb)} It is a ${m.disk_gb} GB download, kept on this computer${m.have_gb ? `, and ${m.have_gb} GB is already here` : ''}.
+      <div class="row"><button class="primary" id="dl">${icon('cloud')}Download ${m.disk_gb} GB</button></div></div>`;
+    $('dl').onclick = async () => { showError(await api('/api/download', {model: m.id})); refresh(); };
+  } else box.innerHTML = '';
+  $('whereSay').textContent = elsewhere() ? `Your prompt and source images go to ${$('where').value} to be drawn.`
+    : m.cloud ? `Your prompt and source images go to ${m.who} to be drawn. Nothing else leaves this computer.` : '';
+}
+
+function renderThreads() {
+  const ids = [...new Set(state.history.map(h => h.thread))];
+  if (thread === undefined) thread = ids.length ? ids[0] : null;
+  if (thread !== null && !ids.includes(thread)) thread = ids.length ? ids[0] : null;
+  $('threads').innerHTML =
+    `<button class="new" id="newThread" aria-current="${thread === null}" data-tip="Start a fresh idea. The next image you make begins a new thread.">${icon('plus')}New thread</button>` +
+    ids.map(t => { const rows = inThread(t), last = rows[rows.length - 1];
+      return `<button data-t="${esc(t)}" aria-current="${t === thread}" aria-label="Thread: ${esc(threadTitle(t))}">
+        <img src="${last.url}" alt="" loading="lazy"><span><span class="t">${esc(threadTitle(t))}</span>
+        <span class="c">${rows.length} image${rows.length > 1 ? 's' : ''}</span></span></button>`; }).join('');
+  $('newThread').onclick = () => { thread = null; selected = null; viewSource = null; mark = null; renderThreads(); renderResult(); $('prompt').focus(); };
+  $('threads').querySelectorAll('button[data-t]').forEach(b => b.onclick = () => {
+    thread = b.dataset.t; selected = null; viewSource = null; mark = null; armedDelete = null; checkSay = ''; renaming = false;
+    renderThreads(); renderResult(); });
+}
+
+function renderSources() {
+  $('thumbs').innerHTML = sources.map((s, i) =>
+    `<div class="thumb"><img src="${s.url}" alt="Source image ${i + 1}"><button data-i="${i}" aria-label="Remove source image ${i + 1}">${icon('x')}</button></div>`).join('');
+  $('thumbs').querySelectorAll('button').forEach(b => b.onclick = () => { sources.splice(+b.dataset.i, 1); renderSources(); });
+  const m = state ? currentModel() : null, has = sources.length > 0;
+  $('useRow').hidden = !has;
+  $('drop').hidden = sources.length >= 4;
+  if (m && !m.can_edit) use = 'start';
+  $('useEdit').disabled = !!m && !m.can_edit;
+  $('useEdit').setAttribute('aria-pressed', use === 'edit');
+  $('useStart').setAttribute('aria-pressed', use === 'start');
+  $('strengthWrap').hidden = use !== 'start';
+  $('strengthSay').textContent = Math.round($('strength').value * 100) + '% of the source';
+  $('useHint').textContent = !has ? '' : use === 'edit'
+    ? 'The model follows your instruction and keeps the rest of each image. Say what to change and what to keep.'
+    : (m && !m.can_edit ? `${m.name} cannot rework images, so it starts from the first one. ` : '') + 'The first image is a loose starting point. Describe the whole picture you want.';
+  // A style describes a whole picture, so it is offered only when one is being drawn from scratch or loosely.
+  $('styleWrap').hidden = has && use === 'edit';
+  $('promptLabel').textContent = has && use === 'edit' ? 'What should change?' : 'What do you want to see?';
+  $('prompt').placeholder = has && use === 'edit' ? 'Make the jacket red. Keep the face, the pose and the background the same.'
+    : 'A red bicycle leaning on a wet brick wall, early morning';
+  if (state) {
+    const used = new Set(sources.map(s => s.ref)), rest = state.library.filter(f => !used.has(f.ref));
+    $('libraryWrap').hidden = rest.length === 0 || sources.length >= 4;
+    $('library').innerHTML = rest.map(f => `<button data-ref="${esc(f.ref)}" data-url="${esc(f.url)}" aria-label="Add this image as a source"><img src="${f.url}" alt="" loading="lazy"></button>`).join('');
+    $('library').querySelectorAll('button').forEach(b => b.onclick = () => {
+      if (sources.length < 4) { sources.push({ref: b.dataset.ref, url: b.dataset.url}); renderSources(); } });
+  }
+  saveDraft();
+}
+
+function renderProgress() {
+  $('go').disabled = !canDraw();
+  const jobs = live(), failed = state.jobs.filter(j => j.state === 'failed').slice(-1)[0];
+  let html = jobs.map(j => {
+    const known = j.total > 0, pct = known ? Math.round(100 * j.step / j.total) : 0;
+    const what = j.state === 'queued' ? 'Waiting its turn'
+      : j.kind === 'download' ? `Downloading: ${j.step} of ${j.total} GB`
+      : known ? `Drawing: step ${j.step} of ${j.total}` : j.where ? `Drawing on ${esc(j.where)}` : 'Loading the model';
+    return `<div class="job"><div class="row"><span class="what">${esc(j.label)}</span>
+        <button data-job="${j.id}" aria-label="Stop this one" data-tip="Stop this one">${icon(j.state === 'queued' ? 'x' : 'stop')}</button></div>
+      ${j.state === 'running' ? `<div class="bar${known ? '' : ' wait'}"><i style="width:${pct}%"></i></div>` : ''}
+      <span class="hint">${what}${j.state === 'running' ? ` · ${j.elapsed} s` : ''}</span></div>`; }).join('');
+  if (failed && !jobs.length)
+    html += `<div class="notice bad" style="margin:0"><strong>${esc(failed.error.message)}</strong>${esc(failed.error.fix || '')}</div>`;
+  $('progress').innerHTML = html;
+  $('progress').querySelectorAll('button[data-job]').forEach(b => b.onclick = async () => { await api('/api/stop', {job: +b.dataset.job}); refresh(); });
+}
+
+function showError(res) {
+  if (res && res.ok === false)
+    $('progress').innerHTML = `<div class="notice bad" style="margin:0"><strong>${esc(res.message)}</strong>${esc(res.fix || '')}</div>`;
+  return res;
+}
+
+function markStyle() {
+  return mark ? `left:${mark[0] * 100}%;top:${mark[1] * 100}%;width:${mark[2] * 100}%;height:${mark[3] * 100}%` : '';
+}
+
+function renderResult() {
+  const rows = thread ? inThread(thread) : [], e = rows.find(h => h.id === selected) || rows[rows.length - 1];
+  selected = e ? e.id : null;
+  if (!e) {
+    $('head').innerHTML = `<h2>${thread === null && state.history.length ? 'A new thread' : 'Your images'}</h2>`;
+    $('stage').innerHTML = `<div class="empty">${icon('image')}<div>${state.history.length
+      ? 'Write what you want on the left and press Make image. It starts a new thread.'
+      : 'Your images appear here. Write what you want on the left and press Make image.'}</div></div>`;
+    $('detail').innerHTML = ''; $('shelf').innerHTML = ''; return;
+  }
+  $('head').innerHTML = renaming
+    ? `<input type="text" id="title" aria-label="Thread name" value="${esc(threadTitle(thread))}"><button class="primary" id="saveTitle">Save name</button>`
+    : `<h2>${esc(threadTitle(thread))}</h2><button id="rename">${icon('pencil')}Rename</button>`;
+  if (renaming) {
+    const save = async () => { await api('/api/thread', {id: thread, title: $('title').value}); renaming = false; refresh(true); };
+    $('saveTitle').onclick = save;
+    $('title').onkeydown = ev => { if (ev.key === 'Enter') save(); if (ev.key === 'Escape') { renaming = false; renderResult(); } };
+  } else $('rename').onclick = () => { renaming = true; renderResult(); $('title').focus(); $('title').select(); };
+
+  const base = e.source_urls[0], shown = viewSource ? viewSource.url : comparing && base ? base : e.url;
+  $('stage').innerHTML = `<div class="frame${marking ? ' marking' : ''}" id="frame"><img src="${shown}" alt="${esc(e.prompt)}" draggable="false">${mark ? `<div class="mark" style="${markStyle()}"></div>` : ''}</div>`;
+  wireMarking();
+  const how = e.region ? 'a marked area reworked'
+    : {new: 'from the prompt alone', edit: `reworked from ${e.sources.length} source image${e.sources.length > 1 ? 's' : ''}`, start: 'started loosely from a source image'}[e.mode];
+  const model = (state.models.find(m => m.id === e.model) || {name: e.model}).name;
+  const armed = armedDelete === e.id, ok = canDraw();
+  $('detail').innerHTML = `
+    ${viewSource ? `<p class="meta">This is a source image of image ${e.id}. Mark an area on it or say what to change, and the result joins this thread.</p>` : ''}
+    <p class="meta"${viewSource ? ' hidden' : ''}>${comparing ? 'Before: the first source of ' : ''}Image ${e.id} · ${esc(model)} · ${how} · ${e.width} by ${e.height} · ${e.steps} steps · seed ${e.seed} · took ${e.secs} s${e.server ? ` · drawn on ${esc(e.server)}` : ''}</p>
+    <p class="said"${viewSource ? ' hidden' : ''}>${esc(e.prompt)}${e.style ? ` <span class="meta">(${esc(e.style)} style)</span>` : ''}</p>
+    ${e.source_urls.length ? `<div class="from">Made from ${e.source_urls.map((u, i) => `<button data-src="${i}" aria-label="Open source image ${i + 1}" data-tip="Open this source image, to mark an area on it or change it."><img src="${u}" alt="Source image ${i + 1}"></button>`).join('')}${viewSource ? `<button id="backToImage" class="back">Back to image ${e.id}</button>` : ''}</div>` : ''}
+    <div class="actions">
+      <button id="again" data-tip="The same request with a new roll of the dice.">${icon('dice')}Try again</button>
+      <button id="again3" data-tip="Three more tries of the same request, to pick from.">${icon('dice')}3 more tries</button>
+      <button id="reuse" data-tip="Put this image in the source box, to rework it or combine it with others.">${icon('layers')}Use as source</button>
+      <button id="compare" class="toggle" aria-pressed="${comparing}" data-tip="Switch between this image and the one it was made from.">${icon('split')}${comparing ? 'Showing before' : 'Compare'}</button>
+      <button id="check" data-tip="Measures how much of the image changed from its source. No model is involved.">${icon('check')}Check</button>
+      <button id="star" class="${e.star ? 'starred' : ''}" aria-pressed="${!!e.star}">${icon('star')}${e.star ? 'Starred' : 'Star'}</button>
+      <a href="${e.url}" download="imagine-${e.id}.png" style="text-decoration:none;color:inherit"><button tabindex="-1">${icon('down')}Save</button></a>
+      <button id="del" class="${armed ? 'armed' : ''}">${icon('trash')}${armed ? 'Confirm delete' : 'Delete'}</button>
+    </div>
+    ${checkSay ? `<p class="hint" role="status">${esc(checkSay)}</p>` : ''}
+    <form class="change" id="changeForm">
+      <div class="row">
+        <button type="button" id="markBtn" class="toggle" aria-pressed="${marking || !!mark}" data-tip="Drag a box on the image. Your change is then kept to that area, and the rest stays exactly as it is.">${icon('area')}${mark ? 'Area marked' : marking ? 'Drag on the image' : 'Mark an area'}</button>
+        ${mark ? `<button type="button" id="clearMark">${icon('x')}Clear the area</button>` : ''}
+      </div>
+      <textarea id="change" aria-label="Change this image" placeholder="${mark ? 'What should change inside the marked area?' : 'What should change? Warmer light, remove the sign, make it night'}"></textarea>
+      <div class="row">
+        <button class="primary" type="submit">${icon('pencil')}${mark ? 'Change the area' : 'Change it'}</button>
+        <button type="button" id="refine" data-tip="Keeps the same starting point and seed, and adds your words to the prompt. Good for a small nudge.">${icon('wand')}Same start, new words</button>
+      </div>
+    </form>`;
+  $('again').disabled = $('again3').disabled = !ok || !!viewSource;
+  $('changeForm').querySelector('button[type=submit]').disabled = !ok;
+  $('refine').disabled = !ok || !!viewSource || !!mark;
+  $('compare').disabled = !base || !!viewSource;
+  $('check').disabled = !base || !!viewSource;
+  $('again').onclick = () => follow('again', e.id);
+  $('again3').onclick = () => follow('again', e.id, '', 3);
+  $('refine').onclick = () => follow('refine', e.id, $('change').value);
+  $('changeForm').onsubmit = ev => { ev.preventDefault(); change(e); };
+  $('change').onkeydown = ev => { if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); change(e); } };
+  $('markBtn').onclick = () => { if (mark) return; marking = !marking; renderResult(); };
+  if (mark) $('clearMark').onclick = () => { mark = null; marking = false; renderResult(); };
+  $('compare').onclick = () => { comparing = !comparing; renderResult(); };
+  $('check').onclick = async () => { const r = await api('/api/check', {id: e.id}); checkSay = r.ok ? 'Measured: ' + r.words : r.message + ' ' + (r.fix || ''); renderResult(); };
+  $('detail').querySelectorAll('button[data-src]').forEach(b => b.onclick = () => {
+    viewSource = {ref: e.sources[+b.dataset.src], url: e.source_urls[+b.dataset.src]}; mark = null; marking = false; comparing = false; renderResult(); });
+  if (viewSource) $('backToImage').onclick = () => { viewSource = null; mark = null; marking = false; renderResult(); };
+  $('reuse').onclick = () => { if (sources.length < 4) { sources.push(viewSource ? {ref: viewSource.ref, url: viewSource.url} : {ref: '#' + e.id, url: e.url}); use = 'edit'; renderSources(); $('prompt').focus(); } };
+  $('star').onclick = async () => { await api('/api/star', {id: e.id}); refresh(true); };
+  $('del').onclick = async () => {
+    if (armedDelete !== e.id) { armedDelete = e.id; renderResult(); return; }
+    armedDelete = null; selected = null; await api('/api/delete', {id: e.id}); refresh(true);
+  };
+  $('shelf').innerHTML = rows.map(h => `<button data-id="${h.id}" aria-current="${h.id === e.id}" aria-label="Image ${h.id}: ${esc(h.prompt)}">
+      <img src="${h.url}" alt="" loading="lazy"><span class="n">${h.id}</span>${h.star ? `<span class="s">${icon('star')}</span>` : ''}</button>`).join('');
+  $('shelf').querySelectorAll('button').forEach(b => b.onclick = () => {
+    selected = +b.dataset.id; armedDelete = null; viewSource = null; mark = null; marking = false; comparing = false; checkSay = ''; renderResult(); });
+}
+
+// Marking an area: press, drag and let go on the image. The box is kept as shares of the image, so it fits any size.
+function wireMarking() {
+  const frame = $('frame');
+  if (!frame || !marking) return;
+  let from = null;
+  const at = ev => { const r = frame.getBoundingClientRect();
+    return [Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height))]; };
+  const box = to => [Math.min(from[0], to[0]), Math.min(from[1], to[1]), Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])];
+  frame.onpointerdown = ev => {
+    from = at(ev);
+    try { frame.setPointerCapture(ev.pointerId); } catch {}      // keeps the drag alive when it leaves the image
+    ev.preventDefault();
+  };
+  frame.onpointermove = ev => {
+    if (!from) return;
+    mark = box(at(ev));
+    let el = frame.querySelector('.mark');
+    if (!el) { el = document.createElement('div'); el.className = 'mark'; frame.appendChild(el); }
+    el.style.cssText = markStyle();
+  };
+  frame.onpointerup = ev => {
+    if (!from) return;
+    const got = box(at(ev)); from = null; marking = false;
+    mark = got[2] >= 0.03 && got[3] >= 0.03 ? got : null;      // a click or a sliver is not an area
+    renderResult(); if (mark) $('change').focus();
+  };
+}
+
+async function sent(res) {
+  if (res.ok) { (res.jobs || []).forEach(id => followJobs.add(id)); mark = null; marking = false; comparing = false; checkSay = ''; }
+  await refresh(true);
+  if (!res.ok) showError(res);
+}
+
+async function change(e) {
+  const words = $('change').value;
+  if (viewSource)
+    return sent(await api('/api/generate', {prompt: words, sources: [viewSource.ref], model: e.model, region: mark,
+                                            thread, parent: e.id, kind: 'rework', server: $('where').value}));
+  sent(await api('/api/generate', {follow: 'rework', id: e.id, change: words, region: mark, server: $('where').value}));
+}
+
+async function follow(kind, id, words, count) {
+  sent(await api('/api/generate', {follow: kind, id, change: words || '', count: count || 1, server: $('where').value}));
+}
+
+async function make() {
+  const num = id => $(id).value === '' ? null : +$(id).value;
+  const res = await api('/api/generate', {
+    prompt: $('prompt').value, model: $('model').value, style: $('style').value,
+    sources: sources.map(s => s.ref), use, strength: +$('strength').value, server: $('where').value,
+    thread: thread || '', count: +$('tries').value,
+    width: num('width'), height: num('height'), steps: num('steps'), seed: num('seed')});
+  if (res.ok && thread === null) thread = res.plan.thread || undefined;
+  sent(res);
+}
+
+async function addFiles(files) {
+  for (const f of [...files].slice(0, 4 - sources.length)) {
+    const res = showError(await api('/api/upload', undefined, f, {'X-Filename': encodeURIComponent(f.name || 'pasted.png')}));
+    if (res.ok) sources.push({ref: res.source, url: res.url});
+  }
+  renderSources();
+}
+
+// The page asks for the state once a second. It redraws the result only when something changed,
+// so typing in a box or dragging an area is never interrupted.
+async function refresh(force) {
+  const next = await api('/api/state');
+  if (!next.ok) { showError(next); return; }
+  const first = !state; state = next;
+  if (first) {
+    $('style').innerHTML = '<option value="">None</option>' + state.styles.map(s => `<option>${s}</option>`).join('');
+    loadDraft();
+  }
+  renderWhere(first); renderModels(); renderSetup();
+  const key = state.history.map(h => `${h.id}${h.star ? '*' : ''}`).join(',') + '|' + JSON.stringify(state.thread_names);
+  const done = state.jobs.find(j => j.state === 'done' && j.entry && followJobs.has(j.id));
+  if (done) {
+    followJobs.delete(done.id);
+    const made = state.history.find(h => h.id === done.entry);
+    if (made) { thread = made.thread; selected = made.id; viewSource = null; }
+  }
+  if (first || force || done || key !== seenJobs) {
+    seenJobs = key;
+    renderThreads(); renderSources(); renderResult();
+  }
+  renderProgress();
+}
+
+$('go').onclick = make;
+$('model').onchange = () => { renderModels(); renderSetup(); renderSources(); renderProgress(); renderResult(); };
+$('where').onchange = () => { renderModels(); renderSetup(); renderProgress(); renderResult(); };
+$('useEdit').onclick = () => { use = 'edit'; renderSources(); };
+$('useStart').onclick = () => { use = 'start'; renderSources(); };
+$('strength').oninput = renderSources;
+$('prompt').oninput = saveDraft;
+$('style').onchange = saveDraft;
+$('drop').onclick = () => $('file').click();
+$('drop').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } };
+$('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+['dragover', 'dragenter'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+$('drop').addEventListener('drop', e => addFiles(e.dataTransfer.files));
+document.addEventListener('paste', e => { const f = [...e.clipboardData.files].filter(x => x.type.startsWith('image/')); if (f.length) addFiles(f); });
+$('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !$('go').disabled) make(); });
+$('improve').onclick = async () => {
+  $('improveSay').textContent = 'Rewriting your prompt';
+  const before = $('prompt').value;
+  const res = await api('/api/improve', {prompt: before, editing: sources.length > 0 && use === 'edit'});
+  if (res.ok) { beforeImprove = before; $('prompt').value = res.prompt; $('undo').hidden = false; saveDraft();
+                $('improveSay').textContent = 'Rewritten by ' + res.by + '. Edit it freely.'; }
+  else $('improveSay').textContent = res.message;
+};
+$('undo').onclick = () => { $('prompt').value = beforeImprove; $('undo').hidden = true; $('improveSay').textContent = 'Your own words are back.'; saveDraft(); };
+$('theme').onclick = () => {
+  const light = matchMedia('(prefers-color-scheme: light)').matches;
+  const now = document.documentElement.dataset.theme || (light ? 'light' : 'dark');
+  const next = now === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem('imagine-kit-theme', next); } catch {}
+};
+try {
+  // ?theme=light or ?theme=dark forces one for this visit, which is how the screen checks see both.
+  const t = new URLSearchParams(location.search).get('theme') || localStorage.getItem('imagine-kit-theme');
+  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+} catch {}
+
+// For the screen check: ?model=NAME opens with that model chosen, ?from=N with image N in the source box,
+// ?open=N with image N on the stage, ?mark=1 with an area already marked, ?view=compare or ?view=source.
+// ?probe=1 records how many controls have words that do not fit and whether an ellipsis is shown.
+const params = new URLSearchParams(location.search);
+refresh().then(() => {
+  if (params.get('model') && state.models.some(m => m.id === params.get('model'))) {
+    $('model').value = params.get('model'); $('model').onchange();
+  }
+  const from = state.history.find(h => h.id === +params.get('from'));
+  if (from) { sources = [{ref: '#' + from.id, url: from.url}]; renderSources(); }
+  const open = state.history.find(h => h.id === +params.get('open'));
+  if (open) { thread = open.thread; selected = open.id; }
+  if (params.get('new')) { thread = null; selected = null; }
+  if (params.get('mark')) mark = [0.3, 0.25, 0.35, 0.4];
+  if (params.get('view') === 'compare') comparing = true;
+  if (params.get('view') === 'source' && open && open.source_urls.length) viewSource = {ref: open.sources[0], url: open.source_urls[0]};
+  if (open || params.get('new') || params.get('mark')) { renderThreads(); renderResult(); }
+  if (params.get('drag')) {
+    // The screen check drags an area the way a person would, and records what the page then shows.
+    $('markBtn').click();
+    $('frame').querySelector('img').decode().then(() => {        // a drag means nothing until the image has a size
+      const frame = $('frame'), r = frame.getBoundingClientRect();
+      const fire = (type, fx, fy) => frame.dispatchEvent(new PointerEvent(type, {bubbles: true, pointerId: 1,
+        clientX: r.left + r.width * fx, clientY: r.top + r.height * fy}));
+      fire('pointerdown', 0.2, 0.3); fire('pointermove', 0.5, 0.6); fire('pointerup', 0.6, 0.7);
+      document.body.dataset.dragged = mark ? mark.map(v => v.toFixed(2)).join(',') : 'none';
+      document.body.dataset.dragButton = $('changeForm').querySelector('button[type=submit]').textContent.trim();
+    });
+  }
+  if (params.get('probe')) {
+    const clipped = [...document.querySelectorAll('button, select, h1, h2, summary')]
+      .filter(el => el.offsetParent && el.scrollWidth > el.clientWidth + 1);
+    document.body.dataset.clipped = clipped.length ? clipped.length + ': ' + clipped.map(el => el.id || el.textContent.trim().slice(0, 20)).join(', ') : '0';
+    document.body.dataset.ellipsis = /…|\.\.\./.test(document.body.innerText) ? '1' : '0';
+    const over = document.documentElement.scrollWidth - window.innerWidth;
+    document.body.dataset.overflow = over > 1 ? String(over) : '0';
+    // Inside the check's narrow frame, hand the readings to the page that holds the frame.
+    if (window.parent !== window) window.parent.postMessage({probe: {...document.body.dataset, width: window.innerWidth}}, '*');
+  }
+});
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
