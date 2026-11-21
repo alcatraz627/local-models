@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio: Canvas</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* Canvas: the image owns the window. Threads are a strip of pictures on the left, the thread's images
+     a film strip at the bottom, and the writing box floats over the foot of the image. */
+  body { display: grid; grid-template-columns: 72px minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr); height: 100vh; overflow: hidden; }
+  header { grid-column: 1 / -1; display: flex; align-items: center; gap: .6em; padding: 0 .8em 0 1.1em; border-bottom: 1px solid var(--line); background: var(--bg); }
+  header .logo { display: flex; align-items: center; gap: .5em; font-weight: 650; }
+  header .crumb { color: var(--soft); display: flex; align-items: center; gap: .4em; margin-left: 1.2em; }
+  header .crumb b { color: var(--text); font-weight: 600; }
+  header .crumb svg { width: .9em; height: .9em; }
+  .rail { border-right: 1px solid var(--line); padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; overflow: auto; }
+  .rail button { width: 48px; height: 48px; padding: 0; border-radius: 10px; overflow: hidden; outline-offset: 2px; justify-content: center; }
+  .rail button img { width: 100%; height: 100%; object-fit: cover; }
+  .rail button[aria-current=true] { outline: 2px solid var(--sel); }
+  .rail .new { border: 1.5px dashed var(--line); color: var(--soft); }
+  main { position: relative; background: var(--canvas); display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
+  .stage { position: relative; min-height: 0; }
+  /* The picture's box stops above the floating writing box, so nothing ever covers the image. */
+  .pic { position: absolute; inset: 22px 28px 178px; }
+  .pic img { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(0 10px 30px rgba(0,0,0,.35)); }
+  .tools-float { position: absolute; top: 16px; right: 18px; display: flex; gap: 2px; background: color-mix(in srgb, var(--panel) 88%, transparent);
+                 backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+  .caption { position: absolute; top: 18px; left: 22px; max-width: min(46ch, 40%); background: color-mix(in srgb, var(--panel) 88%, transparent);
+             backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 12px; padding: .6em .8em; font-size: .92em; }
+  .caption .hint { display: block; margin-top: .2em; }
+  .film { display: flex; gap: 8px; padding: 10px 22px 12px; border-top: 1px solid var(--line); background: var(--bg); overflow-x: auto; align-items: center; }
+  .film button { padding: 0; height: 64px; border-radius: 7px; overflow: hidden; position: relative; flex: none; outline-offset: 2px; }
+  .film button img { height: 100%; display: block; }
+  .film button[aria-current=true] { outline: 2px solid var(--sel); }
+  .film .n { position: absolute; left: 4px; bottom: 4px; font-size: .75em; padding: 0 .35em; border-radius: 4px; background: rgba(0,0,0,.6); color: #fff; }
+  .box { position: absolute; left: 50%; bottom: 100px; transform: translateX(-50%); width: min(760px, calc(100% - 48px));
+         background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: .6em .7em .55em; box-shadow: 0 14px 44px rgba(0,0,0,.35); }
+  .box .tools { display: flex; align-items: center; gap: 2px; }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 52px auto minmax(0, 1fr); }
+    .rail { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 12px; justify-content: flex-start; }
+    header .crumb, .caption { display: none; }
+    .pic { inset: 60px 10px 190px; }
+    .tools-float { top: 10px; right: 10px; }
+    .box { bottom: 94px; }
+  }
+</style>
+</head>
+<body>
+<script src="data.js"></script>
+<script src="common.js"></script>
+<header></header>
+<nav class="rail" id="rail" aria-label="Threads"></nav>
+<main>
+  <div class="stage" id="stage"></div>
+  <div class="film tip-up" id="film" aria-label="Images in this thread"></div>
+  <form class="box tip-up" id="box" onsubmit="return false"></form>
+</main>
+<script>
+document.querySelector('header').innerHTML = `<span class="logo">${icon('logo')}Imagine</span><span class="crumb" id="crumb"></span>
+  <span style="flex:1"></span><span class="model"><span class="dot"></span>FLUX.2 klein</span>
+  <button class="icon" data-tip="How this works">${icon('help')}</button><button class="icon" data-tip="Light or dark" onclick="toggleTheme()">${icon('theme')}</button>`;
+function draw() {
+  const t = thread(), c = current();
+  $('crumb').innerHTML = `${icon('chev')}<b>${esc(t.title)}</b><span>· ${t.imgs.length} images</span>`;
+  $('rail').innerHTML = `<button class="new" data-tip="New thread">${icon('plus')}</button>` + THREADS.map(x =>
+    `<button aria-current="${x.id === t.id}" data-tip="${esc(x.title)}" onclick="openThread('${x.id}')"><img src="${x.imgs[x.imgs.length - 1].url}" alt=""></button>`).join('');
+  $('stage').innerHTML = `<div class="pic"><img src="${c.url}" alt="${esc(c.prompt)}"></div>
+    <div class="caption">${esc(c.prompt)}<span class="hint">Image ${c.id} · ${how(c)} · ${c.secs} s</span></div>
+    <div class="tools-float">
+      <button class="icon" data-tip="Try again">${icon('again')}</button><button class="icon" data-tip="Mark an area">${icon('area')}</button>
+      ${c.parent ? `<button class="icon" data-tip="Compare with image ${c.parent}">${icon('split')}</button>` : ''}
+      <button class="icon" data-tip="Star">${icon('star')}</button><button class="icon" data-tip="Save">${icon('down')}</button>
+      <button class="icon" data-tip="More">${icon('more')}</button></div>`;
+  $('film').innerHTML = t.imgs.map(i => `<button aria-current="${i.id === c.id}" aria-label="Image ${i.id}" onclick="pick(${i.id})"><img src="${i.url}" alt=""><span class="n">${i.id}</span></button>`).join('');
+  $('box').innerHTML = composer();
+}
+draw();
+</script>
+</body>
+</html>

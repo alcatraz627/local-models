@@ -1,0 +1,56 @@
+/* Shared look for the three studio directions. The chrome is neutral so the image is the colour on
+   screen. Three palettes differ only in what marks the main action and the selection:
+   graphite (no hue: the main button is the text colour inverted), blue, and amber (today's page).
+   Red and green are kept for state in all three. Dark follows the OS until the reader picks. */
+:root {
+  --bg: #111113; --canvas: #0b0b0c; --panel: #18181b; --raised: #222226; --line: #2c2c31;
+  --text: #ededf0; --soft: #9d9da6; --faint: #6c6c75;
+  --act: #ededf0; --act-ink: #111113; --sel: #ededf0;
+  --bad: #ff8a80; --good: #86c995;
+  --fs: 15px; --control: 36px; --i: 18px; --r: 10px;
+  color-scheme: dark;
+}
+:root[data-palette="blue"] { --act: #5b93ff; --act-ink: #fff; --sel: #5b93ff; }
+:root[data-palette="amber"] { --act: #f2b84b; --act-ink: #1b1608; --sel: #f2b84b; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #f4f4f5; --canvas: #e9e9eb; --panel: #ffffff; --raised: #efeff1; --line: #dcdce0;
+  --text: #18181b; --soft: #5d5d66; --faint: #8a8a93;
+  --act: #18181b; --act-ink: #fff; --sel: #18181b; --bad: #b3261e; --good: #2a7340; color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg: #f4f4f5; --canvas: #e9e9eb; --panel: #ffffff; --raised: #efeff1; --line: #dcdce0;
+  --text: #18181b; --soft: #5d5d66; --faint: #8a8a93;
+  --act: #18181b; --act-ink: #fff; --sel: #18181b; --bad: #b3261e; --good: #2a7340; color-scheme: light; }
+:root[data-theme="light"][data-palette="blue"] { --act: #2f6fe4; --sel: #2f6fe4; }
+:root[data-theme="light"][data-palette="amber"] { --act: #f2b84b; --act-ink: #1b1608; --sel: #8a5a00; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"])[data-palette="blue"] { --act: #2f6fe4; --sel: #2f6fe4; }
+  :root:not([data-theme="dark"])[data-palette="amber"] { --act: #f2b84b; --act-ink: #1b1608; --sel: #8a5a00; }
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: var(--fs)/1.45 -apple-system, "Segoe UI", system-ui, sans-serif; }
+svg.i { width: var(--i); height: var(--i); flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+button, select, textarea { font: inherit; color: inherit; }
+button { display: inline-flex; align-items: center; gap: .45em; min-height: var(--control); padding: 0 .7em; background: transparent;
+         border: 0; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+button:hover { background: var(--raised); }
+button:focus-visible, textarea:focus-visible { outline: 2px solid var(--sel); outline-offset: 2px; }
+button.icon { width: var(--control); padding: 0; justify-content: center; }
+button.go { background: var(--act); color: var(--act-ink); font-weight: 600; padding: 0 1.1em; }
+button.go:hover { background: var(--act); filter: brightness(1.08); }
+button[aria-pressed=true] { background: var(--raised); }
+.hint { color: var(--soft); font-size: .88em; }
+[data-tip] { position: relative; }
+[data-tip]:hover::after { content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); z-index: 50;
+  width: max-content; max-width: 16em; padding: .4em .6em; background: var(--text); color: var(--bg); border-radius: 7px; font-size: .85em; white-space: normal; }
+.tip-up [data-tip]:hover::after { top: auto; bottom: calc(100% + 6px); }
+textarea { width: 100%; resize: none; background: transparent; border: 0; padding: .55em .2em; line-height: 1.45; outline: none; }
+.mode { display: inline-flex; background: var(--raised); border-radius: 99px; padding: 3px; gap: 2px; }
+.mode button { min-height: 1.9em; border-radius: 99px; padding: 0 .8em; font-size: .9em; }
+.mode button[aria-pressed=true] { background: var(--panel); box-shadow: 0 0 0 1px var(--line); }
+.where { display: inline-flex; align-items: center; gap: .4em; color: var(--soft); font-size: .85em; }
+.where svg { width: 1em; height: 1em; }
+.model { display: inline-flex; align-items: center; gap: .45em; color: var(--soft); font-size: .92em; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }

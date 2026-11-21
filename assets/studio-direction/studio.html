@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio: Studio</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* Studio: a large image on a dark canvas, and beside it the thread as a history of what was asked and
+     what came back, with the writing box at its foot. Reads like a conversation with the image. */
+  body { display: grid; grid-template-columns: 68px minmax(0, 1fr) 380px; grid-template-rows: 52px minmax(0, 1fr); height: 100vh; overflow: hidden; }
+  header { grid-column: 1 / -1; display: flex; align-items: center; gap: .6em; padding: 0 .8em 0 1.1em; border-bottom: 1px solid var(--line); }
+  header .logo { display: flex; align-items: center; gap: .5em; font-weight: 650; }
+  .rail { border-right: 1px solid var(--line); padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; overflow: auto; }
+  .rail button { width: 44px; height: 44px; padding: 0; border-radius: 10px; overflow: hidden; justify-content: center; outline-offset: 2px; }
+  .rail button img { width: 100%; height: 100%; object-fit: cover; }
+  .rail button[aria-current=true] { outline: 2px solid var(--sel); }
+  .rail .new { border: 1.5px dashed var(--line); color: var(--soft); }
+  main { background: var(--canvas); display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
+  .stage { position: relative; min-height: 0; }
+  .pic { position: absolute; inset: 24px 32px 12px; }
+  .pic img { width: 100%; height: 100%; object-fit: contain; display: block; filter: drop-shadow(0 10px 30px rgba(0,0,0,.35)); }
+  .bar { display: flex; justify-content: center; gap: 4px; padding: 10px 16px 16px; flex-wrap: wrap; }
+  aside { border-left: 1px solid var(--line); background: var(--panel); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; }
+  .top { display: flex; align-items: center; gap: .4em; padding: 14px 12px 10px 18px; border-bottom: 1px solid var(--line); }
+  .top h1 { margin: 0; font-size: 1.08em; font-weight: 650; flex: 1; min-width: 0; }
+  .log { overflow: auto; padding: 10px; display: grid; gap: 4px; align-content: start; }
+  .step { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: .75em; padding: .5em; border-radius: 10px; text-align: left; white-space: normal;
+          align-items: start; min-height: 0; width: 100%; }
+  .step[aria-current=true] { background: var(--raised); box-shadow: inset 3px 0 0 var(--sel); }
+  .step img { width: 56px; height: 56px; object-fit: cover; border-radius: 7px; }
+  .step .w { display: block; font-size: .92em; line-height: 1.35; }
+  .step .m { display: block; font-size: .8em; color: var(--soft); margin-top: .2em; }
+  .box { border-top: 1px solid var(--line); padding: .7em .8em .6em; }
+  .box .tools { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+  @media (max-width: 960px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 52px auto auto auto; height: auto; overflow: auto; }
+    .rail { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 12px; }
+    main { min-height: 60vh; } .pic { position: static; padding: 12px; } .pic img { height: auto; max-height: 70vh; }
+    aside { border-left: 0; border-top: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+<script src="data.js"></script>
+<script src="common.js"></script>
+<header></header>
+<nav class="rail" id="rail" aria-label="Threads"></nav>
+<main><div class="stage" id="stage"></div><div class="bar" id="bar"></div></main>
+<aside><div class="top" id="top"></div><div class="log" id="log"></div><form class="box tip-up" id="box" onsubmit="return false"></form></aside>
+<script>
+document.querySelector('header').innerHTML = `<span class="logo">${icon('logo')}Imagine</span>
+  <span style="flex:1"></span><span class="model"><span class="dot"></span>FLUX.2 klein</span>
+  <button class="icon" data-tip="How this works">${icon('help')}</button><button class="icon" data-tip="Light or dark" onclick="toggleTheme()">${icon('theme')}</button>`;
+function draw() {
+  const t = thread(), c = current();
+  $('rail').innerHTML = `<button class="new" data-tip="New thread">${icon('plus')}</button>` + THREADS.map(x =>
+    `<button aria-current="${x.id === t.id}" data-tip="${esc(x.title)}" onclick="openThread('${x.id}')"><img src="${x.imgs[x.imgs.length - 1].url}" alt=""></button>`).join('');
+  $('stage').innerHTML = `<div class="pic"><img src="${c.url}" alt="${esc(c.prompt)}"></div>`;
+  $('bar').innerHTML = `<button>${icon('again')}Try again</button><button>${icon('area')}Mark an area</button>
+    ${c.parent ? `<button>${icon('split')}Compare</button>` : ''}<button>${icon('star')}Star</button><button>${icon('down')}Save</button><button class="icon" data-tip="More">${icon('more')}</button>`;
+  $('top').innerHTML = `<h1>${esc(t.title)}</h1><button class="icon" data-tip="Rename">${icon('pencil')}</button>`;
+  $('log').innerHTML = t.imgs.map(i => `<button class="step" aria-current="${i.id === c.id}" onclick="pick(${i.id})"><img src="${i.url}" alt="">
+      <span><span class="w">${esc(i.prompt)}</span><span class="m">Image ${i.id} · ${how(i)} · ${i.secs} s</span></span></button>`).join('');
+  $('box').innerHTML = composer();
+}
+draw();
+</script>
+</body>
+</html>

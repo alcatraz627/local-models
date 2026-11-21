@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio: Contact sheet</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* Contact sheet: a thread's images sit side by side at their real shapes, large enough to judge,
+     with the words that made each one under it. The writing box is docked on top, like a search bar.
+     Open large shows one image over the page. */
+  body { display: grid; grid-template-columns: 248px minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr); height: 100vh; overflow: hidden; }
+  header { grid-column: 1 / -1; display: flex; align-items: center; gap: .6em; padding: 0 .8em 0 1.1em; border-bottom: 1px solid var(--line); }
+  header .logo { display: flex; align-items: center; gap: .5em; font-weight: 650; }
+  .rail { border-right: 1px solid var(--line); padding: 10px; overflow: auto; display: grid; gap: 4px; align-content: start; }
+  .rail button { width: 100%; padding: .4em; gap: .65em; white-space: normal; text-align: left; justify-content: flex-start; }
+  .rail button[aria-current=true] { background: var(--raised); }
+  .rail img { width: 40px; height: 40px; object-fit: cover; border-radius: 7px; flex: none; }
+  .rail .t { display: block; font-size: .92em; line-height: 1.3; }
+  .rail .c { display: block; font-size: .8em; color: var(--soft); }
+  main { overflow: auto; min-height: 0; }
+  .dock { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 16px 28px 14px; border-bottom: 1px solid var(--line); }
+  .box { max-width: 900px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: .55em .7em .5em; }
+  .box .tools { display: flex; align-items: center; gap: 2px; }
+  .head { display: flex; align-items: baseline; gap: .7em; padding: 22px 28px 6px; }
+  .head h1 { margin: 0; font-size: 1.35em; font-weight: 650; }
+  .sheet { display: flex; flex-wrap: wrap; gap: 22px; padding: 12px 28px 40px; align-items: flex-start; }
+  .tile { display: grid; gap: .5em; flex: 0 0 auto; }
+  .tile .frame { position: relative; height: 380px; border-radius: 10px; overflow: hidden; outline-offset: 3px; cursor: pointer; background: var(--canvas); }
+  .tile .frame img { height: 100%; display: block; }
+  .tile[aria-current=true] .frame { outline: 2px solid var(--sel); }
+  .tile .acts { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 2px; padding: 4px; border-radius: 10px;
+                background: rgba(16,16,18,.72); color: #fff; backdrop-filter: blur(8px); opacity: 0; transition: opacity .12s; }
+  .tile .frame:hover .acts, .tile[aria-current=true] .acts { opacity: 1; }
+  .tile .acts button:hover { background: rgba(255,255,255,.14); }
+  .tile .n { position: absolute; left: 10px; top: 10px; font-size: .78em; padding: .05em .45em; border-radius: 5px; background: rgba(0,0,0,.6); color: #fff; }
+  .tile .words { max-width: 100%; font-size: .9em; }
+  .tile .meta { color: var(--soft); font-size: .8em; }
+  .loupe { position: fixed; inset: 0; z-index: 20; background: rgba(8,8,9,.92); display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+  .loupe .pic { padding: 28px; display: grid; place-items: center; min-height: 0; }
+  .loupe .pic img { max-width: 100%; max-height: calc(100vh - 56px); object-fit: contain; }
+  .loupe aside { background: var(--panel); padding: 18px; display: grid; gap: .8em; align-content: start; color: var(--text); }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 52px auto minmax(0, 1fr); }
+    .rail { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    .rail button { width: 12em; flex: none; }
+    .dock { padding: 10px 12px; } .head, .sheet { padding-left: 12px; padding-right: 12px; }
+    .tile .frame { height: auto; width: calc(100vw - 24px); } .tile .frame img { width: 100%; height: auto; }
+    .loupe { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<script src="data.js"></script>
+<script src="common.js"></script>
+<header></header>
+<nav class="rail" id="rail" aria-label="Threads"></nav>
+<main>
+  <div class="dock"><form class="box" id="box" onsubmit="return false"></form></div>
+  <div class="head" id="head"></div>
+  <div class="sheet" id="sheet"></div>
+</main>
+<div id="loupe"></div>
+<script>
+document.querySelector('header').innerHTML = `<span class="logo">${icon('logo')}Imagine</span>
+  <span style="flex:1"></span><span class="model"><span class="dot"></span>FLUX.2 klein</span>
+  <button class="icon" data-tip="How this works">${icon('help')}</button><button class="icon" data-tip="Light or dark" onclick="toggleTheme()">${icon('theme')}</button>`;
+let large = params.get('loupe') ? true : false;
+function draw() {
+  const t = thread(), c = current();
+  $('rail').innerHTML = `<button>${icon('plus')}<span class="t">New thread</span></button>` + THREADS.map(x =>
+    `<button aria-current="${x.id === t.id}" onclick="openThread('${x.id}')"><img src="${x.imgs[x.imgs.length - 1].url}" alt="">
+      <span><span class="t">${esc(x.title)}</span><span class="c">${x.imgs.length} images</span></span></button>`).join('');
+  $('box').innerHTML = composer();
+  $('head').innerHTML = `<h1>${esc(t.title)}</h1><span class="hint">${t.imgs.length} images, oldest first</span>`;
+  $('sheet').innerHTML = t.imgs.map(i => `<div class="tile" aria-current="${i.id === c.id}">
+      <div class="frame" onclick="pick(${i.id})"><img src="${i.url}" alt="${esc(i.prompt)}"><span class="n">${i.id}</span>
+        <div class="acts"><button class="icon" data-tip="Try again">${icon('again')}</button><button class="icon" data-tip="Mark an area">${icon('area')}</button>
+          <button class="icon" data-tip="Star">${icon('star')}</button><button class="icon" data-tip="Save">${icon('down')}</button>
+          <span style="flex:1"></span><button class="icon" data-tip="Open large" onclick="event.stopPropagation(); large = true; pick(${i.id})">${icon('expand')}</button></div></div>
+      <div class="words" style="width:0;min-width:100%">${esc(i.prompt)}</div><div class="meta">Image ${i.id} · ${how(i)} · ${i.secs} s</div></div>`).join('');
+  $('loupe').innerHTML = large ? `<div class="loupe"><div class="pic"><img src="${c.url}" alt=""></div><aside>
+      <div style="display:flex;align-items:center"><b>Image ${c.id}</b><span style="flex:1"></span><button class="icon" data-tip="Close" onclick="large = false; draw()">${icon('x')}</button></div>
+      <div>${esc(c.prompt)}</div><div class="hint">${how(c)} · ${c.width} by ${c.height} · seed ${c.seed} · ${c.secs} s</div></aside></div>` : '';
+}
+draw();
+</script>
+</body>
+</html>
