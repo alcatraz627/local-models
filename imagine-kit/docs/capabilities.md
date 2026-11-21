@@ -10,7 +10,7 @@ A list of every surface the kit has, so a rebuild can be checked against it. A r
 
 | Surface | What a person can do | Check |
 |---|---|---|
-| Model picker | Choose a model; a dot shows whether it is ready | screen check, shots 01 and 10 |
+| Model picker | A button beside the main button names the model and where it draws; its panel lists every model with its state | screen check, shots 01, 10 and 12 |
 | Help button | Read one paragraph on how the page works | screen check, shot 01 |
 | Theme button | Switch light and dark; the choice is remembered | screen check, shots 01 and 02 |
 | Setup notice | See that the engine is missing, the model is too large, or the model needs a download, with a download button | screen check, shots 10 and 11 |
@@ -41,6 +41,7 @@ A list of every surface the kit has, so a rebuild can be checked against it. A r
 |---|---|---|
 | Threads rail | Each thread's newest image down the left; open one; start one. Names: hover, header, and beside the picture under 860 wide | `test_a_follow_up_stays_in_its_images_thread_and_a_new_request_starts_one`, shot 06d |
 | Thread name | Rename the open thread | `test_a_thread_can_be_named`, shot 06d |
+| Delete a thread | Delete the open thread and all its images; the second press names how many | `test_deleting_a_thread_removes_its_images_and_no_others` |
 | Thread strip | See only the open thread's images, oldest first | shot 06d |
 | Runs on | Choose which computer draws; shown when another machine is known | net-contract render test, shots 12 to 14 |
 | Tries | Ask for one to four tries of a request at once | shot 07b |
@@ -72,8 +73,8 @@ The page has one writing box. A line above it says what the words are about, and
 | Result details | Top left of the canvas; opens into the full list and stays open | walk: "an opened section stays open after another press" |
 | Requests in progress and a failure | Cards in the strip at the foot (see "The foot strip" below) | `tests/ui_landing.js` "a drag held across a landing is kept whole"; screen check shots 07 and 09 |
 | Stop | Takes two presses: the second reads "Confirm stop" | walk: "one press on stop cancels nothing and asks again" |
-| Where the image is drawn | One line above the box, beside the two mode buttons, for every model: this computer, another computer, or the company a cloud model runs at | screen check, shots 03, 10b and 12 |
-| Text size | Three sizes in the header; the choice is remembered. Text steps most, icons less, controls least | screen check, shots 06n to 06q; walk measures at five widths |
+| Where the image is drawn | On the model button, with the full sentence in its tooltip, for every model: this computer, another computer, or the company a cloud model runs at | screen check, shots 03, 10b and 12 |
+| Text size and theme | One View menu in the header; the choices are remembered | screen check, shots 06n to 06q; walk measures at five widths |
 | Words after a failed render | Put back in the box when the request they were sent with fails | walk: "the words stay in the box after a refusal" |
 | Mark an area on a source | The box reads "The marked area of a source of image N", and the result starts from that source | walk: "the change to a source starts from that source and joins the thread" |
 

@@ -489,6 +489,22 @@ class WebCalls(unittest.TestCase):
         self.call("/api/delete", {"id": entry})
         self.assertNotIn(entry, [r["id"] for r in self.call("/api/state")[1]["history"]])
 
+    def test_deleting_a_thread_removes_its_images_and_no_others(self):
+        self.call("/api/generate", {"prompt": "keep me"})
+        keep = self.wait_done()["entry"]
+        self.call("/api/generate", {"prompt": "drop me"})
+        first = self.wait_done()["entry"]
+        self.call("/api/generate", {"follow": "again", "id": first})
+        second = self.wait_done()["entry"]
+        rows = self.call("/api/state")[1]["history"]
+        thread = next(r["thread"] for r in rows if r["id"] == first)
+        self.assertEqual(thread, next(r["thread"] for r in rows if r["id"] == second))
+        self.assertEqual(self.call("/api/thread/delete", {"id": thread})[1]["removed"], 2)
+        left = [r["id"] for r in self.call("/api/state")[1]["history"]]
+        self.assertIn(keep, left)
+        self.assertNotIn(first, left)
+        self.assertNotIn(second, left)
+
 
 class Install(unittest.TestCase):
     def test_the_installer_and_the_pin_list_name_the_same_engine_version(self):

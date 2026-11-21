@@ -1353,6 +1353,12 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/thread":
                 name_thread(body["id"], body.get("title", ""))
                 return self.send(200, {"ok": True})
+            if path == "/api/thread/delete":
+                # A whole thread goes the way single images go: each image and its details file to the trash folder.
+                ids = [r["id"] for r in read_history() if r.get("thread") == body["id"]]
+                for entry_id in ids:
+                    remove_entry(entry_id)
+                return self.send(200, {"ok": True, "removed": len(ids)})
             if path == "/api/check":
                 return self.send(200, dict(check_change(int(body["id"])), ok=True))
             if path == "/api/improve":

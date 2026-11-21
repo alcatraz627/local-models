@@ -84,13 +84,14 @@
   .seg { display: inline-flex; background: var(--sunk); border-radius: 8px; padding: 3px; gap: 2px; }
   .seg button { min-height: calc(var(--control) - 6px); }
   .seg button[aria-pressed=true] { background: var(--panel); box-shadow: 0 0 0 1px var(--line); }
-  .size button { width: calc(var(--control) - 6px); padding: 0; justify-content: center; font-weight: 650; }
-  .size button:nth-child(1) { font-size: 11px; } .size button:nth-child(2) { font-size: 14px; } .size button:nth-child(3) { font-size: 17px; }
+  .size button { justify-content: center; flex: 1; }
 
   .pop { position: absolute; z-index: 30; width: min(24em, 92vw); background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
          padding: .9em; box-shadow: 0 12px 36px rgba(0, 0, 0, .35); display: grid; gap: .6em; }
   .pop h2 { margin: 0; font-size: .88em; font-weight: 600; color: var(--soft); }
-  #helpPop { top: calc(100% + 4px); right: 1em; }
+  #helpPop, #viewPop { top: calc(100% + 4px); right: 1em; }
+  #viewPop .seg { display: flex; }
+  #viewPop #theme { width: 100%; }
   .menu { width: max-content; min-width: 13em; padding: .35em; gap: 2px; top: 100%; left: 0; }
   .menu button, .menu a.btn { width: 100%; }
 
@@ -223,7 +224,21 @@
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5em; }
   .grid2 label { font-size: .88em; color: var(--soft); display: grid; gap: 4px; }
   .grid2 input { width: 100%; color: var(--text); }
-  .where { display: flex; align-items: center; gap: .45em; min-width: 0; padding: 0 .4em; margin-left: auto; }
+  /* The box is one surface: the words are typed straight onto it, and its edge lights when it has focus. */
+  .composer textarea { border: 0; background: transparent; padding: .25em .15em; min-height: 2.6em; resize: none; outline: none; }
+  .composer:focus-within { border-color: var(--accent-line); }
+  .composer textarea:focus-visible { outline: none; }
+  /* The model that will draw, beside the button that makes it draw. */
+  .model-btn { border: 1px solid var(--line); background: var(--sunk); gap: .5em; padding: 0 .7em; max-width: 26em; }
+  .model-btn #whereSay { min-width: 0; overflow-wrap: anywhere; white-space: normal; line-height: 1.25; }
+  .model-btn.off { color: var(--bad); }
+  .composer .pop.models { left: auto; right: 0; width: min(26em, 92vw); }
+  .model-row { width: 100%; align-items: flex-start; padding: .5em .6em; gap: .6em; white-space: normal; }
+  .model-row .dot { margin-top: .45em; }
+  .model-row .name { display: block; font-weight: 600; }
+  .model-row .hint { display: block; }
+  .model-row[aria-pressed=true] { background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); }
+  #settingsPop .grid2 + .grid2 { margin-top: .2em; }
   #improveSay:empty { display: none; }
   /* The main button keeps the right edge even when the row wraps. */
   #go { margin-left: auto; }
@@ -293,21 +308,22 @@
   <h1><svg class="i"><use href="#i-image"/></svg>Imagine Kit</h1>
   <div class="head" id="head"></div>
   <span class="grow"></span>
-  <label class="pick" id="whereWrap" hidden><span>Runs on</span>
-    <select id="where" aria-label="Which computer draws the image"></select></label>
-  <label class="pick"><span class="dot" id="modelDot"></span><span class="sr">Model</span>
-    <select id="model" aria-label="Model"></select></label>
-  <div class="seg size" role="group" aria-label="Text size">
-    <button type="button" data-size="sm" aria-label="Small text" data-tip="Small text">A</button>
-    <button type="button" data-size="md" aria-label="Medium text" data-tip="Medium text">A</button>
-    <button type="button" data-size="lg" aria-label="Large text" data-tip="Large text">A</button>
-  </div>
   <button type="button" id="help" class="icon-only" aria-label="How this works" aria-expanded="false" data-tip="How this works"><svg class="i"><use href="#i-help"/></svg></button>
-  <button type="button" id="theme" class="icon-only" aria-label="Switch between light and dark" data-tip="Switch between light and dark"><svg class="i"><use href="#i-theme"/></svg></button>
+  <button type="button" id="viewBtn" class="icon-only" aria-label="Text size and theme" aria-expanded="false" data-tip="Text size and theme"><svg class="i"><use href="#i-theme"/></svg></button>
+  <div class="pop" id="viewPop" hidden>
+    <h2>Text size</h2>
+    <div class="seg size" role="group" aria-label="Text size">
+      <button type="button" data-size="sm" aria-label="Small text">Small</button>
+      <button type="button" data-size="md" aria-label="Medium text">Medium</button>
+      <button type="button" data-size="lg" aria-label="Large text">Large</button>
+    </div>
+    <h2>Theme</h2>
+    <button type="button" id="theme"><svg class="i"><use href="#i-theme"/></svg>Switch light and dark</button>
+  </div>
   <div class="pop" id="helpPop" hidden>
     <h2>How this works</h2>
-    <div>Write what you want in the box at the bottom and press the amber button. The line above the box says what your words are about: a new image, the image on screen, or an area you marked on it.</div>
-    <div>Add a photo to rework it. Each idea is a thread that keeps every image made on the way. Command or Control with Enter sends the box.</div>
+    <div>Write in the box at the bottom and press the amber button. The two buttons above the box say what your words do: change the image on screen, or make a new one.</div>
+    <div>The button beside the amber one picks the model and says where it draws. Each idea is a thread that keeps every image made on the way. Command or Control with Enter sends the box.</div>
   </div>
 </header>
 
@@ -331,19 +347,18 @@
         <div class="thumbs" id="thumbs"></div>
         <div class="row" id="useRow" hidden>
           <div class="seg" role="group" aria-label="How to use the source images">
-            <button type="button" id="useEdit" aria-pressed="true">Rework them</button>
-            <button type="button" id="useStart" aria-pressed="false">Start loosely</button>
+            <button type="button" id="useEdit" aria-pressed="true" data-tip="Follows your instruction and keeps the rest of each image">Rework them</button>
+            <button type="button" id="useStart" aria-pressed="false" data-tip="Uses the first image as a loose starting point; describe the whole picture">Start loosely</button>
           </div>
           <label id="strengthWrap" class="row" hidden><span class="hint">Keep</span>
             <input type="range" id="strength" min="0.1" max="0.9" step="0.05" value="0.5" aria-label="How much of the source to keep">
             <span class="hint" id="strengthSay"></span></label>
         </div>
-        <p class="hint where" id="whereSay"></p>
       </div>
       <p class="hint" id="useHint" hidden></p>
       <textarea id="prompt" aria-label="What you want"></textarea>
       <div class="tools">
-        <span class="anchor"><button type="button" id="addPhoto" aria-expanded="false" data-tip="Add up to four images to rework or combine. You can also drop or paste one anywhere on this page."><svg class="i"><use href="#i-plus"/></svg>Add an image<svg class="i chev"><use href="#i-chev"/></svg></button>
+        <span class="anchor"><button type="button" id="addPhoto" class="icon-only" aria-expanded="false" aria-label="Add an image" data-tip="Add up to four images to rework or combine. You can also drop or paste one anywhere on this page."><svg class="i"><use href="#i-plus"/></svg></button>
           <div class="pop" id="photoPop" hidden>
             <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose image files">
               <svg class="i"><use href="#i-plus"/></svg><span>Drop images here, or click to choose. Up to four.</span>
@@ -351,14 +366,15 @@
             <input type="file" id="file" accept="image/*" multiple hidden>
             <div id="libraryWrap" hidden><h2>Images you added before</h2><div class="library" id="library"></div></div>
           </div></span>
-        <button type="button" id="improve" data-tip="Rewrites a short idea as a fuller prompt. You can edit the result, or undo it."><svg class="i"><use href="#i-wand"/></svg>Improve my words</button>
+        <button type="button" id="improve" class="icon-only" aria-label="Improve my words" data-tip="Improve my words: rewrites a short idea as a fuller prompt. You can edit it, or undo."><svg class="i"><use href="#i-wand"/></svg></button>
         <button type="button" id="undo" hidden><svg class="i"><use href="#i-undo"/></svg>Undo</button>
-        <label id="styleWrap"><span>Style</span><select id="style" aria-label="Style"></select></label>
-        <label id="triesWrap"><span>Tries</span>
-          <select id="tries" aria-label="How many tries to make at once"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
-        <span class="anchor"><button type="button" id="settings" aria-expanded="false"><svg class="i"><use href="#i-sliders"/></svg>Size, steps and seed<svg class="i chev"><use href="#i-chev"/></svg></button>
+        <span class="anchor"><button type="button" id="settings" aria-expanded="false" data-tip="Style, tries, size, steps and seed"><svg class="i"><use href="#i-sliders"/></svg><span id="settingsSay">Options</span></button>
           <div class="pop" id="settingsPop" hidden>
-            <h2>Size, steps and seed</h2>
+            <h2>Options for a new image</h2>
+            <div class="grid2">
+              <label id="styleWrap">Style<select id="style" aria-label="Style"></select></label>
+              <label id="triesWrap">Tries<select id="tries" aria-label="How many tries to make at once"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+            </div>
             <div class="grid2">
               <label>Width<input type="number" id="width" min="256" max="2048" step="16" placeholder="Automatic"></label>
               <label>Height<input type="number" id="height" min="256" max="2048" step="16" placeholder="Automatic"></label>
@@ -368,6 +384,13 @@
             <p class="hint">These apply to a new image. A seed repeats a result exactly.</p>
           </div></span>
         <span class="grow"></span>
+        <!-- Which model draws, and where. The selects hold the choice; the button and panel are how a person makes it. -->
+        <span class="anchor"><button type="button" id="modelBtn" class="model-btn" aria-expanded="false"><span class="dot" id="modelDot"></span><span id="whereSay"></span><svg class="i chev"><use href="#i-chev"/></svg></button>
+          <div class="pop models" id="modelPop" hidden>
+            <div id="modelList"></div>
+            <div id="whereWrap" hidden><h2>Runs on</h2><select id="where" aria-label="Which computer draws the image"></select></div>
+            <select id="model" aria-label="Model" hidden></select>
+          </div></span>
         <button class="primary" type="submit" id="go"></button>
       </div>
       <p class="hint" id="improveSay" role="status"></p>
@@ -405,6 +428,7 @@ const view = {
   comparing: false,          // the stage shows the first source in place of the image
 };
 let ready = null;            // an image that landed and was not shown, offered as "Image N is ready"
+let armedThread = null;      // a thread whose delete has been pressed once and waits for the second press
 
 // Write a region only when its content changed, so the once-a-second refresh never wipes
 // a half-typed key, closes an open list or drops keyboard focus.
@@ -460,6 +484,17 @@ function renderModels() {
     sel.value = keep;
   const m = currentModel();
   $('modelDot').className = 'dot' + (elsewhere() || (m.ready && m.ram_ok && (m.cloud || m.engine_ok)) ? '' : ' off');
+  // The panel: every model, what state it is in, and where it draws. Picking one sets the select above.
+  // A cloud model's description already says where it runs, so only a missing key is added to it.
+  const status = x => x.cloud ? (x.ready ? '' : `Needs a key from ${x.who}. `)
+    : (!x.engine_ok ? 'Cannot run on this computer' : !x.ram_ok ? `Needs ${x.min_ram_gb} GB of memory` : !x.ready ? `Not downloaded (${x.disk_gb} GB)` : 'Runs on this computer') + '. ';
+  if (put($('modelList'), `<h2>Model for a new image</h2>` + state.models.map(x =>
+      `<button type="button" class="model-row" data-m="${x.id}" aria-pressed="${x.id === m.id}">
+        <span class="dot${(x.cloud ? x.ready : x.ready && x.ram_ok && x.engine_ok) ? '' : ' off'}"></span>
+        <span><span class="name">${esc(x.name)}</span><span class="hint">${esc(status(x))}${esc(x.blurb)}</span></span></button>`).join('')
+      + `<p class="hint">A change to an image uses the model that made it.</p>`))
+    $('modelList').querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+      $('model').value = b.dataset.m; closePops(); $('model').onchange(); });
 }
 
 function renderSetup() {
@@ -482,8 +517,8 @@ function renderSetup() {
     // This computer cannot run the chosen model. Say why, and what does work here.
     const others = state.models.filter(x => x.cloud).map(x => x.name).join(' or ');
     html = `<div class="notice bad"><strong>${esc(m.name)} cannot run on this computer</strong>${esc(m.engine_fix)}
-      <div style="margin-top:6px">You can still make images here: pick ${esc(others)} at the top right${state.servers.length ? ', or choose another machine under Runs on' : ''}.</div></div>`;
-  } else if (!m.ram_ok) html = `<div class="notice bad"><strong>${esc(m.name)} is too large for this computer</strong>It needs ${m.min_ram_gb} GB of memory and this computer has ${state.ram_gb} GB. Pick another model at the top right.</div>`;
+      <div style="margin-top:6px">You can still make images here: pick ${esc(others)} in the model picker beside the main button${state.servers.length ? ', or choose another machine under Runs on' : ''}.</div></div>`;
+  } else if (!m.ram_ok) html = `<div class="notice bad"><strong>${esc(m.name)} is too large for this computer</strong>It needs ${m.min_ram_gb} GB of memory and this computer has ${state.ram_gb} GB. Pick another model in the model picker beside the main button.</div>`;
   else if (!m.ready && !downloading) html = `<div class="notice"><strong>${esc(m.name)} is not downloaded yet</strong>${esc(m.blurb)} It is a ${m.disk_gb} GB download, kept on this computer${m.have_gb ? `, and ${m.have_gb} GB is already here` : ''}.
       <div class="row"><button type="button" class="primary" id="dl">${icon('down')}Download ${m.disk_gb} GB</button></div></div>`;
   if (put(box, html)) {
@@ -502,17 +537,21 @@ function drawer() { const sub = subject(); return (sub && state.models.find(m =>
 // Why a model cannot draw right now, or nothing when it can.
 function blocked(m) {
   if (m.cloud) return m.ready ? '' : m.id === currentModel().id ? `it needs a key from ${m.who}. Paste one in the panel at the top.`
-    : `it needs a key from ${m.who}. Choose it at the top right to add one.`;
+    : `it needs a key from ${m.who}. Choose it in the model picker to add one.`;
   if (elsewhere()) return '';
   return !m.engine_ok ? 'this computer cannot run it.' : !m.ram_ok ? 'it is too large for this computer.' : !m.ready ? 'it is not downloaded yet.' : '';
 }
-// The line under the box says where the image will be drawn, so nothing leaves the computer unannounced.
+// The model button beside the main button names the model that will draw and where it draws, so nothing
+// leaves the computer unannounced. Its tooltip says it in full.
 function renderWhereSay() {
   const m = drawer(), why = blocked(m);
-  put($('whereSay'), why ? `${icon('x')}<span>${esc(m.name)} cannot draw yet: ${esc(why)}</span>`
-    : m.cloud ? `${icon('cloud')}<span>Your words and source images go to ${esc(m.who)} to be drawn. Nothing else leaves this computer.</span>`
-    : elsewhere() ? `${icon('cloud')}<span>Your words and source images go to ${esc($('where').value)} to be drawn.</span>`
-    : `${icon('lock')}<span>Drawn on this computer. Nothing leaves it.</span>`);
+  const where = m.cloud ? `sent to ${m.who}` : elsewhere() ? `on ${$('where').value}` : 'on this computer';
+  put($('whereSay'), why ? `${esc(m.name)} · cannot draw yet` : `${esc(m.name)} · ${esc(where)}`);
+  $('modelBtn').dataset.tip = why ? `${m.name} cannot draw yet: ${why}`
+    : m.cloud ? `Your words and source images go to ${m.who} to be drawn. Nothing else leaves this computer.`
+    : elsewhere() ? `Your words and source images go to ${$('where').value} to be drawn.`
+    : 'Drawn on this computer. Nothing leaves it.';
+  $('modelBtn').classList.toggle('off', !!why);
   $('go').classList.toggle('off', !!why);
 }
 
@@ -590,6 +629,10 @@ function renderSources() {
     : reworking ? 'Make the jacket red. Keep the face, the pose and the background the same.'
     : 'A red bicycle leaning on a wet brick wall, early morning';
   const tries = +$('tries').value;
+  // The Options button says what is set, so nothing rides along unseen.
+  const opts = [tries > 1 ? `${tries} tries` : '', !reworking && $('style').value ? $('style').value : '',
+    ['width', 'height', 'steps', 'seed'].some(id => $(id).value !== '') ? 'size or seed set' : ''].filter(Boolean);
+  $('settingsSay').textContent = opts.length ? opts.join(' · ') : 'Options';
   $('go').innerHTML = sub ? icon('pencil') + (view.sameStart ? 'Make with the same start' : view.mark ? 'Change the area' : view.viewSource ? 'Change this source' : `Change image ${sub.id}`)
     : icon('spark') + (reworking ? (sources.length > 1 ? 'Combine these' : 'Rework this') : has ? 'Start from this' : tries > 1 ? `Make ${tries} images` : 'Make image');
   if (state) {
@@ -678,7 +721,17 @@ function renderResult() {
     $('head').innerHTML = view.renaming
       ? `<input type="text" id="title" aria-label="Thread name" value="${esc(threadTitle(view.thread))}"><button type="button" class="primary" id="saveTitle">${icon('check')}Save name</button>`
       : `<h2>${esc(threadTitle(view.thread))}</h2><span class="count">· ${rows.length} image${rows.length > 1 ? 's' : ''}</span>
-         <button type="button" id="rename" class="icon-only" aria-label="Rename this thread" data-tip="Rename this thread">${icon('pencil')}</button>`;
+         <button type="button" id="rename" class="icon-only" aria-label="Rename this thread" data-tip="Rename this thread">${icon('pencil')}</button>
+         ${armedThread === view.thread
+           ? `<button type="button" id="delThread" class="armed">${icon('trash')}Delete all ${rows.length} image${rows.length > 1 ? 's' : ''}</button>`
+           : `<button type="button" id="delThread" class="icon-only" aria-label="Delete this thread" data-tip="Delete this thread and its images">${icon('trash')}</button>`}`;
+    // Deleting a thread takes two presses; the second names how many images go.
+    if ($('delThread')) $('delThread').onclick = async () => {
+      if (armedThread !== view.thread) { armedThread = view.thread; renderResult(); $('delThread').focus(); return; }
+      const gone = armedThread; armedThread = null;
+      await api('/api/thread/delete', {id: gone});
+      view.thread = undefined; view.selected = null; refresh(true);
+    };
     if (view.renaming) {
       const save = async () => { await api('/api/thread', {id: view.thread, title: $('title').value}); view.renaming = false; refresh(true); };
       $('saveTitle').onclick = save;
@@ -820,6 +873,9 @@ async function make() {
   // Several tries get their thread's name at once. A single image gets one only when it lands,
   // so until then the page stays on the empty new thread.
   if (res.ok && view.thread === null && res.plan.thread) { view.thread = res.plan.thread; awaited = view.thread; }
+  // The added images went with the request. Left in the box, the next words would rework them again
+  // instead of the result; they stay one press away under Add an image.
+  if (res.ok && sources.length) { sources = []; use = 'edit'; }
   sent(res, words);
 }
 
@@ -907,7 +963,7 @@ function renderReady() {
   }
 }
 
-const POPS = [['addPhoto', 'photoPop'], ['settings', 'settingsPop'], ['help', 'helpPop']];
+const POPS = [['addPhoto', 'photoPop'], ['settings', 'settingsPop'], ['help', 'helpPop'], ['viewBtn', 'viewPop'], ['modelBtn', 'modelPop']];
 function closePops(except) {
   POPS.forEach(([b, p]) => { if (p !== except) { $(p).hidden = true; $(b).setAttribute('aria-expanded', 'false'); } });
 }
@@ -921,6 +977,8 @@ document.addEventListener('click', e => {
   closePops();
   if (moreOpen && state && entry()) { moreOpen = false; armedDelete = null; renderResult(); }
   if (armedStop != null && !e.target.closest('.stop')) { armedStop = null; if (state) renderProgress(); }
+  // A press anywhere else disarms a thread delete.
+  if (armedThread != null && !e.target.closest('#delThread')) { armedThread = null; if (state && entry()) renderResult(); }
 });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
@@ -945,7 +1003,8 @@ $('useEdit').onclick = () => { use = 'edit'; renderSources(); };
 $('useStart').onclick = () => { use = 'start'; renderSources(); };
 $('strength').oninput = renderSources;
 $('prompt').oninput = saveDraft;
-$('style').onchange = saveDraft;
+$('style').onchange = () => { saveDraft(); renderSources(); };
+['width', 'height', 'steps', 'seed'].forEach(id => $(id).addEventListener('input', renderSources));
 $('drop').onclick = () => $('file').click();
 $('drop').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } };
 $('file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
