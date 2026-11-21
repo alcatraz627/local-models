@@ -39,7 +39,7 @@ A list of every surface the kit has, so a rebuild can be checked against it. A r
 
 | Surface | What a person can do | Check |
 |---|---|---|
-| Threads rail | See each idea as a thread with its newest image and a count; open one; start a new one | `test_a_follow_up_stays_in_its_images_thread_and_a_new_request_starts_one`, shot 06d |
+| Threads rail | Each thread's newest image down the left; open one; start one. Names: hover, header, and beside the picture under 860 wide | `test_a_follow_up_stays_in_its_images_thread_and_a_new_request_starts_one`, shot 06d |
 | Thread name | Rename the open thread | `test_a_thread_can_be_named`, shot 06d |
 | Thread strip | See only the open thread's images, oldest first | shot 06d |
 | Runs on | Choose which computer draws; shown when another machine is known | net-contract render test, shots 12 to 14 |
@@ -56,6 +56,44 @@ A list of every surface the kit has, so a rebuild can be checked against it. A r
 | Same start, new words | Keep the seed and starting point and add to the prompt | `test_refine_keeps_the_seed_and_adds_to_the_prompt` |
 
 Changed on purpose: a second request used to be refused as busy. It now waits in the queue, up to twelve.
+
+## Changed in the move to one writing box
+
+The page has one writing box. A line above it says what the words are about, and its button is named for what it will do. No surface above was removed; these rows say where each one now lives. "Walk" is `tests/ui_walk.js`, run in a browser against the stand-in engine.
+
+| Surface | Where it is now | Check |
+|---|---|---|
+| Prompt box and Change it | One box with two mode buttons above it (see "The writing box" below) | walk: "the box is now about the image on screen", "a change made one new image from the open one" |
+| Source box | "Add a photo" opens a panel with the file chooser and earlier uploads; a file can also be dropped or pasted anywhere on the page | walk: "a click outside an open panel closes it"; drop and paste have no check |
+| Size, steps and seed | A panel above its button, offered for a new image only | walk: "size, steps and seed reach the image" |
+| Try again, Mark an area, Compare, Star, Save | A row of icons at the top right of the canvas, each named in its tooltip | walk rows of the same names |
+| 3 more tries, Same start new words, Check, Use as source, Delete | In the More menu at the end of that row | walk: check, delete and use as source rows |
+| Same start, new words | Now has a button (More menu). It turns the box into "The same start as image N" | none yet |
+| Result details | Top left of the canvas; opens into the full list and stays open | walk: "an opened section stays open after another press" |
+| Requests in progress and a failure | Cards in the strip at the foot (see "The foot strip" below) | `tests/ui_landing.js` "a drag held across a landing is kept whole"; screen check shots 07 and 09 |
+| Stop | Takes two presses: the second reads "Confirm stop" | walk: "one press on stop cancels nothing and asks again" |
+| Where the image is drawn | One line above the box, beside the two mode buttons, for every model: this computer, another computer, or the company a cloud model runs at | screen check, shots 03, 10b and 12 |
+| Text size | Three sizes in the header; the choice is remembered. Text steps most, icons less, controls least | screen check, shots 06n to 06q; walk measures at five widths |
+| Words after a failed render | Put back in the box when the request they were sent with fails | walk: "the words stay in the box after a refusal" |
+| Mark an area on a source | The box reads "The marked area of a source of image N", and the result starts from that source | walk: "the change to a source starts from that source and joins the thread" |
+
+### The writing box
+
+With an image open, two buttons sit above the box:
+
+- "About image N": the words change the open image. The main button reads "Change image N".
+- "New image": the words make a new image. The main button reads "Make image".
+
+### Result details
+
+The words that made the image sit at the top left of the canvas. Under them, "Image N · how · seconds" opens into the full list.
+
+### The foot strip
+
+The thread's images come first, then one card per request in progress, then a failure if there is one.
+
+- Each card is one tile high. The request's words are in its tooltip.
+- A render starting or ending never moves or covers the image.
 
 ## The command line
 
@@ -79,7 +117,29 @@ Changed on purpose: a second request used to be refused as busy. It now waits in
 | A request cannot read outside the image folders | `test_a_request_cannot_read_outside_the_image_folder` |
 | Every image has a details file beside it holding its full record | `test_a_render_keeps_its_details_in_a_file_beside_the_image` |
 | On this Mac a new image takes about 11 s, a rework 19 s, a two-source combine 32 s | real renders, run by hand after each engine change |
+| A finished render never moves the reader (see "Landing rule" below) | `tests/ui_landing.js`, 16 rows; seven planted breakages each turn their rows red |
+
+### Landing rule
+
+When a render finishes, these stay put:
+
+- the open thread and the image on the stage
+- what the box is about, and a marked area
+- a drag, and a thread name being typed
+- an open More menu, a Check result, and Compare
+
+The image the reader was waiting for, or one from another thread, shows as "Image N is ready" with Show it.
+
+The test uses real mouse and keyboard input. The seven planted breakages were: always follow, rebuild the title while renaming, rebuild the stage while dragging, and removing each of rename, More, Check and Compare from the rule.
 
 ## Not covered by any check
 
-`refine` has no button on the page. `history`, `models`, `download` and `doctor` have no test of their own output. The light theme with real images has not been read.
+These have no check:
+
+- `history`, `models`, `download` and `doctor` output.
+- Undo for Improve, the Same start button, and dropping or pasting a file.
+- Covering: no script measures whether something lies over the image. That was checked by reading screenshots on 2026-11-21.
+
+The walk and `tests/ui_landing.js` need a browser driver (the Playwright MCP) and are not part of `tests/test_kit.py`.
+
+Both themes were read with 8 real renders (portrait, landscape, square) on 2026-11-21. No real render has yet been run through the page itself.

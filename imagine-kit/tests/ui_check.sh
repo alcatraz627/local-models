@@ -86,6 +86,13 @@ shot 06g-source-dark 1440 1100 "?theme=dark&open=5&view=source"
 shot 06h-new-thread-dark 1440 1000 "?theme=dark&new=1"
 shot 06i-area-narrow 390 1700 "?theme=dark&open=5&mark=1"
 shot 06j-threads-mid 1024 1100 "?theme=light&open=5"
+shot 06k-more-menu-dark 1440 1000 "?theme=dark&open=5&menu=more"
+shot 06l-add-photo-light 1440 1000 "?theme=light&open=5&menu=photo"
+shot 06m-settings-dark 1440 1000 "?theme=dark&new=1&menu=settings"
+shot 06n-large-text-dark 1440 1000 "?theme=dark&open=5&size=lg"
+shot 06o-medium-text-light 1440 1000 "?theme=light&open=5&size=md"
+shot 06p-narrow-light 390 1400 "?theme=light&open=5"
+shot 06q-narrow-large-text 390 1700 "?theme=dark&open=5&size=lg"
 for w in 1440 1024 820 390; do measure shelf "$w"; done
 # Drag an area on the image and read back what the page made of it.
 DRAG="$("$CHROME" --headless=new --disable-gpu --window-size=1440,1100 --virtual-time-budget=4000 --dump-dom "$BASE/?open=5&drag=1" 2>/dev/null)"
