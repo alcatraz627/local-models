@@ -109,7 +109,7 @@ prompts are flattened to keep display numbers == line numbers); open any entry i
 | Model | Role |
 |---|---|
 | `gemma4-e4b-warm` | default; Tier W companion (num_ctx 8192, QAT 4-bit) |
-| `qwen2.5-coder:3b` | alternate for `cmd` via `-m` |
+| `granite4:tiny-h` | alternate for `cmd` via `-m` |
 | `gemma4:26b` / `:31b` | heavier, on-demand via `-m` |
 
 ## Design rationale (load-bearing decisions)

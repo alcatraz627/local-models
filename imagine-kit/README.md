@@ -37,9 +37,31 @@ cd local-models/imagine-kit
 |---|---|---|
 | Mac | M1 or newer; `brew install uv` if Python 3.12 is missing | Installs mflux; asks before the model download |
 | Linux | `sudo apt install python3 python3-venv git`; NVIDIA driver (`nvidia-smi` works) | Installs PyTorch and diffusers only if VRAM is 12 GB+; then `./imagine download klein` |
-| Windows | `wsl --install` in an admin PowerShell, reboot, then the Linux steps inside Ubuntu | Untested. Open the printed URL in a Windows browser. For local render, install the current NVIDIA Windows driver first |
+| Windows | WSL with Ubuntu; see "Windows, step by step" below | Untested on a real Windows machine |
 
 With no usable GPU, `install.sh` installs the app only and skips the engine and model.
+
+### Windows, step by step
+
+Untested. The steps inside Ubuntu are the Linux path, which was run on Ubuntu 24.04 with a 16 GB NVIDIA card.
+
+| Step | Where | Command or action |
+|---|---|---|
+| 1 | Windows | Install the current NVIDIA driver from nvidia.com. Skip this with no NVIDIA card; the app then draws through Gemini, GPT or another machine |
+| 2 | PowerShell, as administrator | `wsl --install`, then restart Windows |
+| 3 | Ubuntu (opens after the restart) | Choose a user name and password when asked |
+| 4 | Ubuntu | `nvidia-smi` should list the card. Do not install an NVIDIA driver inside Ubuntu; WSL uses the Windows one |
+| 5 | Ubuntu | `sudo apt update && sudo apt install -y python3 python3-venv git` |
+| 6 | Ubuntu | `cd ~ && git clone https://github.com/alcatraz627/local-models && cd local-models/imagine-kit` |
+| 7 | Ubuntu | `./install.sh`, then `./imagine` |
+| 8 | Windows browser | Open `http://127.0.0.1:7717/` |
+
+| If | Then |
+|---|---|
+| `nvidia-smi` is not found in Ubuntu | The Windows driver is missing or old. Redo step 1, run `wsl --shutdown` in PowerShell, open Ubuntu again |
+| The render is killed part way | WSL gives Ubuntu half of the computer's memory by default. Put `[wsl2]` and `memory=24GB` in `C:\Users\<you>\.wslconfig`, then `wsl --shutdown` |
+| Everything is slow to start | The kit is under `/mnt/c`. Keep it in the Ubuntu home folder, as in step 6 |
+| The browser cannot reach the page | Leave the Ubuntu window that runs `./imagine` open, and use `127.0.0.1`, not the Ubuntu address |
 
 ## Without a local engine
 
@@ -136,7 +158,7 @@ Edit instructions: state the change, where, and what stays. One change per instr
 | Gemini image | Edit in 6 s |
 | Remote render | Loopback only, one Mac |
 
-Untested: Windows, 16 GB Mac, NVIDIA 20 GB+, model download on Linux, GPT image, remote render between two machines.
+Untested: Windows, 16 GB Mac, NVIDIA 20 GB+, GPT image, remote render between two machines.
 
 ## Built on
 

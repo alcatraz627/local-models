@@ -11,6 +11,8 @@ safetensors==0.8.0
 tokenizers==0.23.3
 sentencepiece==0.2.3
 protobuf==7.36.2
-pillow==13.0.0
+# Pillow 13.0.0 cannot import its PIL._typing module on Python 3.12. The engine did not hit it,
+# but any library that imports that module would fail, so this stays on 12.2.0 (a rework ran on it).
+pillow==12.2.0
 huggingface_hub==2.4.0
 numpy==2.5.5

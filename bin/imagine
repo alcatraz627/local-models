@@ -497,10 +497,12 @@ if [ "$rc" -eq 0 ] && [ -f "$OUT" ]; then
       parent:(if $parent == "" then null else ($parent|tonumber) end),
       kind:$kind} + '"$JQ_WHO" >> "$LOG" 2>/dev/null || true
   case "$AUTO_OPEN" in
-    yes) command -v open >/dev/null && open "$OUT" ;;
+    yes) if command -v open >/dev/null; then open "$OUT"; fi ;;
     no)  : ;;
-    auto) [ -t 1 ] && command -v open >/dev/null && open "$OUT" ;;
+    auto) if [ -t 1 ] && command -v open >/dev/null; then open "$OUT"; fi ;;
   esac
+  # A finished image is success whether or not it was opened; a piped run has no screen to open it on.
+  exit 0
 else
   _sec FAILED; echo "  generation did not produce $OUT (exit $rc)" >&2; exit 1
 fi

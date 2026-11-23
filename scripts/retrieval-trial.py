@@ -27,7 +27,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--set", default="probe/bench/retrieval.json")
     ap.add_argument("--out-dir", required=True)
-    ap.add_argument("--models", nargs="+", default=["nomic-embed-text", "qwen3-embedding:0.6b"])
+    ap.add_argument("--models", nargs="+", default=["nomic-embed-text"],
+                    help="embedding models to compare; pull a candidate first, then name it here")
     args = ap.parse_args()
     fixture = json.loads((ROOT / args.set).read_text())
     out = Path(args.out_dir).expanduser().resolve()

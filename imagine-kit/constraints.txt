@@ -1,7 +1,7 @@
 # The exact versions of the image engine's dependencies that this kit was
 # tested with, on Python 3.12. install.sh installs against this list, so a
 # newer release of any one of them cannot break a fresh install. (Pillow 13.0.0
-# did exactly that: it fails to import on Python 3.12.)
+# did exactly that: its PIL._typing module fails to import on Python 3.12, and mflux imports it.)
 #
 # To move to newer versions: install without this file in a scratch folder, run
 # tests/test_kit.py and one real render, then copy the versions that worked here.

@@ -64,7 +64,7 @@ show_help() {
   _ex 'q --preflight --file data.xlsx --json' '# extracted size and workbook sheets, no model call'
   _ex 'q --json --ctx - qa "who signs off?" < doc.md'  '# machine mode'
   _ex 'q --think "harder reasoning task"'    '# show the thinking trace'
-  _ex 'q -m qwen2.5-coder:3b cmd "..."'      '# swap model per call'
+  _ex 'q -m granite4:tiny-h cmd "..."'       '# swap model per call'
   _ex 'q show -1'                            '# your latest call, in full'
   _sec OPTIONS
   _opt '--big / --code'  'use the big (reasoning) / code tier for this call'
