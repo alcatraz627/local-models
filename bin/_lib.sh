@@ -114,6 +114,19 @@ _note() {
 wants_help() { local a; for a in "$@"; do case "$a" in -h|--help) return 0 ;; esac; done; return 1; }
 wants_all() { local a; for a in "$@"; do [ "$a" = --all ] && return 0; done; return 1; }
 
+# ── JSONL history: one whole row per write ──
+# Add one row to a history file so that two tools writing at once never cut each other's row.
+# `jq ... >> file` writes a long row in 4 KB pieces, and another writer's row can land between
+# them; this reads the whole row first and hands it to the file in a single write.
+jsonl_append() { # LOG, row on stdin
+  python3 -c 'import os, sys
+row = sys.stdin.buffer.read()
+if row.strip():
+    fd = os.open(sys.argv[1], os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+    os.write(fd, row if row.endswith(b"\n") else row + b"\n")
+    os.close(fd)' "$1"
+}
+
 # ── JSONL history: numbered list + full entry ──
 # Entry numbers are stable JSONL line numbers, so `show N` works forever.
 jsonl_history() { # LOG N LINE_JQ

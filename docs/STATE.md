@@ -76,7 +76,7 @@ Only `lm`, `q`, `see`, `warm` and `review` are on PATH. Newer tools are reached 
 | Big seat | `qwen3.8:27b` was recommended for a probe and never run. |
 | Model refresh | Follow `docs/model-refresh-guide.md` monthly. |
 | Routing policy | Write down when work goes local, to Gemini, or to the cloud. |
-| lm and the z- tool standard | Six steps are recommended in `docs/reviews/20261120-lm-and-the-z-tool-standard.md`. Two are in the zcmd repo and wait on the owner. |
+| lm and the z- tool standard | Six steps are recommended in `docs/reviews/20261120-lm-and-the-z-tool-standard.md`. The two in the zcmd repo were done on 2026-11-23: the help-page sync leaves a linked page alone, and the `see`, `lm` and `review` manifest rows are right. They are uncommitted in that repo. |
 | Image kit on a small Mac | `imagine-kit/` has not been run on a 16 GB Mac. Try it on one before sharing widely. |
 | Image kit and opencode on Linux and Windows | Neither runs there yet. See "Cross-platform and shared use" below. |
 | lm net between two real machines | Not yet tried. See "Cross-platform and shared use" below. |
@@ -125,12 +125,13 @@ What has run for real and what has not:
 
 Still to do:
 
-- The WSL setup for Windows, and a run on a real Windows machine.
-- A run of OpenAI's image model with a real key.
+- A run on a real Windows machine. The WSL steps are written in `imagine-kit/README.md` and are untested.
+- A run of OpenAI's image model with a real key. No OpenAI API key is stored on this machine (checked 2026-11-23); the owner has to create one.
 - A model's reading of a change, through `lm see`. Today the Check button only measures.
 - The kit's own guide, which does not yet describe threads, areas, cloud models or Linux.
 - A run on a card with 20 GB or more, where the kit loads the full model. That path is written and has not run.
-- The model download on Linux through the kit. The test VM already had the model.
+
+The model download on Linux was run on 2026-11-23: `imagine download klein` into an empty cache, then a new image from it in 94 s and a rework in 153 s.
 
 To try `lm net` between two real machines:
 
@@ -140,14 +141,18 @@ To try `lm net` between two real machines:
 
 `lm net serve` runs as a background service named `lm-net`, started by `scripts/gcc-lm-net`. Switch it off and on in Switchboard or with `gcc-schedule disable lm-net`. The M5 Air is named ahead of time, so it is let in on first contact. claude-see still runs beside it, unchanged.
 
-One stopped Linux test VM, `lm-linux-probe-2`, has a 16 GB graphics card, the driver, the engine and the model. A first VM with a 24 GB card could not be restarted, because its zone ran out of that card, and was deleted.
+There is no Linux test machine any more. The owner had the test VM `lm-linux-probe-2` deleted on 2026-11-23, after the last Linux checks ran on it. A new Linux check needs a new VM with an NVIDIA card of 16 GB or more.
 
 ## Known failures in the smoke suite
 
-| Check | Cause |
-|---|---|
-| guard-model-tier block path | A gcc hook outside this repo. |
-| `logs/gem-history.jsonl` corrupt | Two parallel `lm gemini` calls wrote one row over another. |
+None on 2026-11-23: 52 checks passed, 0 failed. Two long-standing failures were closed that day.
+
+| Check | What was wrong | Fix |
+|---|---|---|
+| guard-model-tier block path | The check expected fable seats to be blocked, and the owner allows them by default. | The check now follows the owner's switch. |
+| `logs/gem-history.jsonl` corrupt | `jq >> file` writes a long row in 4 KB pieces, so two parallel `lm gemini` calls cut each other's row. | `jsonl_append` in `bin/_lib.sh` writes a row in one piece; `probe/fixtures/history-append.sh` checks it. The two damaged rows were untangled. |
+
+`see` and `imagine` still append with `jq >> file`. Their rows are short, so they have not been seen to break.
 
 ## Lessons that still hold
 
@@ -186,8 +191,7 @@ One stopped Linux test VM, `lm-linux-probe-2`, has a 16 GB graphics card, the dr
 | Speech results | `docs/11-speech-lane.md` |
 | Vision and text comparison | `docs/reviews/20261022-model-comparison.md` |
 | Smoke suite result | `bash scripts/verify.sh` |
-| Linux engine times | runs on the test VM on 2026-11-20; its 16 GB card is an NVIDIA T4, and the 24 GB one is an L4 |
-| Test VM zone | `lm-linux-probe-2` is in us-central1-a |
+| Linux engine times | runs on the test VM on 2026-11-20 and 2026-11-23, before it was deleted; its 16 GB card was an NVIDIA T4, and the 24 GB one an L4 |
 | Cold-by-default ruling | owner |
 | Scoped-under-lm ruling | owner |
 

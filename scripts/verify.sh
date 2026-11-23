@@ -40,6 +40,8 @@ done
 echo "── deterministic table contract ──"
 TBL="$(python3 probe/fixtures/table-contract.py 2>&1)" \
   && ok "$TBL" || bad "table contract: $TBL"
+HA="$(bash probe/fixtures/history-append.sh 2>&1)" \
+  && ok "history rows stay whole under parallel writers: $(printf '%s' "$HA" | tail -n 1)" || bad "history append: $(printf '%s' "$HA" | tail -n 1)"
 BR="$(.venv/bin/python probe/fixtures/bench-rag-contract.py 2>&1)" \
   && ok "$BR" || bad "benchmark and RAG contract: $BR"
 
@@ -255,12 +257,14 @@ bash scripts/self-audit.sh >/dev/null 2>&1 && [ -f "logs/self-audit/$(date +%Y%m
 
 echo "── gcc hooks (pipe-tests) ──"
 H=~/.claude/scripts/hooks/guard-model-tier.sh
-if [ -f "$HOME/.claude/.allow-fable-subagents" ]; then
-  skip "guard-model-tier fable block — LIFTED by ~/.claude/.allow-fable-subagents (owner ruling 2026-07-23; trash the file to re-arm the block)"
-elif [ -f "$HOME/.claude/.fable-subagent-promo" ]; then
-  skip "guard-model-tier fable block — BYPASSED by ~/.claude/.fable-subagent-promo (promo window, self-expires 2026-07-17). Every fable sub-agent dispatch currently passes. Delete the file to restore the hard block."
+# Fable seats are allowed by default (owner, 2026-09-18). The hook blocks one only while the owner
+# has a fable-restrict row or has set the model.fable policy to block, so the check follows that switch.
+FABLE_GOT="$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"fable","prompt":"x"}}' | "$H" | jq -r '.decision // empty' 2>/dev/null)"
+if bash ~/.claude/scripts/hooks/hook-snooze.sh check fable-restrict-subagents >/dev/null 2>&1 \
+   || [ "$(bash ~/.claude/scripts/pol/pol.sh get model.fable 2>/dev/null)" = "block" ]; then
+  [ "$FABLE_GOT" = "block" ] && ok "guard-model-tier: fable is switched off, and a fable seat is blocked" || bad "guard-model-tier: fable is switched off but a fable seat was not blocked"
 else
-  [ "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"fable","prompt":"x"}}' | "$H" | jq -r .decision 2>/dev/null)" = "block" ] && ok "guard-model-tier: fable → block" || bad "guard-model-tier block path"
+  [ "$FABLE_GOT" != "block" ] && ok "guard-model-tier: fable is allowed, and a fable seat passes" || bad "guard-model-tier: fable is allowed but a fable seat was blocked"
 fi
 [ -z "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"prompt":"x"}}' | "$H")" ] && ok "guard-model-tier: unpinned → silent (warn retired)" || bad "guard-model-tier retired warn path"
 [ -z "$(echo '{"session_id":"verify","tool_name":"Agent","tool_input":{"model":"sonnet","prompt":"x"}}' | "$H")" ] && ok "guard-model-tier: pinned → silent" || bad "guard-model-tier silent path"

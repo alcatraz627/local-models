@@ -108,7 +108,7 @@ log_line() { # KIND TEXT_OR_CODE MS
       model:$model, prompt:$prompt, response:$r, ms:$ms, bytes_in:$bin, bytes_out:$bout}
      + (if $served != "" then {served:$served} else {} end)
      + (if $stream != "" then {stream:$stream} else {} end)
-     + {transport:$transport} + '"$JQ_WHO" --arg served "${SERVED:-}" --arg stream "${STREAM:-}" --arg transport "${TRANSPORT:-cli}" >> "$LOG" 2>/dev/null
+     + {transport:$transport} + '"$JQ_WHO" --arg served "${SERVED:-}" --arg stream "${STREAM:-}" --arg transport "${TRANSPORT:-cli}" 2>/dev/null | jsonl_append "$LOG" 2>/dev/null
 }
 
 # Run the backend with a hard wall-clock cap (kills the whole process group —
