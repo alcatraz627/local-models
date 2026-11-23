@@ -74,7 +74,9 @@
   .hint { color: var(--soft); font-size: .88em; margin: 0; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 
-  header { display: flex; align-items: center; gap: .7em; padding: .5em 1em; border-bottom: 1px solid var(--line); flex-wrap: wrap; position: relative; }
+  /* One row on a wide screen: a long thread name wraps inside its own space, so the buttons never drop to a new row. */
+  header { display: flex; align-items: center; gap: .7em; padding: .5em 1em; border-bottom: 1px solid var(--line); position: relative; }
+  header h1 { flex: none; white-space: nowrap; }
   header h1 { display: flex; align-items: center; gap: .5em; margin: 0; font-size: 1.07em; font-weight: 650; }
   header h1 svg { color: var(--accent-line); }
   .pick { display: flex; align-items: center; gap: .5em; color: var(--soft); font-size: .93em; }
@@ -123,7 +125,7 @@
   #setup:empty, #ready:empty { display: none; }
   .topline { display: flex; align-items: flex-start; gap: 12px; padding: 12px 18px 0; }
   .topline:has(.side:empty) { display: none; }
-  .stage { flex: 1; min-height: 200px; display: grid; place-items: center; padding: 12px 18px; container-type: size; }
+  .stage { flex: 1; min-height: 200px; display: grid; place-items: center; padding: 6px 18px; container-type: size; }
   .frame { position: relative; line-height: 0; }
   /* The image fits the stage both ways, whatever its shape, so nothing else on the page ever covers it. */
   .frame img { max-width: calc(100cqw - 4px); max-height: calc(100cqh - 4px); display: block; border-radius: 4px;
@@ -143,7 +145,7 @@
   .meta { color: var(--soft); font-size: .86em; display: flex; align-items: center; gap: .3em .9em; flex-wrap: wrap; }
   .meta details[open] { flex-basis: 100%; order: 3; }
   .from { display: flex; align-items: center; gap: .4em; flex-wrap: wrap; }
-  .from button.src { padding: 0; width: 1.9em; height: 1.9em; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 5px; }
+  .from button.src { padding: 0; width: 1.5em; height: 1.5em; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 5px; }
   .from img { width: 100%; height: 100%; object-fit: cover; display: block; }
   /* The image's actions: one row of icons at the top right of the canvas. */
   .actions { display: flex; gap: 2px; align-items: center; position: relative; margin-left: auto; background: var(--panel);
@@ -172,8 +174,8 @@
   .mode button svg { width: 1em; height: 1em; }
 
   /* One writing box for everything. The line above it says what the words are about. */
-  .composer { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: .65em .8em .6em; display: grid; gap: .45em;
-              position: relative; width: min(1080px, calc(100% - 36px)); margin: 0 auto 12px; box-shadow: 0 12px 36px rgba(0, 0, 0, .22); flex: none; }
+  .composer { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: .6em .8em .55em; display: grid; gap: .3em;
+              position: relative; width: min(1080px, calc(100% - 36px)); margin: 0 auto 8px; box-shadow: 0 12px 36px rgba(0, 0, 0, .22); flex: none; }
   /* A panel opens just above the button that opened it. */
   .anchor { position: relative; display: inline-flex; }
   .composer .pop { bottom: calc(100% + 6px); left: 0; }
@@ -188,8 +190,10 @@
   .foot .job .state { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; }
   .foot .job[data-tip]::after { top: auto; bottom: calc(100% + 6px); }
   #fail { flex: 1 0 18em; }
-  #fail .notice { padding: .45em .6em; }
-  #fail .notice .row { margin-top: .3em; }
+  /* A failure is one tile high like everything else in the band, so it never moves the image. Long words scroll inside it. */
+  #fail .notice { padding: .35em .6em; display: flex; align-items: center; gap: .8em; height: calc(var(--control) * 1.7); }
+  #fail .notice .words { flex: 1; min-width: 0; max-height: 100%; overflow-y: auto; }
+  #fail .notice button { flex: none; }
   .job { background: var(--sunk); border-radius: 8px; padding: .5em .65em; font-size: .9em; display: grid; gap: .35em; }
   .job .row { flex-wrap: nowrap; }
   .job .what { flex: 1; min-width: 0; overflow-wrap: anywhere; }
@@ -207,12 +211,18 @@
   .about { display: flex; align-items: center; gap: .6em; flex-wrap: wrap; min-height: 1.6em; }
   .thumbs { display: flex; gap: 8px; flex-wrap: wrap; }
   .thumbs:empty { display: none; }
-  .thumb { position: relative; width: 56px; height: 56px; border-radius: 8px; border: 1px solid var(--line); }
+  .thumb { position: relative; width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--line); }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 7px; }
   .thumb button { position: absolute; top: -7px; right: -7px; min-height: 0; height: 22px; width: 22px; padding: 0; justify-content: center;
                   background: var(--text); color: var(--bg); border-radius: 50%; }
   .thumb button svg { width: 12px; height: 12px; }
-  .tools { display: flex; align-items: center; gap: 2px .3em; flex-wrap: wrap; }
+  /* The box has two rows so the image above keeps its room at larger text: what the words are about with the
+     tools at its right end, then the words with the model and the main button beside them. */
+  .tools { display: flex; align-items: center; gap: 2px .3em; flex-wrap: wrap; margin-left: auto; }
+  .tools .pop { left: auto; right: 0; }
+  /* The words keep at least 16em; on a narrower box the model and the main button drop to their own line. */
+  .write { display: flex; align-items: flex-end; gap: .5em; flex-wrap: wrap; }
+  .write textarea { flex: 1 1 16em; min-width: 0; }
   .tools label { display: inline-flex; align-items: center; gap: .45em; color: var(--soft); font-size: .93em; padding: 0 .3em; }
   .tools label select { color: var(--text); }
   .drop { display: flex; align-items: center; justify-content: center; gap: .5em; min-height: 4.6em; padding: .6em;
@@ -229,7 +239,7 @@
   .composer:focus-within { border-color: var(--accent-line); }
   .composer textarea:focus-visible { outline: none; }
   /* The model that will draw, beside the button that makes it draw. */
-  .model-btn { border: 1px solid var(--line); background: var(--sunk); gap: .5em; padding: 0 .7em; max-width: 26em; }
+  .model-btn { border: 1px solid var(--line); background: var(--sunk); gap: .5em; padding: 0 .7em; max-width: 20em; }
   .model-btn #whereSay { min-width: 0; overflow-wrap: anywhere; white-space: normal; line-height: 1.25; }
   .model-btn.off { color: var(--bad); }
   .composer .pop.models { left: auto; right: 0; width: min(26em, 92vw); }
@@ -267,8 +277,10 @@
     .threads button[data-t] .t { display: block; max-width: 11em; white-space: normal; font-size: .88em; line-height: 1.25; text-align: left; }
     .composer { width: calc(100% - 20px); margin-bottom: 10px; }
     .anchor { position: static; }
-    .composer .pop { left: .8em; }
-    header { padding: .5em .7em; gap: .4em; }
+    .composer .pop { left: .8em; right: auto; }
+    .write { flex-wrap: wrap; }
+    .write textarea { flex-basis: 100%; }
+    header { padding: .5em .7em; gap: .4em; flex-wrap: wrap; }
     header .head { order: 4; flex: 1 1 100%; margin-left: 0; }
     #whereWrap { order: 5; flex: 1 1 100%; } #whereWrap select { flex: 1; }
     .pick select { max-width: 11em; }
@@ -354,10 +366,7 @@
             <input type="range" id="strength" min="0.1" max="0.9" step="0.05" value="0.5" aria-label="How much of the source to keep">
             <span class="hint" id="strengthSay"></span></label>
         </div>
-      </div>
-      <p class="hint" id="useHint" hidden></p>
-      <textarea id="prompt" aria-label="What you want"></textarea>
-      <div class="tools">
+        <div class="tools tip-right">
         <span class="anchor"><button type="button" id="addPhoto" class="icon-only" aria-expanded="false" aria-label="Add an image" data-tip="Add up to four images to rework or combine. You can also drop or paste one anywhere on this page."><svg class="i"><use href="#i-plus"/></svg></button>
           <div class="pop" id="photoPop" hidden>
             <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose image files">
@@ -383,7 +392,11 @@
             </div>
             <p class="hint">These apply to a new image. A seed repeats a result exactly.</p>
           </div></span>
-        <span class="grow"></span>
+        </div>
+      </div>
+      <p class="hint" id="useHint" hidden></p>
+      <div class="write">
+        <textarea id="prompt" aria-label="What you want"></textarea>
         <!-- Which model draws, and where. The selects hold the choice; the button and panel are how a person makes it. -->
         <span class="anchor"><button type="button" id="modelBtn" class="model-btn" aria-expanded="false"><span class="dot" id="modelDot"></span><span id="whereSay"></span><svg class="i chev"><use href="#i-chev"/></svg></button>
           <div class="pop models" id="modelPop" hidden>
@@ -429,6 +442,13 @@ const view = {
 };
 let ready = null;            // an image that landed and was not shown, offered as "Image N is ready"
 let armedThread = null;      // a thread whose delete has been pressed once and waits for the second press
+
+// Leaving a thread drops everything the reader had open on it, so none of it shows up on the next one:
+// a source on the stage, a marked area, a comparison, a measurement, an open menu, a delete waiting for its second press.
+function letGo() {
+  Object.assign(view, {viewSource: null, mark: null, marking: false, comparing: false, sameStart: false, fresh: false, renaming: false});
+  checkSay = ''; armedDelete = null; armedThread = null; moreOpen = false;
+}
 
 // Write a region only when its content changed, so the once-a-second refresh never wipes
 // a half-typed key, closes an open list or drops keyboard focus.
@@ -494,7 +514,7 @@ function renderModels() {
         <span><span class="name">${esc(x.name)}</span><span class="hint">${esc(status(x))}${esc(x.blurb)}</span></span></button>`).join('')
       + `<p class="hint">A change to an image uses the model that made it.</p>`))
     $('modelList').querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
-      $('model').value = b.dataset.m; closePops(); $('model').onchange(); });
+      $('model').value = b.dataset.m; closePops(); $('model').onchange(); $('modelBtn').focus(); });
 }
 
 function renderSetup() {
@@ -576,10 +596,10 @@ function renderThreads() {
     ids.map(t => { const rows = inThread(t), last = rows[rows.length - 1], count = `${rows.length} image${rows.length > 1 ? 's' : ''}`;
       return `<button type="button" data-t="${esc(t)}" aria-current="${t === view.thread}" aria-label="Thread: ${esc(threadTitle(t))}, ${count}" data-tip="${esc(threadTitle(t))} · ${count}">
         <img src="${last.url}" alt="" loading="lazy"><span class="t">${esc(threadTitle(t))}</span></button>`; }).join('');
-  $('newThread').onclick = () => { view.thread = null; view.selected = null; view.viewSource = null; view.mark = null; view.marking = false; view.sameStart = false; view.fresh = false;
+  $('newThread').onclick = () => { letGo(); view.thread = null; view.selected = null;
     renderThreads(); renderResult(); $('prompt').focus(); };
   $('threads').querySelectorAll('button[data-t]').forEach(b => b.onclick = () => {
-    view.thread = b.dataset.t; view.selected = null; view.viewSource = null; view.mark = null; view.marking = false; armedDelete = null; checkSay = ''; view.renaming = false; view.sameStart = false; view.fresh = false; moreOpen = false;
+    letGo(); view.thread = b.dataset.t; view.selected = null;
     renderThreads(); renderResult(); });
   refocus(held);
 }
@@ -695,7 +715,7 @@ function renderProgress() {
 
 function showError(res) {
   if (res && res.ok === false)
-    put($('fail'), `<div class="notice bad"><strong>${esc(res.message)}</strong>${esc(res.fix || '')}<div class="row"><button type="button" id="failClose">${icon('x')}Dismiss</button></div></div>`)
+    put($('fail'), `<div class="notice bad"><div class="words"><strong>${esc(res.message)}</strong>${esc(res.fix || '')}</div><button type="button" id="failClose">${icon('x')}Dismiss</button></div>`)
       && ($('failClose').onclick = () => put($('fail'), ''));
   return res;
 }
@@ -728,7 +748,9 @@ function renderResult() {
     // Deleting a thread takes two presses; the second names how many images go.
     if ($('delThread')) $('delThread').onclick = async () => {
       if (armedThread !== view.thread) { armedThread = view.thread; renderResult(); $('delThread').focus(); return; }
-      const gone = armedThread; armedThread = null;
+      // The thread's images leave the writing box with it; a request built on them could not be drawn.
+      const gone = armedThread, rows = inThread(gone), refs = rows.map(h => '#' + h.id), urls = rows.map(h => h.url);
+      letGo(); sources = sources.filter(s => !refs.includes(s.ref) && !urls.includes(s.url));
       await api('/api/thread/delete', {id: gone});
       view.thread = undefined; view.selected = null; refresh(true);
     };
@@ -785,7 +807,7 @@ function renderResult() {
   on('markBtn', () => { if (view.mark || view.marking) { view.mark = null; view.marking = false; } else { view.marking = true; view.comparing = false; view.sameStart = false; } renderResult(); });
   on('compare', () => { view.comparing = !view.comparing; view.mark = null; view.marking = false; renderResult(); });
   on('check', async () => { const r = await api('/api/check', {id: e.id}); checkSay = r.ok ? 'Measured: ' + r.words : r.message + ' ' + (r.fix || ''); moreOpen = false; renderResult(); });
-  on('more', () => { moreOpen = !moreOpen; armedDelete = null; renderResult(); $('more').focus(); });
+  on('more', () => { moreOpen = !moreOpen; armedDelete = null; closePops(); renderResult(); $('more').focus(); });
   $('detail').querySelectorAll('button[data-src]').forEach(b => b.onclick = () => {
     view.viewSource = {ref: e.sources[+b.dataset.src], url: e.source_urls[+b.dataset.src]}; view.mark = null; view.marking = false; view.comparing = false; view.sameStart = false; view.fresh = false; moreOpen = false; renderResult(); });
   on('backToImage', () => { view.viewSource = null; view.mark = null; view.marking = false; renderResult(); });
@@ -800,7 +822,7 @@ function renderResult() {
   $('shelf').innerHTML = rows.map(h => `<button type="button" data-id="${h.id}" aria-current="${h.id === e.id}" aria-label="Image ${h.id}: ${esc(h.prompt)}" style="aspect-ratio: ${h.width || 1} / ${h.height || 1}">
       <img src="${h.url}" alt="" loading="lazy"><span class="n">${h.id}</span>${h.star ? `<span class="s">${icon('star')}</span>` : ''}</button>`).join('');
   $('shelf').querySelectorAll('button').forEach(b => b.onclick = () => {
-    view.selected = +b.dataset.id; armedDelete = null; view.viewSource = null; view.mark = null; view.marking = false; view.comparing = false; checkSay = ''; view.sameStart = false; view.fresh = false; moreOpen = false; renderResult(); });
+    view.selected = +b.dataset.id; armedDelete = null; armedThread = null; view.viewSource = null; view.mark = null; view.marking = false; view.comparing = false; checkSay = ''; view.sameStart = false; view.fresh = false; moreOpen = false; renderResult(); });
   renderSources();
   refocus(held);
 }
@@ -948,7 +970,7 @@ function showReady() {
   if (!ready) return;
   Object.assign(view, {thread: ready.thread, selected: ready.id, viewSource: null, mark: null, marking: false,
                        comparing: false, sameStart: false, fresh: false, renaming: false});
-  ready = null; checkSay = ''; armedDelete = null; moreOpen = false;
+  ready = null; checkSay = ''; armedDelete = null; armedThread = null; moreOpen = false;
   renderThreads(); renderResult();
 }
 
@@ -967,8 +989,10 @@ const POPS = [['addPhoto', 'photoPop'], ['settings', 'settingsPop'], ['help', 'h
 function closePops(except) {
   POPS.forEach(([b, p]) => { if (p !== except) { $(p).hidden = true; $(b).setAttribute('aria-expanded', 'false'); } });
 }
+// One thing is open at a time: a panel opening closes the others and the More menu.
 POPS.forEach(([b, p]) => $(b).onclick = () => {
-  const open = $(p).hidden; closePops(); $(p).hidden = !open; $(b).setAttribute('aria-expanded', String(open)); });
+  const open = $(p).hidden; closePops(); $(p).hidden = !open; $(b).setAttribute('aria-expanded', String(open));
+  if (moreOpen && state && entry()) { moreOpen = false; armedDelete = null; renderResult(); } });
 // A press outside an open panel or menu closes it.
 document.addEventListener('click', e => {
   // A button that redrew itself while handling this press is no longer in the page; that press was not "outside".
@@ -982,7 +1006,9 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  if (POPS.some(([, p]) => !$(p).hidden)) return closePops();
+  // Closing a panel from the keyboard hands focus back to the button that opened it.
+  const open = POPS.find(([, p]) => !$(p).hidden);
+  if (open) { closePops(); $(open[0]).focus(); return; }
   if (moreOpen) { moreOpen = false; armedDelete = null; renderResult(); $('more').focus(); return; }
   if (view.mark || view.marking || view.sameStart) { view.mark = null; view.marking = false; view.sameStart = false; renderResult(); return; }
   // Escape in New image mode goes back to the image on screen.

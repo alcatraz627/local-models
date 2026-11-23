@@ -1186,14 +1186,16 @@ class Queue:
         self.count = 0
         self.runner = None
 
-    def add(self, kind, label, work, where=""):
+    def add(self, kind, label, work, where="", thread=""):
+        """Put work in the line. `thread` is the thread its image will join, when that is already known."""
         with self.lock:
             if sum(j["state"] in ("queued", "running") for j in self.jobs) >= self.LIMIT:
                 raise KitError("queue_full", f"{self.LIMIT} things are already waiting.",
                                "Let some finish, or stop a few, then ask again.")
             self.count += 1
             job = {"id": self.count, "kind": kind, "label": label, "state": "queued", "step": 0, "total": 0,
-                   "added": time.time(), "started": None, "entry": None, "error": None, "where": where}
+                   "added": time.time(), "started": None, "entry": None, "error": None, "where": where,
+                   "thread": thread}
             self.jobs.append(job)
             self.work[job["id"]] = (work, threading.Event())
             if self.runner is None or not self.runner.is_alive():
@@ -1235,6 +1237,13 @@ class Queue:
                     self.work.pop(job["id"], None)
                 elif job["state"] == "running" and job_id in (None, job["id"]):
                     self.work[job["id"]][1].set()
+
+    def stop_thread(self, thread):
+        """Stop everything still headed for one thread, so a deleted thread is not brought back by a late image."""
+        with self.lock:
+            ids = [j["id"] for j in self.jobs if j["state"] in ("queued", "running") and j.get("thread") == thread]
+        for job_id in ids:
+            self.stop(job_id)
 
     def view(self):
         """What the page shows: everything waiting or running, and the last few that ended."""
@@ -1335,7 +1344,10 @@ class Handler(BaseHTTPRequestHandler):
                 for n in range(tries):
                     p = plan(dict(body, thread=thread, seed=body.get("seed") if n == 0 else None))
                     plans.append(p)
-                jobs = [QUEUE.add("render", p["prompt"], lambda step, stop, p=p: render(p, step, stop), p["server"])
+                # A follow-up has no thread of its own yet; it will join its parent's.
+                threads = {r["id"]: r.get("thread", "") for r in read_history()}
+                jobs = [QUEUE.add("render", p["prompt"], lambda step, stop, p=p: render(p, step, stop), p["server"],
+                                  p["thread"] or threads.get(p["parent"], ""))
                         for p in plans]
                 return self.send(200, {"ok": True, "plan": plans[0], "jobs": [j["id"] for j in jobs]})
             if path == "/api/download":
@@ -1355,6 +1367,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"ok": True})
             if path == "/api/thread/delete":
                 # A whole thread goes the way single images go: each image and its details file to the trash folder.
+                # Its requests still in the line stop first, or the image they make would bring the thread back.
+                QUEUE.stop_thread(body["id"])
                 ids = [r["id"] for r in read_history() if r.get("thread") == body["id"]]
                 for entry_id in ids:
                     remove_entry(entry_id)

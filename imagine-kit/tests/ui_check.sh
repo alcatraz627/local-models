@@ -47,11 +47,12 @@ measure() { # NAME WIDTH: fail when a control's words are clipped, or an ellipsi
   local dom
   dom="$("$CHROME" --headless=new --disable-gpu --window-size="$(win_w "$2"),1000" --virtual-time-budget=4000 --dump-dom \
         "$(url_for "$2" 1000 "?probe=1")" 2>/dev/null)"
-  if printf '%s' "$dom" | grep -q 'data-overflow="0"'; then echo "  ok   $1 at $2 wide: the page does not scroll sideways"
+  # The page is read from a here-string: a pipe into `grep -q` closes at the first match and prints a broken-pipe error.
+  if grep -q 'data-overflow="0"' <<< "$dom"; then echo "  ok   $1 at $2 wide: the page does not scroll sideways"
   else echo "  FAIL $1 at $2 wide: the page is wider than the screen by $(printf '%s' "$dom" | grep -o 'data-overflow="[^"]*"' | head -n 1) px"; FAILS=$((FAILS+1)); fi
-  if printf '%s' "$dom" | grep -q 'data-clipped="0"'; then echo "  ok   $1 at $2 wide: every control's words fit"
+  if grep -q 'data-clipped="0"' <<< "$dom"; then echo "  ok   $1 at $2 wide: every control's words fit"
   else echo "  FAIL $1 at $2 wide: clipped controls: $(printf '%s' "$dom" | grep -o 'data-clipped="[^"]*"' | head -n 1)"; FAILS=$((FAILS+1)); fi
-  if printf '%s' "$dom" | grep -q 'data-ellipsis="0"'; then echo "  ok   $1 at $2 wide: no ellipsis on screen"
+  if grep -q 'data-ellipsis="0"' <<< "$dom"; then echo "  ok   $1 at $2 wide: no ellipsis on screen"
   else echo "  FAIL $1 at $2 wide: an ellipsis is on screen"; FAILS=$((FAILS+1)); fi
 }
 

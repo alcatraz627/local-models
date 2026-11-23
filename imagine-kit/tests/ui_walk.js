@@ -5,6 +5,7 @@
 //       python3 kit.py app --port 6281 --no-open
 // Then, from a browser driver: open the page, add this file as a script, and call window.__walk(1),
 // reload, add it again and call window.__walk(2). window.__measure() reports fit at the current width.
+// The height left for the image is checked by tests/ui_room.js.
 // Not covered here: a failed render (tests/ui_check.sh photographs it) and choosing a file from disk.
 (() => {
   const $ = s => document.querySelector(s), wait = ms => new Promise(r => setTimeout(r, ms));
@@ -119,8 +120,10 @@
         ok('a render that lands while words are in the box does not change what the box is about', $('#prompt').value === 'keep me' && text('#subjectSay') === `About image ${n.id}` && $('#shelf [aria-current=true]').dataset.id === String(n.id), [text('#subjectSay'), $('#prompt').value]);
         ok('the image that landed is in the strip all the same', document.querySelectorAll('#shelf button').length === 2 && s2.history.length === have + 2);
         type('#prompt', '');
+        // The theme button lives in the View panel, so the panel is opened first and must be showing.
+        press('#viewBtn'); const panelShown = !$('#viewPop').hidden && !!$('#theme').offsetParent;
         const theme = document.documentElement.dataset.theme; press('#theme');
-        ok('the theme button switches light and dark', document.documentElement.dataset.theme !== theme);
+        ok('the theme button, in the open View panel, switches light and dark', panelShown && document.documentElement.dataset.theme !== theme);
       }
     } catch (e) { out.push('FAIL the walk stopped: ' + e.message); }
     return out.join('\n');

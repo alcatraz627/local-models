@@ -85,6 +85,16 @@ With an image open, two buttons sit above the box:
 - "About image N": the words change the open image. The main button reads "Change image N".
 - "New image": the words make a new image. The main button reads "Make image".
 
+The box has two rows. The first holds the two mode buttons, any source images, and at its right end Add an image, Improve my words and Options. The second holds the words, the model button and the main button.
+
+| Text size | Image height on a 1440 by 800 window | With two source images in the box |
+|---|---|---|
+| Small | 467 px | 436 px |
+| Medium | 429 px | 398 px |
+| Large | 387 px | 355 px |
+
+`tests/ui_room.js` fails any row under 350 px. Enlarging the source thumbnails by 12 px turns its last row red.
+
 ### Result details
 
 The words that made the image sit at the top left of the canvas. Under them, "Image N · how · seconds" opens into the full list.
@@ -117,8 +127,15 @@ The thread's images come first, then one card per request in progress, then a fa
 | Only the machine's own page may ask for work | `test_a_request_from_another_host_name_is_refused` |
 | A request cannot read outside the image folders | `test_a_request_cannot_read_outside_the_image_folder` |
 | Every image has a details file beside it holding its full record | `test_a_render_keeps_its_details_in_a_file_beside_the_image` |
-| On this Mac a new image takes about 11 s, a rework 19 s, a two-source combine 32 s | real renders, run by hand after each engine change |
+| On this Mac a new image takes about 11 s, a rework 19 s, a two-source combine 32 s, with nothing else running | real renders, run by hand after each engine change |
+| Render time follows machine load, not the page. The page and the command line send the same request for a combine (klein, 4 steps, 1024 by 1024, 8-bit, two sources) | 2026-11-21 through the page: 37 s. 2026-11-23 through `gen --from A --from B` at load average 16: 47 and 49 s |
 | A finished render never moves the reader (see "Landing rule" below) | `tests/ui_landing.js`, 16 rows; seven planted breakages each turn their rows red |
+| A thread deleted while it draws does not come back | `test_a_thread_deleted_while_it_draws_does_not_come_back`, red before the fix |
+| Deleting a thread leaves nothing of it on the page or in the box; its delete disarms when the reader moves away | `tests/ui_panels.js`, red before the fix |
+| One panel or menu is open at a time, and Escape hands focus back to the button that opened it | `tests/ui_panels.js`, red before the fix |
+| The words in the box keep 240 px or more at 880, 960 and 1024 wide with large text | `tests/ui_panels.js`, red before the fix |
+| A failure in the foot strip is one tile high and does not move the image | `tests/ui_panels.js`, red before the fix |
+| The model button, the View panel, the text sizes and thread delete work when pressed with a real mouse | `tests/ui_panels.js`, 18 rows in all |
 
 ### Landing rule
 

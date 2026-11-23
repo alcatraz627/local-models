@@ -505,6 +505,25 @@ class WebCalls(unittest.TestCase):
         self.assertNotIn(first, left)
         self.assertNotIn(second, left)
 
+    def test_a_thread_deleted_while_it_draws_does_not_come_back(self):
+        self.call("/api/generate", {"prompt": "draw, then delete the thread"})
+        first = self.wait_done()["entry"]
+        thread = next(r["thread"] for r in self.call("/api/state")[1]["history"] if r["id"] == first)
+        quick, kit.Settings.fake_step_s = kit.Settings.fake_step_s, 0.3      # slow enough to delete mid-render
+        try:
+            self.call("/api/generate", {"follow": "again", "id": first})
+            self.call("/api/generate", {"follow": "again", "id": first})      # one drawing, one waiting its turn
+            self.call("/api/thread/delete", {"id": thread})
+            for _ in range(400):
+                if not any(j["state"] in ("queued", "running") for j in self.call("/api/state")[1]["jobs"]):
+                    break
+                time.sleep(0.02)
+            else:
+                self.fail("the line never emptied")
+        finally:
+            kit.Settings.fake_step_s = quick
+        self.assertEqual([r["id"] for r in self.call("/api/state")[1]["history"] if r["thread"] == thread], [])
+
 
 class Install(unittest.TestCase):
     def test_the_installer_and_the_pin_list_name_the_same_engine_version(self):
